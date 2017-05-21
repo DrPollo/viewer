@@ -1,0 +1,22 @@
+{
+  "name": "areaviewer",
+  "version": "1.0.0",
+  "description": "AreaViwer: map-based viewer for FirstLife area-based aggregations of crowdsourced data.",
+  "main": "index.js",
+  "scripts": {
+    "test": "serve"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@gitlab.dev.di.unito.it:firstlife/areaviewer.git"
+  },
+  "keywords": [
+    "mapboxjs",
+    "geojson"
+  ],
+  "author": "Alessio Antonini",
+  "license": "MIT",
+  "dependencies": {
+    "mapbox.js": "^3.1.0"
+  }
+}
