@@ -35,3 +35,5 @@ gulp.task('watch', function () {
 gulp.task('js', function () {
     return bundle(browserify('./index.js'));
 });
+
+gulp.task('default',['watch']);
