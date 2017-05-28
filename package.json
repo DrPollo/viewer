@@ -17,6 +17,7 @@
   "author": "Alessio Antonini",
   "license": "MIT",
   "dependencies": {
+    "gaussian": "^1.1.0",
     "leaflet": "^1.0.3",
     "leaflet.vectorgrid": "^1.2.0",
     "mapbox.js": "^3.1.0"
