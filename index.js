@@ -4,7 +4,6 @@
 require('leaflet');
 require('leaflet.vectorgrid');
 require('./libs/leaflet-geojson-gridlayer');
-require('gaussian');
 
 // defaults
 var initZoom = 13;
