@@ -4,7 +4,8 @@
   "description": "AreaViwer: map-based viewer for FirstLife area-based aggregations of crowdsourced data.",
   "main": "index.js",
   "scripts": {
-    "test": "gulp"
+    "test": "gulp",
+    "start": "gulp"
   },
   "repository": {
     "type": "git",

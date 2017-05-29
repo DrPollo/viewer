@@ -123,12 +123,15 @@ const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
  * Gaussian
  * a = max radius
  * b = zoom level
- * c = spread (between 2 - 3)
+ * cLeft & cRight = spread (between 2 - 3)
+ * code diverse per lo zoom in e zoom out dalla media
  */
 const maxWeight = 2,
       maxRadius = 10,
-      c = 1.4;
+      cRight = 1.4,
+      cLeft = 3;
 const scale = (x, level) => {
+    let c = x < level ? cLeft : cRight;
     let k = Math.pow(x - level, 2) * -1;
     let q = 2 * Math.pow(c, 2);
     let z = k / q;
@@ -178,8 +181,9 @@ map.on('zoomend', e => {
         // console.log(features[i].feature.properties.zoom_level);
         let level = feat.feature.properties.zoom_level;
         let radius = scale(zoom, level);
+        let weight = Math.min(radius, maxWeight);
         feat.setRadius(radius);
-        feat.setStyle({ weight: Math.min(radius, maxWeight) });
+        feat.setStyle({ weight: weight });
     }
 });
 
