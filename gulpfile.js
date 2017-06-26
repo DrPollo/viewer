@@ -1,12 +1,12 @@
 const gulp = require('gulp');
-var sourcemaps = require('gulp-sourcemaps');
+const sourcemaps = require('gulp-sourcemaps');
 const gutil = require('gulp-util');
 const source = require('vinyl-source-stream');
-var buffer = require('vinyl-buffer');
-const browserify = require('browserify');
+const buffer = require('vinyl-buffer');
+const browserify = require('browserify',{"debug":true});
 const watchify = require('watchify');
 const browserSync = require('browser-sync').create();
-var babel = require('babelify');
+const babel = require('babelify');
 
 
 function bundle (bundler) {
