@@ -50,7 +50,7 @@ const vectorMapStyling = {
     indoor: featureStyle,
     interactive: featureStyle
 };
-//
+
 // const vectorMapStyling = {
 //     nazioni: function (feature, zoom) {
 //         // console.log('nazione');
@@ -197,14 +197,14 @@ const vectorMapStyling = {
 //             opacity: 0.5
 //         };
 //     },
-//     interactive:// console.log(feature,zoom);
-//         return {
-//             fill: true,
-//             weight: 0,
-//             color: orange,
-//             opacity: 1,
-//             fillOpacity:0.75,
-//             fillColor: '#fafafa'};
+//     // interactive:// console.log(feature,zoom);
+//     //     return {
+//     //         fill: true,
+//     //         weight: 0,
+//     //         color: orange,
+//     //         opacity: 1,
+//     //         fillOpacity:0.75,
+//     //         fillColor: '#fafafa'};
 // };
 
 const ordering = function (layers, zoom) {
@@ -326,15 +326,34 @@ const vectormapConfig = {
     },
     layersOrdering: ordering
 };
-const vectormapUrl = "http://localhost:3090/tile/{z}/{x}/{y}";
+const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
+// const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
 // const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
+
+const detailsUrl = "http://localhost:3095/areas/";
+// const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
+// const detailsUrl = "https://tiles.firstlife.org/areas/";
+
 // definition of the vectorGrid layer
-const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig).addTo(map);
+const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
+vGrid.addTo(map);
+console.log('vGrid', vGrid);
 let currentFeature = null;
+
+var detailsPromise = null;
+
 vGrid.on('click', e => {
     let id = e.layer.properties.id,
         properties = e.layer.properties;
     console.log('click on ', e, properties.name, id);
+
+    // get feature details
+    detailsPromise = getFeature(id);
+    detailsPromise.then(response => {
+        console.debug('feature details', response);
+    }, error => {
+        console.error(error);
+    });
 
     // todo multiple selection
 
@@ -348,6 +367,23 @@ vGrid.on('click', e => {
 
     // todo clean markers not in the area
 });
+
+function getFeature(id) {
+    console.log('getFeature', id);
+    return new Promise((resolve, reject) => {
+        let xhr = new XMLHttpRequest();
+        console.log('asking to ', detailsUrl.concat(id));
+        xhr.open("GET", detailsUrl.concat(id));
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr.response);
+            } else {
+                reject(xhr.statusText);
+            }
+        };
+        xhr.onerror = () => reject(xhr.statusText);
+    });
+}
 
 // exponential
 // var scale = function(x,level){
@@ -2599,7 +2635,7 @@ map.on('zoomend', e => {
 
             vectorTilePromise.then(function renderTile(vectorTile) {
                 var layersKeys = Object.keys(vectorTile.layers);
-                // console.log("layers:",layersKeys);
+                console.log("layers:", layersKeys);
                 if (this.options.layersOrdering) {
                     layersKeys = this.options.layersOrdering(vectorTile.layers, zoom_level);
                 }
@@ -3221,21 +3257,28 @@ map.on('zoomend', e => {
             },
 
             addData: function (data) {
+                console.log('addData', data);
                 if (data.type === 'FeatureCollection') {
+                    console.log('addData > addSubLayerData');
                     this.addSubLayerData('default', data);
                 } else {
+                    console.log('addData > spacchetta per livelli');
                     var tileLayer = this;
                     Object.keys(data).forEach(function (key) {
+                        // todo extend with featureGroup
                         tileLayer.addSubLayerData(key, data[key]);
                     });
                 }
             },
 
             addSubLayerData: function (sublayer, data) {
+                console.log('addSubLayerData', sublayer, data);
+                // se non c'e' crea il livello
                 if (!this._geojsons[sublayer]) {
                     this._geojsons[sublayer] = new this.geoJsonClass(null, this.options.layers[sublayer]).addTo(this._map);
                     this.checkZoomConditions(this._map.getZoom());
                 }
+                // filtra le features gia' esistenti
                 var toAdd = data.features.filter(function (feature) {
                     return !this.hasLayerWithId(sublayer, feature.id ? feature.id : feature.properties.id);
                 }, this);
@@ -3243,11 +3286,12 @@ map.on('zoomend', e => {
                 if (!this._features[sublayer]) {
                     this._features[sublayer] = {};
                 }
+                // aggiunge le features alla sua struttura interna
                 toAdd.forEach(function (feature) {
                     var id = feature.id ? feature.id : feature.properties.id;
                     this._features[sublayer][id] = feature;
                 }, this);
-
+                console.log('addSubLayerData4', this._geojsons[sublayer]);
                 this._geojsons[sublayer].addData({
                     type: 'FeatureCollection',
                     features: toAdd

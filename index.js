@@ -54,7 +54,7 @@ const vectorMapStyling = {
     indoor: featureStyle,
     interactive: featureStyle
 };
-//
+
 // const vectorMapStyling = {
 //     nazioni: function (feature, zoom) {
 //         // console.log('nazione');
@@ -201,14 +201,14 @@ const vectorMapStyling = {
 //             opacity: 0.5
 //         };
 //     },
-//     interactive:// console.log(feature,zoom);
-//         return {
-//             fill: true,
-//             weight: 0,
-//             color: orange,
-//             opacity: 1,
-//             fillOpacity:0.75,
-//             fillColor: '#fafafa'};
+//     // interactive:// console.log(feature,zoom);
+//     //     return {
+//     //         fill: true,
+//     //         weight: 0,
+//     //         color: orange,
+//     //         opacity: 1,
+//     //         fillOpacity:0.75,
+//     //         fillColor: '#fafafa'};
 // };
 
 const ordering = function (layers, zoom) {
@@ -401,15 +401,37 @@ const vectormapConfig = {
     },
     layersOrdering: ordering
 };
-const vectormapUrl = "http://localhost:3090/tile/{z}/{x}/{y}";
+const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
+// const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
 // const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
+
+const detailsUrl = "http://localhost:3095/areas/";
+// const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
+// const detailsUrl = "https://tiles.firstlife.org/areas/";
+
 // definition of the vectorGrid layer
-const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig).addTo(map);
+const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
+vGrid.addTo(map);
+console.log('vGrid',vGrid);
 let currentFeature = null;
+
+var detailsPromise = null;
+
 vGrid.on('click', e => {
     let id = e.layer.properties.id,
         properties = e.layer.properties;
     console.log('click on ',e, properties.name, id);
+
+    // get feature details
+    detailsPromise = getFeature(id);
+    detailsPromise.then(
+        response => {
+            console.debug('feature details',response);
+        },
+        error => {
+            console.error(error);
+        }
+    );
 
     // todo multiple selection
 
@@ -424,6 +446,24 @@ vGrid.on('click', e => {
 
     // todo clean markers not in the area
 });
+
+function getFeature(id) {
+    console.log('getFeature',id);
+    return new Promise((resolve, reject) => {
+        let xhr = new XMLHttpRequest();
+        console.log('asking to ',detailsUrl.concat(id));
+        xhr.open("GET", detailsUrl.concat(id));
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr.response);
+            } else {
+                reject(xhr.statusText);
+            }
+        };
+        xhr.onerror = () => reject(xhr.statusText);
+    });
+}
+
 
 // exponential
 // var scale = function(x,level){
