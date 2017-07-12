@@ -401,18 +401,18 @@ const vectormapConfig = {
     },
     layersOrdering: ordering
 };
-const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
-// const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
+// const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
+const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
 // const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
 
-const detailsUrl = "http://localhost:3095/areas/";
-// const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
+// const detailsUrl = "http://localhost:3095/areas/";
+const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
 // const detailsUrl = "https://tiles.firstlife.org/areas/";
 
 // definition of the vectorGrid layer
 const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
-vGrid.addTo(map);
-console.log('vGrid',vGrid);
+
+// console.log('vGrid',vGrid);
 let currentFeature = null;
 
 var detailsPromise = null;
@@ -451,8 +451,9 @@ function getFeature(id) {
     console.log('getFeature',id);
     return new Promise((resolve, reject) => {
         let xhr = new XMLHttpRequest();
-        console.log('asking to ',detailsUrl.concat(id));
-        xhr.open("GET", detailsUrl.concat(id));
+        let url = detailsUrl.concat(id);
+        console.log('asking to ',url);
+        xhr.open("GET", url);
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
                 resolve(xhr.response);
@@ -461,6 +462,7 @@ function getFeature(id) {
             }
         };
         xhr.onerror = () => reject(xhr.statusText);
+        xhr.send();
     });
 }
 
@@ -543,7 +545,7 @@ const markerLayers = {
 };
 // definition of the vectorGrid layer
 const mGrid = L.geoJsonGridLayer(markerUrl, markerLayers);
-map.addLayer(mGrid);
+
 
 map.on('zoomend', (e) => {
     let layer = mGrid.getLayers()[0];
@@ -561,3 +563,8 @@ map.on('zoomend', (e) => {
         feat.setStyle({weight: weight});
     }
 });
+
+
+
+map.addLayer(mGrid);
+vGrid.addTo(map);
