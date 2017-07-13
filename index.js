@@ -510,7 +510,8 @@ const scale = (x, level) => {
 const geojsonMarkerOptions = {
     opacity: 1,
     fill: true,
-    fillOpacity: 0.8
+    fillOpacity: 0.8,
+    interactive: false
 };
 
 // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
@@ -566,5 +567,10 @@ map.on('zoomend', (e) => {
 
 
 
-map.addLayer(mGrid);
+// map.addLayer(mGrid);
+mGrid.addTo(map);
 vGrid.addTo(map);
+console.log('map',map.getPanes());
+map.getPane('overlayPane').style.pointerEvents = 'none';
+// map.getPane('overlayPane').style.zIndex = 10;
+// map.getPane('tilePane').style.zIndex = 99;
