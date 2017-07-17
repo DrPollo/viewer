@@ -7,8 +7,6 @@
 require('leaflet');
 require('./libs/Leaflet.VectorGrid');
 require('./libs/leaflet-geojson-gridlayer');
-
-
 // defaults
 const initZoom = 14;
 const initLat = 45.070312;
@@ -350,6 +348,31 @@ const layers = {
 
 
 const map = L.map('map').setView([initLat, initLon], initZoom);
+// pane per vectorGrid
+map.createPane('vectorGridPane');
+map.createPane('focusPane');
+// gestione pane
+// overlayPane > markers
+map.getPane('overlayPane').style.zIndex = 10;
+// vectorGridPane > vector tile
+map.getPane('vectorGridPane').style.zIndex = 11;
+// focusPane > focus geometry
+map.getPane('focusPane').style.zIndex = 12;
+
+
+const focusStyle = {
+    style:{
+        color: orange,
+        weight: 2,
+        fill:false,
+        fillColor: orange,
+        opacity:1,
+        fillOpacity: 0.5
+    },
+    pane: 'focusPane'
+};
+const focusLayer = L.geoJson([], focusStyle).addTo(map);
+
 layers[contrast ? 'contrast' : 'base'].addTo(map);
 
 
@@ -396,67 +419,96 @@ const vectormapConfig = {
     attribution: false,
     vectorTileLayerStyles: vectorMapStyling,
     interactive: true,
+    pane: 'vectorGridPane',
     getFeatureId: function (e) {
         return e.properties.id;
     },
     layersOrdering: ordering
 };
-// const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
-const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
+const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
+// const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
 // const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
 
-// const detailsUrl = "http://localhost:3095/areas/";
-const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
+const detailsUrl = "http://localhost:3095/areas/";
+// const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
 // const detailsUrl = "https://tiles.firstlife.org/areas/";
 
 // definition of the vectorGrid layer
 const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
-
+vGrid.addTo(map);
 // console.log('vGrid',vGrid);
 let currentFeature = null;
 
-var detailsPromise = null;
+let detailsPromise = null;
 
 vGrid.on('click', e => {
+    if(e.originalEvent.defaultPrevented)
+        return;
+
+    e.originalEvent.preventDefault();
+
+
     let id = e.layer.properties.id,
-        properties = e.layer.properties;
-    console.log('click on ',e, properties.name, id);
+        properties = e.layer.properties,
+        bbox = JSON.parse(properties.bbox);
+    console.log('click on ',e, properties.name, id,bbox);
 
     // get feature details
-    detailsPromise = getFeature(id);
-    detailsPromise.then(
-        response => {
-            console.debug('feature details',response);
+    // detailsPromise = getFeature(id);
+    // detailsPromise.then(
+    //     response => {
+    //         console.debug('feature details',response);
+    //     },
+    //     error => {
+    //         console.error(error);
+    //     }
+    // );
+    let bounds = [[bbox[1],bbox[0]],[bbox[3],bbox[2]]];
+    // console.log('fit to bounds',bounds);
+    // Fit the map to the polygon bounds
+    map.fitBounds(bounds);
+    // get selected feature by id
+    getFeature(id).then(
+        res => {
+            // console.debug('getFeature',res);
+            focusLayer.clearLayers();
+            focusLayer.addData(res);
         },
-        error => {
-            console.error(error);
+        err => {
+            console.error('getFeature',err);
         }
     );
+
+
 
     // todo multiple selection
 
     // reset prev feature
-    if (currentFeature !== id)
-        vGrid.resetFeatureStyle(currentFeature);
-
-    vGrid.setFeatureStyle(id, highlightStyle);
-    currentFeature = id;
+    // if (currentFeature !== id)
+    //     vGrid.resetFeatureStyle(currentFeature);
+    //
+    // vGrid.setFeatureStyle(id, highlightStyle);
+    // currentFeature = id;
 
     // todo focus on feature (bbox)
+
 
     // todo clean markers not in the area
 });
 
+
+
+// get feature by id
 function getFeature(id) {
-    console.log('getFeature',id);
+    // console.log('getFeature', id);
     return new Promise((resolve, reject) => {
         let xhr = new XMLHttpRequest();
         let url = detailsUrl.concat(id);
-        console.log('asking to ',url);
+        console.log('asking to ', url);
         xhr.open("GET", url);
         xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
-                resolve(xhr.response);
+                resolve(JSON.parse(xhr.response));
             } else {
                 reject(xhr.statusText);
             }
@@ -501,8 +553,10 @@ const scale = (x, level) => {
     let z = k / q;
     let radius = Math.floor(maxRadius * Math.exp(z));
     // console.log(radius);
-    //
-    return Math.max(radius, minRadius);
+    // senza soglia
+    // return Math.max(radius, minRadius);
+    // con soglia
+    return radius;
 };
 /*
  * Markers
@@ -546,7 +600,7 @@ const markerLayers = {
 };
 // definition of the vectorGrid layer
 const mGrid = L.geoJsonGridLayer(markerUrl, markerLayers);
-
+mGrid.addTo(map);
 
 map.on('zoomend', (e) => {
     let layer = mGrid.getLayers()[0];
@@ -564,13 +618,3 @@ map.on('zoomend', (e) => {
         feat.setStyle({weight: weight});
     }
 });
-
-
-
-// map.addLayer(mGrid);
-mGrid.addTo(map);
-vGrid.addTo(map);
-console.log('map',map.getPanes());
-map.getPane('overlayPane').style.pointerEvents = 'none';
-// map.getPane('overlayPane').style.zIndex = 10;
-// map.getPane('tilePane').style.zIndex = 99;
