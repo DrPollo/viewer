@@ -394,7 +394,13 @@ vGrid.on('click', e => {
     getFeature(id).then(res => {
         // console.debug('getFeature',res);
         focusLayer.clearLayers();
-        focusLayer.addData(res);
+        // todo set style
+        // aggiungo l'area di focus
+        setTimeout(() => {
+            focusLayer.addData(res);
+        }, 500);
+        // todo nascondi contenuti non attinenti
+        mGrid.setStyle(hideStyle(id));
     }, err => {
         console.error('getFeature', err);
     });
@@ -414,6 +420,20 @@ vGrid.on('click', e => {
     // todo clean markers not in the area
 });
 
+//
+function hideStyle(id) {
+    return feature => {
+        console.debug('new style for', feature);
+        if (feature.properties.areaid && feature.properties.areaid === id) {
+            return {};
+        } else {
+            return {
+                weight: 0,
+                fillColor: 'gray'
+            };
+        }
+    };
+}
 // get feature by id
 function getFeature(id) {
     // console.log('getFeature', id);
@@ -476,11 +496,17 @@ const scale = (x, level) => {
 /*
  * Markers
  */
-const geojsonMarkerOptions = {
-    opacity: 1,
-    fill: true,
-    fillOpacity: 0.8,
-    interactive: false
+const geojsonMarkerStyle = feature => {
+    let type = feature.properties.entity_type;
+    let color = colors[type];
+    return {
+        opacity: 1,
+        fill: true,
+        fillOpacity: 0.8,
+        weight: 0,
+        color: color,
+        fillColor: color
+    };
 };
 
 // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
@@ -493,15 +519,14 @@ const markerLayers = {
                 let currentZoom = map.getZoom();
                 // if(feature.area_id)
                 // console.log(feature);
-                let type = feature.properties.entity_type;
-                let color = colors[type];
+
                 let radius = scale(currentZoom, feature.properties.zoom_level);
                 let weight = Math.min(radius, maxWeight);
-                let style = Object.assign({}, geojsonMarkerOptions, {
-                    radius: radius,
+                let style = Object.assign({
+                    interactive: false
+                }, geojsonMarkerStyle(feature), {
                     weight: weight,
-                    color: color,
-                    fillColor: color
+                    radius: radius
                 });
                 // console.log(style,latlng);
                 return L.circleMarker(latlng, style);
@@ -512,8 +537,8 @@ const markerLayers = {
 // definition of the vectorGrid layer
 const mGrid = L.geoJsonGridLayer(markerUrl, markerLayers);
 mGrid.addTo(map);
-
-map.on('zoomend', e => {
+console.log('mGrid', mGrid);
+mGrid.setStyle = (newStyle = {}) => {
     let layer = mGrid.getLayers()[0];
     // console.log(layer);
     let features = layer[`_layers`];
@@ -526,8 +551,33 @@ map.on('zoomend', e => {
         let radius = scale(zoom, level);
         let weight = Math.min(radius, maxWeight);
         feat.setRadius(radius);
-        feat.setStyle({ weight: weight });
+        // creo il nuovo stile
+        let style = Object.assign({}, geojsonMarkerStyle(feat.feature), { weight: weight });
+        // se e' una funzione la risolvo passando la feature
+        if (newStyle instanceof Function) {
+            style = Object.assign(style, newStyle(feat.feature));
+        } else if (newStyle instanceof Object) {
+            style = Object.assign(style, newStyle);
+        }
+        feat.setStyle(style);
     }
+};
+
+// prima del cambio di zoom
+// map.on('zoomstart', (e) => {
+//     // elimino il livello di focus
+//     focusLayer.clearLayers();
+// });
+// prima del cambio di zoom
+map.on('movestart', e => {
+    // elimino il livello di focus
+    focusLayer.clearLayers();
+});
+// fine cambio di zoom
+map.on('zoomend', e => {
+    // aggiorno stile marker
+    // todo gestione focus nella scelta di stile
+    mGrid.setStyle();
 });
 
 },{"./libs/Leaflet.VectorGrid":2,"./libs/leaflet-geojson-gridlayer":3,"leaflet":4}],2:[function(require,module,exports){
