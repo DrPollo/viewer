@@ -18,6 +18,10 @@
   "author": "Alessio Antonini",
   "license": "MIT",
   "dependencies": {
+    "@turf/combine": "^4.5.2",
+    "@turf/helpers": "^4.5.2",
+    "@turf/inside": "^4.5.2",
+    "@turf/within": "^4.5.2",
     "leaflet": "^1.0.3",
     "leaflet.vectorgrid": "^1.2.0",
     "mapbox.js": "^3.1.0",

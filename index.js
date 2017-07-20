@@ -8,6 +8,10 @@ require('leaflet');
 require('./libs/Leaflet.VectorGrid');
 require('./libs/leaflet-geojson-gridlayer');
 
+const inside = require('@turf/inside');
+const combine = require('@turf/combine');
+const within = require('@turf/within');
+const turf = require('@turf/helpers');
 /*
  * moduli
  */
@@ -113,8 +117,26 @@ vGrid.on('click', e => {
         return;
 
     e.originalEvent.preventDefault();
-    // azione focus
-    status.focus(e.layer.properties);
+
+    console.debug('click event at',e.latlng);
+    // recupero focus se attuale
+    let focus = status.getFocus();
+    if(focus){
+        // console.debug('click inside focus area',focus);
+        let pt = turf.point([e.latlng.lng,e.latlng.lat]);
+        let geoJSON = {type:"FeatureCollection",features:focus.features};
+        console.debug('within?',pt,geoJSON);
+        let result = within(turf.featureCollection([pt]),geoJSON);
+        console.debug('within?',result);
+        if(result.features.length < 1){
+            status.restore();
+        } else {
+            status.focus(e.layer.properties);
+        }
+    } else {
+        // azione focus
+        status.focus(e.layer.properties);
+    }
 });
 // prima del cambio di zoom
 map.on('moveend', (e) => {

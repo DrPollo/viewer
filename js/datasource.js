@@ -96,12 +96,15 @@ module.exports = (map) => {
         // se non definito id o definito e uguale all'area id
         if(!focusId || feature.area_id === focusId){
             // non cambio nulla
-            return {};
+            return {
+                up: true
+            };
         } else {
             return {
                 radius: 1,
                 color: gray,
-                fillColor: gray
+                fillColor: gray,
+                up: false
             }
         }
     };

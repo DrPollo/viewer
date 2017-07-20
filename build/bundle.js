@@ -9,6 +9,10 @@ require('leaflet');
 require('./libs/Leaflet.VectorGrid');
 require('./libs/leaflet-geojson-gridlayer');
 
+const inside = require('@turf/inside');
+const combine = require('@turf/combine');
+const within = require('@turf/within');
+const turf = require('@turf/helpers');
 /*
  * moduli
  */
@@ -107,8 +111,26 @@ vGrid.on('click', e => {
     if (e.originalEvent.defaultPrevented) return;
 
     e.originalEvent.preventDefault();
-    // azione focus
-    status.focus(e.layer.properties);
+
+    console.debug('click event at', e.latlng);
+    // recupero focus se attuale
+    let focus = status.getFocus();
+    if (focus) {
+        // console.debug('click inside focus area',focus);
+        let pt = turf.point([e.latlng.lng, e.latlng.lat]);
+        let geoJSON = { type: "FeatureCollection", features: focus.features };
+        console.debug('within?', pt, geoJSON);
+        let result = within(turf.featureCollection([pt]), geoJSON);
+        console.debug('within?', result);
+        if (result.features.length < 1) {
+            status.restore();
+        } else {
+            status.focus(e.layer.properties);
+        }
+    } else {
+        // azione focus
+        status.focus(e.layer.properties);
+    }
 });
 // prima del cambio di zoom
 map.on('moveend', e => {
@@ -122,7 +144,7 @@ map.on('zoomend', e => {
     mGrid.update();
 });
 
-},{"./js/datasource.js":2,"./js/focus":3,"./js/interactive.js":4,"./js/map":5,"./js/status":6,"./js/utils":7,"./libs/Leaflet.VectorGrid":8,"./libs/leaflet-geojson-gridlayer":9,"leaflet":10}],2:[function(require,module,exports){
+},{"./js/datasource.js":2,"./js/focus":3,"./js/interactive.js":4,"./js/map":5,"./js/status":6,"./js/utils":7,"./libs/Leaflet.VectorGrid":8,"./libs/leaflet-geojson-gridlayer":9,"@turf/combine":10,"@turf/helpers":11,"@turf/inside":12,"@turf/within":15,"leaflet":16}],2:[function(require,module,exports){
 /**
  * Created by drpollo on 20/07/2017.
  */
@@ -215,12 +237,15 @@ module.exports = map => {
         // se non definito id o definito e uguale all'area id
         if (!focusId || feature.area_id === focusId) {
             // non cambio nulla
-            return {};
+            return {
+                up: true
+            };
         } else {
             return {
                 radius: 1,
                 color: gray,
-                fillColor: gray
+                fillColor: gray,
+                up: false
             };
         }
     };
@@ -519,18 +544,19 @@ module.exports = () => {
 const Rx = require('rxjs/Rx');
 const Utils = require('./utils');
 const utils = Utils();
-
 // inizializzazione status
+const initFocus = {
+    "id": null,
+    "bounds": null,
+    "features": []
+};
+const initExplorer = {
+    "bounds": null,
+    "reset": true
+};
 const store = {
-    "focus": {
-        "id": null,
-        "bounds": null,
-        "features": []
-    },
-    "explorer": {
-        "bounds": null,
-        "reset": true
-    }
+    "focus": initFocus,
+    "explorer": initExplorer
 };
 
 let current = "explorer";
@@ -547,12 +573,12 @@ module.exports = (params = {}) => {
     status.observe = Rx.Observable.create(function (observer) {
         status.focus = focusHandler(observer);
         status.move = bounds => {
-            console.log('saving? ', current);
+            // console.log('saving? ',current);
             switch (current) {
                 case "focus":
                     break;
                 default:
-                    console.debug('saving bounds', bounds);
+                    // console.debug('saving bounds',bounds);
                     store["explorer"].bounds = bounds;
             }
         };
@@ -563,6 +589,10 @@ module.exports = (params = {}) => {
     }).share();
     // init objervable
     status.observe.subscribe();
+    // get current focus
+    status.getFocus = () => {
+        if (current === "focus") return store["focus"];else return null;
+    };
     // console.log('status',status);
     return status;
 };
@@ -578,9 +608,7 @@ function focusHandler(observer) {
                 if (store["focus"].features.lenght > 0 && JSON.stringify(store["focus"].features).find(entry.id)) {
                     focus(entry, observer);
                 } else {
-                    current = "explorer";
-                    console.debug('restore', store["explorer"]);
-                    observer.next(store["explorer"]);
+                    //nothing to do
                 }
                 break;
             default:
@@ -615,14 +643,14 @@ function focus(entry, observer) {
             store["focus"].features = [];
         }
         // propago il nuovo stato
-        console.debug("stato focus", store["focus"]);
+        // console.debug("stato focus",store["focus"]);
         observer.next(store["focus"]);
     }, err => {
         console.error('getFeature', err);
     });
 }
 
-},{"./utils":7,"rxjs/Rx":19}],7:[function(require,module,exports){
+},{"./utils":7,"rxjs/Rx":25}],7:[function(require,module,exports){
 /**
  * Created by drpollo on 20/07/2017.
  */
@@ -3530,6 +3558,1796 @@ function getFeature(id) {
 })();
 
 },{}],10:[function(require,module,exports){
+var meta = require('@turf/meta');
+
+/**
+ * Combines a {@link FeatureCollection} of {@link Point}, {@link LineString}, or {@link Polygon} features
+ * into {@link MultiPoint}, {@link MultiLineString}, or {@link MultiPolygon} features.
+ *
+ * @name combine
+ * @param {FeatureCollection<Point|LineString|Polygon>} fc a FeatureCollection of any type
+ * @returns {FeatureCollection<MultiPoint|MultiLineString|MultiPolygon>} a FeatureCollection of corresponding type to input
+ * @example
+ * var fc = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [19.026432, 47.49134]
+ *       }
+ *     }, {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [19.074497, 47.509548]
+ *       }
+ *     }
+ *   ]
+ * };
+ *
+ * var combined = turf.combine(fc);
+ *
+ * //addToMap
+ * var addToMap = [combined]
+ */
+module.exports = function (fc) {
+    var groups = {
+        MultiPoint: {coordinates: [], properties: []},
+        MultiLineString: {coordinates: [], properties: []},
+        MultiPolygon: {coordinates: [], properties: []}
+    };
+
+    var multiMapping = Object.keys(groups).reduce(function (memo, item) {
+        memo[item.replace('Multi', '')] = item;
+        return memo;
+    }, {});
+
+    function addToGroup(feature, key, multi) {
+        if (!multi) {
+            groups[key].coordinates.push(feature.geometry.coordinates);
+        } else {
+            groups[key].coordinates = groups[key].coordinates.concat(feature.geometry.coordinates);
+        }
+        groups[key].properties.push(feature.properties);
+    }
+
+    meta.featureEach(fc, function (feature) {
+        if (!feature.geometry) return;
+        if (groups[feature.geometry.type]) {
+            addToGroup(feature, feature.geometry.type, true);
+        } else if (multiMapping[feature.geometry.type]) {
+            addToGroup(feature, multiMapping[feature.geometry.type], false);
+        }
+    });
+
+    return {
+        type: 'FeatureCollection',
+        features: Object.keys(groups)
+            .filter(function (key) {
+                return groups[key].coordinates.length;
+            })
+            .sort()
+            .map(function (key) {
+                return {
+                    type: 'Feature',
+                    properties: {
+                        collectedProperties: groups[key].properties
+                    },
+                    geometry: {
+                        type: key,
+                        coordinates: groups[key].coordinates
+                    }
+                };
+            })
+    };
+};
+
+},{"@turf/meta":14}],11:[function(require,module,exports){
+/**
+ * Wraps a GeoJSON {@link Geometry} in a GeoJSON {@link Feature}.
+ *
+ * @name feature
+ * @param {Geometry} geometry input geometry
+ * @param {Object} properties properties
+ * @returns {Feature} a GeoJSON Feature
+ * @example
+ * var geometry = {
+ *   "type": "Point",
+ *   "coordinates": [110, 50]
+ * };
+ *
+ * var feature = turf.feature(geometry);
+ *
+ * //=feature
+ */
+function feature(geometry, properties) {
+    if (!geometry) throw new Error('No geometry passed');
+
+    return {
+        type: 'Feature',
+        properties: properties || {},
+        geometry: geometry
+    };
+}
+
+/**
+ * Takes coordinates and properties (optional) and returns a new {@link Point} feature.
+ *
+ * @name point
+ * @param {Array<number>} coordinates longitude, latitude position (each in decimal degrees)
+ * @param {Object=} properties an Object that is used as the {@link Feature}'s
+ * properties
+ * @returns {Feature<Point>} a Point feature
+ * @example
+ * var point = turf.point([-75.343, 39.984]);
+ *
+ * //=point
+ */
+function point(coordinates, properties) {
+    if (!coordinates) throw new Error('No coordinates passed');
+    if (coordinates.length === undefined) throw new Error('Coordinates must be an array');
+    if (coordinates.length < 2) throw new Error('Coordinates must be at least 2 numbers long');
+    if (typeof coordinates[0] !== 'number' || typeof coordinates[1] !== 'number') throw new Error('Coordinates must contain numbers');
+
+    return feature({
+        type: 'Point',
+        coordinates: coordinates
+    }, properties);
+}
+
+/**
+ * Takes an array of LinearRings and optionally an {@link Object} with properties and returns a {@link Polygon} feature.
+ *
+ * @name polygon
+ * @param {Array<Array<Array<number>>>} coordinates an array of LinearRings
+ * @param {Object=} properties a properties object
+ * @returns {Feature<Polygon>} a Polygon feature
+ * @throws {Error} throw an error if a LinearRing of the polygon has too few positions
+ * or if a LinearRing of the Polygon does not have matching Positions at the beginning & end.
+ * @example
+ * var polygon = turf.polygon([[
+ *   [-2.275543, 53.464547],
+ *   [-2.275543, 53.489271],
+ *   [-2.215118, 53.489271],
+ *   [-2.215118, 53.464547],
+ *   [-2.275543, 53.464547]
+ * ]], { name: 'poly1', population: 400});
+ *
+ * //=polygon
+ */
+function polygon(coordinates, properties) {
+    if (!coordinates) throw new Error('No coordinates passed');
+
+    for (var i = 0; i < coordinates.length; i++) {
+        var ring = coordinates[i];
+        if (ring.length < 4) {
+            throw new Error('Each LinearRing of a Polygon must have 4 or more Positions.');
+        }
+        for (var j = 0; j < ring[ring.length - 1].length; j++) {
+            if (ring[ring.length - 1][j] !== ring[0][j]) {
+                throw new Error('First and last Position are not equivalent.');
+            }
+        }
+    }
+
+    return feature({
+        type: 'Polygon',
+        coordinates: coordinates
+    }, properties);
+}
+
+/**
+ * Creates a {@link LineString} based on a
+ * coordinate array. Properties can be added optionally.
+ *
+ * @name lineString
+ * @param {Array<Array<number>>} coordinates an array of Positions
+ * @param {Object=} properties an Object of key-value pairs to add as properties
+ * @returns {Feature<LineString>} a LineString feature
+ * @throws {Error} if no coordinates are passed
+ * @example
+ * var linestring1 = turf.lineString([
+ *   [-21.964416, 64.148203],
+ *   [-21.956176, 64.141316],
+ *   [-21.93901, 64.135924],
+ *   [-21.927337, 64.136673]
+ * ]);
+ * var linestring2 = turf.lineString([
+ *   [-21.929054, 64.127985],
+ *   [-21.912918, 64.134726],
+ *   [-21.916007, 64.141016],
+ *   [-21.930084, 64.14446]
+ * ], {name: 'line 1', distance: 145});
+ *
+ * //=linestring1
+ *
+ * //=linestring2
+ */
+function lineString(coordinates, properties) {
+    if (!coordinates) throw new Error('No coordinates passed');
+    if (coordinates.length < 2) throw new Error('Coordinates must be an array of two or more positions');
+
+    return feature({
+        type: 'LineString',
+        coordinates: coordinates
+    }, properties);
+}
+
+/**
+ * Takes one or more {@link Feature|Features} and creates a {@link FeatureCollection}.
+ *
+ * @name featureCollection
+ * @param {Feature[]} features input features
+ * @returns {FeatureCollection} a FeatureCollection of input features
+ * @example
+ * var features = [
+ *  turf.point([-75.343, 39.984], {name: 'Location A'}),
+ *  turf.point([-75.833, 39.284], {name: 'Location B'}),
+ *  turf.point([-75.534, 39.123], {name: 'Location C'})
+ * ];
+ *
+ * var collection = turf.featureCollection(features);
+ *
+ * //=collection
+ */
+function featureCollection(features) {
+    if (!features) throw new Error('No features passed');
+    if (!Array.isArray(features)) throw new Error('features must be an Array');
+
+    return {
+        type: 'FeatureCollection',
+        features: features
+    };
+}
+
+/**
+ * Creates a {@link Feature<MultiLineString>} based on a
+ * coordinate array. Properties can be added optionally.
+ *
+ * @name multiLineString
+ * @param {Array<Array<Array<number>>>} coordinates an array of LineStrings
+ * @param {Object=} properties an Object of key-value pairs to add as properties
+ * @returns {Feature<MultiLineString>} a MultiLineString feature
+ * @throws {Error} if no coordinates are passed
+ * @example
+ * var multiLine = turf.multiLineString([[[0,0],[10,10]]]);
+ *
+ * //=multiLine
+ */
+function multiLineString(coordinates, properties) {
+    if (!coordinates) throw new Error('No coordinates passed');
+
+    return feature({
+        type: 'MultiLineString',
+        coordinates: coordinates
+    }, properties);
+}
+
+/**
+ * Creates a {@link Feature<MultiPoint>} based on a
+ * coordinate array. Properties can be added optionally.
+ *
+ * @name multiPoint
+ * @param {Array<Array<number>>} coordinates an array of Positions
+ * @param {Object=} properties an Object of key-value pairs to add as properties
+ * @returns {Feature<MultiPoint>} a MultiPoint feature
+ * @throws {Error} if no coordinates are passed
+ * @example
+ * var multiPt = turf.multiPoint([[0,0],[10,10]]);
+ *
+ * //=multiPt
+ */
+function multiPoint(coordinates, properties) {
+    if (!coordinates) throw new Error('No coordinates passed');
+
+    return feature({
+        type: 'MultiPoint',
+        coordinates: coordinates
+    }, properties);
+}
+
+/**
+ * Creates a {@link Feature<MultiPolygon>} based on a
+ * coordinate array. Properties can be added optionally.
+ *
+ * @name multiPolygon
+ * @param {Array<Array<Array<Array<number>>>>} coordinates an array of Polygons
+ * @param {Object=} properties an Object of key-value pairs to add as properties
+ * @returns {Feature<MultiPolygon>} a multipolygon feature
+ * @throws {Error} if no coordinates are passed
+ * @example
+ * var multiPoly = turf.multiPolygon([[[[0,0],[0,10],[10,10],[10,0],[0,0]]]]);
+ *
+ * //=multiPoly
+ *
+ */
+function multiPolygon(coordinates, properties) {
+    if (!coordinates) throw new Error('No coordinates passed');
+
+    return feature({
+        type: 'MultiPolygon',
+        coordinates: coordinates
+    }, properties);
+}
+
+/**
+ * Creates a {@link Feature<GeometryCollection>} based on a
+ * coordinate array. Properties can be added optionally.
+ *
+ * @name geometryCollection
+ * @param {Array<{Geometry}>} geometries an array of GeoJSON Geometries
+ * @param {Object=} properties an Object of key-value pairs to add as properties
+ * @returns {Feature<GeometryCollection>} a GeoJSON GeometryCollection Feature
+ * @example
+ * var pt = {
+ *     "type": "Point",
+ *       "coordinates": [100, 0]
+ *     };
+ * var line = {
+ *     "type": "LineString",
+ *     "coordinates": [ [101, 0], [102, 1] ]
+ *   };
+ * var collection = turf.geometryCollection([pt, line]);
+ *
+ * //=collection
+ */
+function geometryCollection(geometries, properties) {
+    if (!geometries) throw new Error('geometries is required');
+
+    return feature({
+        type: 'GeometryCollection',
+        geometries: geometries
+    }, properties);
+}
+
+// https://en.wikipedia.org/wiki/Great-circle_distance#Radius_for_spherical_Earth
+var factors = {
+    miles: 3960,
+    nauticalmiles: 3441.145,
+    degrees: 57.2957795,
+    radians: 1,
+    inches: 250905600,
+    yards: 6969600,
+    meters: 6373000,
+    metres: 6373000,
+    centimeters: 6.373e+8,
+    centimetres: 6.373e+8,
+    kilometers: 6373,
+    kilometres: 6373,
+    feet: 20908792.65
+};
+
+var areaFactors = {
+    kilometers: 0.000001,
+    kilometres: 0.000001,
+    meters: 1,
+    metres: 1,
+    centimetres: 10000,
+    millimeter: 1000000,
+    acres: 0.000247105,
+    miles: 3.86e-7,
+    yards: 1.195990046,
+    feet: 10.763910417,
+    inches: 1550.003100006
+};
+/**
+ * Round number to precision
+ *
+ * @param {number} num Number
+ * @param {number} [precision=0] Precision
+ * @returns {number} rounded number
+ * @example
+ * round(120.4321)
+ * //=120
+ *
+ * round(120.4321, 2)
+ * //=120.43
+ */
+function round(num, precision) {
+    if (num === undefined || num === null || isNaN(num)) throw new Error('num is required');
+    if (precision && !(precision >= 0)) throw new Error('precision must be a positive number');
+    var multiplier = Math.pow(10, precision || 0);
+    return Math.round(num * multiplier) / multiplier;
+}
+
+/**
+ * Convert a distance measurement (assuming a spherical Earth) from radians to a more friendly unit.
+ * Valid units: miles, nauticalmiles, inches, yards, meters, metres, kilometers, centimeters, feet
+ *
+ * @name radiansToDistance
+ * @param {number} radians in radians across the sphere
+ * @param {string} [units=kilometers] can be degrees, radians, miles, or kilometers inches, yards, metres, meters, kilometres, kilometers.
+ * @returns {number} distance
+ */
+function radiansToDistance(radians, units) {
+    if (radians === undefined || radians === null) throw new Error('radians is required');
+
+    var factor = factors[units || 'kilometers'];
+    if (!factor) throw new Error('units is invalid');
+    return radians * factor;
+}
+
+/**
+ * Convert a distance measurement (assuming a spherical Earth) from a real-world unit into radians
+ * Valid units: miles, nauticalmiles, inches, yards, meters, metres, kilometers, centimeters, feet
+ *
+ * @name distanceToRadians
+ * @param {number} distance in real units
+ * @param {string} [units=kilometers] can be degrees, radians, miles, or kilometers inches, yards, metres, meters, kilometres, kilometers.
+ * @returns {number} radians
+ */
+function distanceToRadians(distance, units) {
+    if (distance === undefined || distance === null) throw new Error('distance is required');
+
+    var factor = factors[units || 'kilometers'];
+    if (!factor) throw new Error('units is invalid');
+    return distance / factor;
+}
+
+/**
+ * Convert a distance measurement (assuming a spherical Earth) from a real-world unit into degrees
+ * Valid units: miles, nauticalmiles, inches, yards, meters, metres, centimeters, kilometres, feet
+ *
+ * @name distanceToDegrees
+ * @param {number} distance in real units
+ * @param {string} [units=kilometers] can be degrees, radians, miles, or kilometers inches, yards, metres, meters, kilometres, kilometers.
+ * @returns {number} degrees
+ */
+function distanceToDegrees(distance, units) {
+    return radians2degrees(distanceToRadians(distance, units));
+}
+
+/**
+ * Converts any bearing angle from the north line direction (positive clockwise)
+ * and returns an angle between 0-360 degrees (positive clockwise), 0 being the north line
+ *
+ * @name bearingToAngle
+ * @param {number} bearing angle, between -180 and +180 degrees
+ * @returns {number} angle between 0 and 360 degrees
+ */
+function bearingToAngle(bearing) {
+    if (bearing === null || bearing === undefined) throw new Error('bearing is required');
+
+    var angle = bearing % 360;
+    if (angle < 0) angle += 360;
+    return angle;
+}
+
+/**
+ * Converts an angle in radians to degrees
+ *
+ * @name radians2degrees
+ * @param {number} radians angle in radians
+ * @returns {number} degrees between 0 and 360 degrees
+ */
+function radians2degrees(radians) {
+    if (radians === null || radians === undefined) throw new Error('radians is required');
+
+    var degrees = radians % (2 * Math.PI);
+    return degrees * 180 / Math.PI;
+}
+
+/**
+ * Converts an angle in degrees to radians
+ *
+ * @name degrees2radians
+ * @param {number} degrees angle between 0 and 360 degrees
+ * @returns {number} angle in radians
+ */
+function degrees2radians(degrees) {
+    if (degrees === null || degrees === undefined) throw new Error('degrees is required');
+
+    var radians = degrees % 360;
+    return radians * Math.PI / 180;
+}
+
+
+/**
+ * Converts a distance to the requested unit.
+ * Valid units: miles, nauticalmiles, inches, yards, meters, metres, kilometers, centimeters, feet
+ *
+ * @param {number} distance to be converted
+ * @param {string} originalUnit of the distance
+ * @param {string} [finalUnit=kilometers] returned unit
+ * @returns {number} the converted distance
+ */
+function convertDistance(distance, originalUnit, finalUnit) {
+    if (distance === null || distance === undefined) throw new Error('distance is required');
+    if (!(distance >= 0)) throw new Error('distance must be a positive number');
+
+    var convertedDistance = radiansToDistance(distanceToRadians(distance, originalUnit), finalUnit || 'kilometers');
+    return convertedDistance;
+}
+
+/**
+ * Converts a area to the requested unit.
+ * Valid units: kilometers, kilometres, meters, metres, centimetres, millimeter, acre, mile, yard, foot, inch
+ * @param {number} area to be converted
+ * @param {string} [originalUnit=meters] of the distance
+ * @param {string} [finalUnit=kilometers] returned unit
+ * @returns {number} the converted distance
+ */
+function convertArea(area, originalUnit, finalUnit) {
+    if (area === null || area === undefined) throw new Error('area is required');
+    if (!(area >= 0)) throw new Error('area must be a positive number');
+
+    var startFactor = areaFactors[originalUnit || 'meters'];
+    if (!startFactor) throw new Error('invalid original units');
+
+    var finalFactor = areaFactors[finalUnit || 'kilometers'];
+    if (!finalFactor) throw new Error('invalid final units');
+
+    return (area / startFactor) * finalFactor;
+}
+
+module.exports = {
+    feature: feature,
+    featureCollection: featureCollection,
+    geometryCollection: geometryCollection,
+    point: point,
+    multiPoint: multiPoint,
+    lineString: lineString,
+    multiLineString: multiLineString,
+    polygon: polygon,
+    multiPolygon: multiPolygon,
+    radiansToDistance: radiansToDistance,
+    distanceToRadians: distanceToRadians,
+    distanceToDegrees: distanceToDegrees,
+    radians2degrees: radians2degrees,
+    degrees2radians: degrees2radians,
+    bearingToAngle: bearingToAngle,
+    convertDistance: convertDistance,
+    convertArea: convertArea,
+    round: round
+};
+
+},{}],12:[function(require,module,exports){
+var invariant = require('@turf/invariant');
+var getCoord = invariant.getCoord;
+var getCoords = invariant.getCoords;
+
+// http://en.wikipedia.org/wiki/Even%E2%80%93odd_rule
+// modified from: https://github.com/substack/point-in-polygon/blob/master/index.js
+// which was modified from http://www.ecse.rpi.edu/Homepages/wrf/Research/Short_Notes/pnpoly.html
+
+/**
+ * Takes a {@link Point} and a {@link Polygon} or {@link MultiPolygon} and determines if the point resides inside the polygon. The polygon can
+ * be convex or concave. The function accounts for holes.
+ *
+ * @name inside
+ * @param {Feature<Point>} point input point
+ * @param {Feature<Polygon|MultiPolygon>} polygon input polygon or multipolygon
+ * @param {boolean} [ignoreBoundary=false] True if polygon boundary should be ignored when determining if the point is inside the polygon otherwise false.
+ * @returns {boolean} `true` if the Point is inside the Polygon; `false` if the Point is not inside the Polygon
+ * @example
+ * var pt = turf.point([-77, 44]);
+ * var poly = turf.polygon([[
+ *   [-81, 41],
+ *   [-81, 47],
+ *   [-72, 47],
+ *   [-72, 41],
+ *   [-81, 41]
+ * ]]);
+ *
+ * var isInside = turf.inside(pt, poly);
+ *
+ * //addToMap
+ * pt.properties.isInside = isInside
+ * var addToMap = [pt, poly]
+ */
+module.exports = function (point, polygon, ignoreBoundary) {
+    // validation
+    if (!point) throw new Error('point is required');
+    if (!polygon) throw new Error('polygon is required');
+
+    var pt = getCoord(point);
+    var polys = getCoords(polygon);
+    var type = (polygon.geometry) ? polygon.geometry.type : polygon.type;
+    var bbox = polygon.bbox;
+
+    // Quick elimination if point is not inside bbox
+    if (bbox && inBBox(pt, bbox) === false) return false;
+
+    // normalize to multipolygon
+    if (type === 'Polygon') polys = [polys];
+
+    for (var i = 0, insidePoly = false; i < polys.length && !insidePoly; i++) {
+        // check if it is in the outer ring first
+        if (inRing(pt, polys[i][0], ignoreBoundary)) {
+            var inHole = false;
+            var k = 1;
+            // check for the point in any of the holes
+            while (k < polys[i].length && !inHole) {
+                if (inRing(pt, polys[i][k], !ignoreBoundary)) {
+                    inHole = true;
+                }
+                k++;
+            }
+            if (!inHole) insidePoly = true;
+        }
+    }
+    return insidePoly;
+};
+
+/**
+ * inRing
+ *
+ * @private
+ * @param {[number, number]} pt [x,y]
+ * @param {Array<[number, number]>} ring [[x,y], [x,y],..]
+ * @param {boolean} ignoreBoundary ignoreBoundary
+ * @returns {boolean} inRing
+ */
+function inRing(pt, ring, ignoreBoundary) {
+    var isInside = false;
+    if (ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]) ring = ring.slice(0, ring.length - 1);
+
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        var xi = ring[i][0], yi = ring[i][1];
+        var xj = ring[j][0], yj = ring[j][1];
+        var onBoundary = (pt[1] * (xi - xj) + yi * (xj - pt[0]) + yj * (pt[0] - xi) === 0) &&
+            ((xi - pt[0]) * (xj - pt[0]) <= 0) && ((yi - pt[1]) * (yj - pt[1]) <= 0);
+        if (onBoundary) return !ignoreBoundary;
+        var intersect = ((yi > pt[1]) !== (yj > pt[1])) &&
+        (pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi);
+        if (intersect) isInside = !isInside;
+    }
+    return isInside;
+}
+
+/**
+ * inBBox
+ *
+ * @private
+ * @param {[number, number]} pt point [x,y]
+ * @param {[number, number, number, number]} bbox BBox [west, south, east, north]
+ * @returns {boolean} true/false if point is inside BBox
+ */
+function inBBox(pt, bbox) {
+    return bbox[0] <= pt[0] &&
+           bbox[1] <= pt[1] &&
+           bbox[2] >= pt[0] &&
+           bbox[3] >= pt[1];
+}
+
+},{"@turf/invariant":13}],13:[function(require,module,exports){
+/**
+ * Unwrap a coordinate from a Point Feature, Geometry or a single coordinate.
+ *
+ * @name getCoord
+ * @param {Array<any>|Geometry|Feature<Point>} obj any value
+ * @returns {Array<number>} coordinates
+ */
+function getCoord(obj) {
+    if (!obj) throw new Error('No obj passed');
+
+    var coordinates = getCoords(obj);
+
+    // getCoord() must contain at least two numbers (Point)
+    if (coordinates.length > 1 &&
+        typeof coordinates[0] === 'number' &&
+        typeof coordinates[1] === 'number') {
+        return coordinates;
+    } else {
+        throw new Error('Coordinate is not a valid Point');
+    }
+}
+
+/**
+ * Unwrap coordinates from a Feature, Geometry Object or an Array of numbers
+ *
+ * @name getCoords
+ * @param {Array<any>|Geometry|Feature<any>} obj any value
+ * @returns {Array<any>} coordinates
+ */
+function getCoords(obj) {
+    if (!obj) throw new Error('No obj passed');
+    var coordinates;
+
+    // Array of numbers
+    if (obj.length) {
+        coordinates = obj;
+
+    // Geometry Object
+    } else if (obj.coordinates) {
+        coordinates = obj.coordinates;
+
+    // Feature
+    } else if (obj.geometry && obj.geometry.coordinates) {
+        coordinates = obj.geometry.coordinates;
+    }
+    // Checks if coordinates contains a number
+    if (coordinates) {
+        containsNumber(coordinates);
+        return coordinates;
+    }
+    throw new Error('No valid coordinates');
+}
+
+/**
+ * Checks if coordinates contains a number
+ *
+ * @name containsNumber
+ * @param {Array<any>} coordinates GeoJSON Coordinates
+ * @returns {boolean} true if Array contains a number
+ */
+function containsNumber(coordinates) {
+    if (coordinates.length > 1 &&
+        typeof coordinates[0] === 'number' &&
+        typeof coordinates[1] === 'number') {
+        return true;
+    }
+
+    if (Array.isArray(coordinates[0]) && coordinates[0].length) {
+        return containsNumber(coordinates[0]);
+    }
+    throw new Error('coordinates must only contain numbers');
+}
+
+/**
+ * Enforce expectations about types of GeoJSON objects for Turf.
+ *
+ * @name geojsonType
+ * @param {GeoJSON} value any GeoJSON object
+ * @param {string} type expected GeoJSON type
+ * @param {string} name name of calling function
+ * @throws {Error} if value is not the expected type.
+ */
+function geojsonType(value, type, name) {
+    if (!type || !name) throw new Error('type and name required');
+
+    if (!value || value.type !== type) {
+        throw new Error('Invalid input to ' + name + ': must be a ' + type + ', given ' + value.type);
+    }
+}
+
+/**
+ * Enforce expectations about types of {@link Feature} inputs for Turf.
+ * Internally this uses {@link geojsonType} to judge geometry types.
+ *
+ * @name featureOf
+ * @param {Feature} feature a feature with an expected geometry type
+ * @param {string} type expected GeoJSON type
+ * @param {string} name name of calling function
+ * @throws {Error} error if value is not the expected type.
+ */
+function featureOf(feature, type, name) {
+    if (!feature) throw new Error('No feature passed');
+    if (!name) throw new Error('.featureOf() requires a name');
+    if (!feature || feature.type !== 'Feature' || !feature.geometry) {
+        throw new Error('Invalid input to ' + name + ', Feature with geometry required');
+    }
+    if (!feature.geometry || feature.geometry.type !== type) {
+        throw new Error('Invalid input to ' + name + ': must be a ' + type + ', given ' + feature.geometry.type);
+    }
+}
+
+/**
+ * Enforce expectations about types of {@link FeatureCollection} inputs for Turf.
+ * Internally this uses {@link geojsonType} to judge geometry types.
+ *
+ * @name collectionOf
+ * @param {FeatureCollection} featureCollection a FeatureCollection for which features will be judged
+ * @param {string} type expected GeoJSON type
+ * @param {string} name name of calling function
+ * @throws {Error} if value is not the expected type.
+ */
+function collectionOf(featureCollection, type, name) {
+    if (!featureCollection) throw new Error('No featureCollection passed');
+    if (!name) throw new Error('.collectionOf() requires a name');
+    if (!featureCollection || featureCollection.type !== 'FeatureCollection') {
+        throw new Error('Invalid input to ' + name + ', FeatureCollection required');
+    }
+    for (var i = 0; i < featureCollection.features.length; i++) {
+        var feature = featureCollection.features[i];
+        if (!feature || feature.type !== 'Feature' || !feature.geometry) {
+            throw new Error('Invalid input to ' + name + ', Feature with geometry required');
+        }
+        if (!feature.geometry || feature.geometry.type !== type) {
+            throw new Error('Invalid input to ' + name + ': must be a ' + type + ', given ' + feature.geometry.type);
+        }
+    }
+}
+
+/**
+ * Get Geometry from Feature or Geometry Object
+ *
+ * @param {Feature<any>|Geometry<any>} geojson GeoJSON Feature or Geometry Object
+ * @returns {Geometry<any>} GeoJSON Geometry Object
+ * @throws {Error} if geojson is not a Feature or Geometry Object
+ * @example
+ * var point = {
+ *   "type": "Feature",
+ *   "properties": {},
+ *   "geometry": {
+ *     "type": "Point",
+ *     "coordinates": [110, 40]
+ *   }
+ * }
+ * var geom = invariant.getGeom(point)
+ * //={"type": "Point", "coordinates": [110, 40]}
+ */
+function getGeom(geojson) {
+    if (!geojson) throw new Error('<geojson> is required');
+    if (geojson.geometry) return geojson.geometry;
+    if (geojson.coordinates || geojson.geometries) return geojson;
+    throw new Error('<geojson> must be a Feature or Geometry Object');
+}
+
+/**
+ * Get Geometry Type from Feature or Geometry Object
+ *
+ * @param {Feature<any>|Geometry<any>} geojson GeoJSON Feature or Geometry Object
+ * @returns {string} GeoJSON Geometry Type
+ * @throws {Error} if geojson is not a Feature or Geometry Object
+ * @example
+ * var point = {
+ *   "type": "Feature",
+ *   "properties": {},
+ *   "geometry": {
+ *     "type": "Point",
+ *     "coordinates": [110, 40]
+ *   }
+ * }
+ * var geom = invariant.getGeom(point)
+ * //="Point"
+ */
+function getGeomType(geojson) {
+    return getGeom(geojson).type;
+}
+
+module.exports = {
+    geojsonType: geojsonType,
+    collectionOf: collectionOf,
+    featureOf: featureOf,
+    getCoord: getCoord,
+    getCoords: getCoords,
+    containsNumber: containsNumber,
+    getGeom: getGeom,
+    getGeomType: getGeomType
+};
+
+},{}],14:[function(require,module,exports){
+/**
+ * Callback for coordEach
+ *
+ * @private
+ * @callback coordEachCallback
+ * @param {Array<number>} currentCoords The current coordinates being processed.
+ * @param {number} currentIndex The index of the current element being processed in the
+ * array.Starts at index 0, if an initialValue is provided, and at index 1 otherwise.
+ */
+
+/**
+ * Iterate over coordinates in any GeoJSON object, similar to Array.forEach()
+ *
+ * @name coordEach
+ * @param {FeatureCollection|Geometry|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (currentCoords, currentIndex)
+ * @param {boolean} [excludeWrapCoord=false] whether or not to include the final coordinate of LinearRings that wraps the ring in its iteration.
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [36, 53]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.coordEach(features, function (currentCoords, currentIndex) {
+ *   //=currentCoords
+ *   //=currentIndex
+ * });
+ */
+function coordEach(geojson, callback, excludeWrapCoord) {
+    var i, j, k, g, l, geometry, stopG, coords,
+        geometryMaybeCollection,
+        wrapShrink = 0,
+        currentIndex = 0,
+        isGeometryCollection,
+        isFeatureCollection = geojson.type === 'FeatureCollection',
+        isFeature = geojson.type === 'Feature',
+        stop = isFeatureCollection ? geojson.features.length : 1;
+
+  // This logic may look a little weird. The reason why it is that way
+  // is because it's trying to be fast. GeoJSON supports multiple kinds
+  // of objects at its root: FeatureCollection, Features, Geometries.
+  // This function has the responsibility of handling all of them, and that
+  // means that some of the `for` loops you see below actually just don't apply
+  // to certain inputs. For instance, if you give this just a
+  // Point geometry, then both loops are short-circuited and all we do
+  // is gradually rename the input until it's called 'geometry'.
+  //
+  // This also aims to allocate as few resources as possible: just a
+  // few numbers and booleans, rather than any temporary arrays as would
+  // be required with the normalization approach.
+    for (i = 0; i < stop; i++) {
+
+        geometryMaybeCollection = (isFeatureCollection ? geojson.features[i].geometry :
+        (isFeature ? geojson.geometry : geojson));
+        isGeometryCollection = geometryMaybeCollection.type === 'GeometryCollection';
+        stopG = isGeometryCollection ? geometryMaybeCollection.geometries.length : 1;
+
+        for (g = 0; g < stopG; g++) {
+            geometry = isGeometryCollection ?
+            geometryMaybeCollection.geometries[g] : geometryMaybeCollection;
+            coords = geometry.coordinates;
+
+            wrapShrink = (excludeWrapCoord &&
+                (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon')) ?
+                1 : 0;
+
+            if (geometry.type === 'Point') {
+                callback(coords, currentIndex);
+                currentIndex++;
+            } else if (geometry.type === 'LineString' || geometry.type === 'MultiPoint') {
+                for (j = 0; j < coords.length; j++) {
+                    callback(coords[j], currentIndex);
+                    currentIndex++;
+                }
+            } else if (geometry.type === 'Polygon' || geometry.type === 'MultiLineString') {
+                for (j = 0; j < coords.length; j++)
+                    for (k = 0; k < coords[j].length - wrapShrink; k++) {
+                        callback(coords[j][k], currentIndex);
+                        currentIndex++;
+                    }
+            } else if (geometry.type === 'MultiPolygon') {
+                for (j = 0; j < coords.length; j++)
+                    for (k = 0; k < coords[j].length; k++)
+                        for (l = 0; l < coords[j][k].length - wrapShrink; l++) {
+                            callback(coords[j][k][l], currentIndex);
+                            currentIndex++;
+                        }
+            } else if (geometry.type === 'GeometryCollection') {
+                for (j = 0; j < geometry.geometries.length; j++)
+                    coordEach(geometry.geometries[j], callback, excludeWrapCoord);
+            } else {
+                throw new Error('Unknown Geometry Type');
+            }
+        }
+    }
+}
+
+/**
+ * Callback for coordReduce
+ *
+ * The first time the callback function is called, the values provided as arguments depend
+ * on whether the reduce method has an initialValue argument.
+ *
+ * If an initialValue is provided to the reduce method:
+ *  - The previousValue argument is initialValue.
+ *  - The currentValue argument is the value of the first element present in the array.
+ *
+ * If an initialValue is not provided:
+ *  - The previousValue argument is the value of the first element present in the array.
+ *  - The currentValue argument is the value of the second element present in the array.
+ *
+ * @private
+ * @callback coordReduceCallback
+ * @param {*} previousValue The accumulated value previously returned in the last invocation
+ * of the callback, or initialValue, if supplied.
+ * @param {[number, number]} currentCoords The current coordinate being processed.
+ * @param {number} currentIndex The index of the current element being processed in the
+ * array.Starts at index 0, if an initialValue is provided, and at index 1 otherwise.
+ */
+
+/**
+ * Reduce coordinates in any GeoJSON object, similar to Array.reduce()
+ *
+ * @name coordReduce
+ * @param {FeatureCollection|Geometry|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (previousValue, currentCoords, currentIndex)
+ * @param {*} [initialValue] Value to use as the first argument to the first call of the callback.
+ * @param {boolean} [excludeWrapCoord=false] whether or not to include
+ * the final coordinate of LinearRings that wraps the ring in its iteration.
+ * @returns {*} The value that results from the reduction.
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [36, 53]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.coordReduce(features, function (previousValue, currentCoords, currentIndex) {
+ *   //=previousValue
+ *   //=currentCoords
+ *   //=currentIndex
+ *   return currentCoords;
+ * });
+ */
+function coordReduce(geojson, callback, initialValue, excludeWrapCoord) {
+    var previousValue = initialValue;
+    coordEach(geojson, function (currentCoords, currentIndex) {
+        if (currentIndex === 0 && initialValue === undefined) {
+            previousValue = currentCoords;
+        } else {
+            previousValue = callback(previousValue, currentCoords, currentIndex);
+        }
+    }, excludeWrapCoord);
+    return previousValue;
+}
+
+/**
+ * Callback for propEach
+ *
+ * @private
+ * @callback propEachCallback
+ * @param {*} currentProperties The current properties being processed.
+ * @param {number} currentIndex The index of the current element being processed in the
+ * array.Starts at index 0, if an initialValue is provided, and at index 1 otherwise.
+ */
+
+/**
+ * Iterate over properties in any GeoJSON object, similar to Array.forEach()
+ *
+ * @name propEach
+ * @param {FeatureCollection|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (currentProperties, currentIndex)
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"foo": "bar"},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"hello": "world"},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [36, 53]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.propEach(features, function (currentProperties, currentIndex) {
+ *   //=currentProperties
+ *   //=currentIndex
+ * });
+ */
+function propEach(geojson, callback) {
+    var i;
+    switch (geojson.type) {
+    case 'FeatureCollection':
+        for (i = 0; i < geojson.features.length; i++) {
+            callback(geojson.features[i].properties, i);
+        }
+        break;
+    case 'Feature':
+        callback(geojson.properties, 0);
+        break;
+    }
+}
+
+
+/**
+ * Callback for propReduce
+ *
+ * The first time the callback function is called, the values provided as arguments depend
+ * on whether the reduce method has an initialValue argument.
+ *
+ * If an initialValue is provided to the reduce method:
+ *  - The previousValue argument is initialValue.
+ *  - The currentValue argument is the value of the first element present in the array.
+ *
+ * If an initialValue is not provided:
+ *  - The previousValue argument is the value of the first element present in the array.
+ *  - The currentValue argument is the value of the second element present in the array.
+ *
+ * @private
+ * @callback propReduceCallback
+ * @param {*} previousValue The accumulated value previously returned in the last invocation
+ * of the callback, or initialValue, if supplied.
+ * @param {*} currentProperties The current properties being processed.
+ * @param {number} currentIndex The index of the current element being processed in the
+ * array.Starts at index 0, if an initialValue is provided, and at index 1 otherwise.
+ */
+
+/**
+ * Reduce properties in any GeoJSON object into a single value,
+ * similar to how Array.reduce works. However, in this case we lazily run
+ * the reduction, so an array of all properties is unnecessary.
+ *
+ * @name propReduce
+ * @param {FeatureCollection|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (previousValue, currentProperties, currentIndex)
+ * @param {*} [initialValue] Value to use as the first argument to the first call of the callback.
+ * @returns {*} The value that results from the reduction.
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"foo": "bar"},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"hello": "world"},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [36, 53]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.propReduce(features, function (previousValue, currentProperties, currentIndex) {
+ *   //=previousValue
+ *   //=currentProperties
+ *   //=currentIndex
+ *   return currentProperties
+ * });
+ */
+function propReduce(geojson, callback, initialValue) {
+    var previousValue = initialValue;
+    propEach(geojson, function (currentProperties, currentIndex) {
+        if (currentIndex === 0 && initialValue === undefined) {
+            previousValue = currentProperties;
+        } else {
+            previousValue = callback(previousValue, currentProperties, currentIndex);
+        }
+    });
+    return previousValue;
+}
+
+/**
+ * Callback for featureEach
+ *
+ * @private
+ * @callback featureEachCallback
+ * @param {Feature<any>} currentFeature The current feature being processed.
+ * @param {number} currentIndex The index of the current element being processed in the
+ * array.Starts at index 0, if an initialValue is provided, and at index 1 otherwise.
+ */
+
+/**
+ * Iterate over features in any GeoJSON object, similar to
+ * Array.forEach.
+ *
+ * @name featureEach
+ * @param {Geometry|FeatureCollection|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (currentFeature, currentIndex)
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [36, 53]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.featureEach(features, function (currentFeature, currentIndex) {
+ *   //=currentFeature
+ *   //=currentIndex
+ * });
+ */
+function featureEach(geojson, callback) {
+    if (geojson.type === 'Feature') {
+        callback(geojson, 0);
+    } else if (geojson.type === 'FeatureCollection') {
+        for (var i = 0; i < geojson.features.length; i++) {
+            callback(geojson.features[i], i);
+        }
+    }
+}
+
+/**
+ * Callback for featureReduce
+ *
+ * The first time the callback function is called, the values provided as arguments depend
+ * on whether the reduce method has an initialValue argument.
+ *
+ * If an initialValue is provided to the reduce method:
+ *  - The previousValue argument is initialValue.
+ *  - The currentValue argument is the value of the first element present in the array.
+ *
+ * If an initialValue is not provided:
+ *  - The previousValue argument is the value of the first element present in the array.
+ *  - The currentValue argument is the value of the second element present in the array.
+ *
+ * @private
+ * @callback featureReduceCallback
+ * @param {*} previousValue The accumulated value previously returned in the last invocation
+ * of the callback, or initialValue, if supplied.
+ * @param {Feature<any>} currentFeature The current Feature being processed.
+ * @param {number} currentIndex The index of the current element being processed in the
+ * array.Starts at index 0, if an initialValue is provided, and at index 1 otherwise.
+ */
+
+/**
+ * Reduce features in any GeoJSON object, similar to Array.reduce().
+ *
+ * @name featureReduce
+ * @param {Geometry|FeatureCollection|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (previousValue, currentFeature, currentIndex)
+ * @param {*} [initialValue] Value to use as the first argument to the first call of the callback.
+ * @returns {*} The value that results from the reduction.
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"foo": "bar"},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"hello": "world"},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [36, 53]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.featureReduce(features, function (previousValue, currentFeature, currentIndex) {
+ *   //=previousValue
+ *   //=currentFeature
+ *   //=currentIndex
+ *   return currentFeature
+ * });
+ */
+function featureReduce(geojson, callback, initialValue) {
+    var previousValue = initialValue;
+    featureEach(geojson, function (currentFeature, currentIndex) {
+        if (currentIndex === 0 && initialValue === undefined) {
+            previousValue = currentFeature;
+        } else {
+            previousValue = callback(previousValue, currentFeature, currentIndex);
+        }
+    });
+    return previousValue;
+}
+
+/**
+ * Get all coordinates from any GeoJSON object.
+ *
+ * @name coordAll
+ * @param {Geometry|FeatureCollection|Feature<any>} geojson any GeoJSON object
+ * @returns {Array<Array<number>>} coordinate position array
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [36, 53]
+ *       }
+ *     }
+ *   ]
+ * };
+ * var coords = turf.coordAll(features);
+ * //=coords
+ */
+function coordAll(geojson) {
+    var coords = [];
+    coordEach(geojson, function (coord) {
+        coords.push(coord);
+    });
+    return coords;
+}
+
+/**
+ * Iterate over each geometry in any GeoJSON object, similar to Array.forEach()
+ *
+ * @name geomEach
+ * @param {Geometry|FeatureCollection|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (currentGeometry, currentIndex, currentProperties)
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [36, 53]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.geomEach(features, function (currentGeometry, currentIndex, currentProperties) {
+ *   //=currentGeometry
+ *   //=currentIndex
+ *   //=currentProperties
+ * });
+ */
+function geomEach(geojson, callback) {
+    var i, j, g, geometry, stopG,
+        geometryMaybeCollection,
+        isGeometryCollection,
+        geometryProperties,
+        currentIndex = 0,
+        isFeatureCollection = geojson.type === 'FeatureCollection',
+        isFeature = geojson.type === 'Feature',
+        stop = isFeatureCollection ? geojson.features.length : 1;
+
+  // This logic may look a little weird. The reason why it is that way
+  // is because it's trying to be fast. GeoJSON supports multiple kinds
+  // of objects at its root: FeatureCollection, Features, Geometries.
+  // This function has the responsibility of handling all of them, and that
+  // means that some of the `for` loops you see below actually just don't apply
+  // to certain inputs. For instance, if you give this just a
+  // Point geometry, then both loops are short-circuited and all we do
+  // is gradually rename the input until it's called 'geometry'.
+  //
+  // This also aims to allocate as few resources as possible: just a
+  // few numbers and booleans, rather than any temporary arrays as would
+  // be required with the normalization approach.
+    for (i = 0; i < stop; i++) {
+
+        geometryMaybeCollection = (isFeatureCollection ? geojson.features[i].geometry :
+        (isFeature ? geojson.geometry : geojson));
+        geometryProperties = (isFeatureCollection ? geojson.features[i].properties :
+                              (isFeature ? geojson.properties : {}));
+        isGeometryCollection = geometryMaybeCollection.type === 'GeometryCollection';
+        stopG = isGeometryCollection ? geometryMaybeCollection.geometries.length : 1;
+
+        for (g = 0; g < stopG; g++) {
+            geometry = isGeometryCollection ?
+            geometryMaybeCollection.geometries[g] : geometryMaybeCollection;
+
+            if (geometry.type === 'Point' ||
+                geometry.type === 'LineString' ||
+                geometry.type === 'MultiPoint' ||
+                geometry.type === 'Polygon' ||
+                geometry.type === 'MultiLineString' ||
+                geometry.type === 'MultiPolygon') {
+                callback(geometry, currentIndex, geometryProperties);
+                currentIndex++;
+            } else if (geometry.type === 'GeometryCollection') {
+                for (j = 0; j < geometry.geometries.length; j++) {
+                    callback(geometry.geometries[j], currentIndex, geometryProperties);
+                    currentIndex++;
+                }
+            } else {
+                throw new Error('Unknown Geometry Type');
+            }
+        }
+    }
+}
+
+/**
+ * Callback for geomReduce
+ *
+ * The first time the callback function is called, the values provided as arguments depend
+ * on whether the reduce method has an initialValue argument.
+ *
+ * If an initialValue is provided to the reduce method:
+ *  - The previousValue argument is initialValue.
+ *  - The currentValue argument is the value of the first element present in the array.
+ *
+ * If an initialValue is not provided:
+ *  - The previousValue argument is the value of the first element present in the array.
+ *  - The currentValue argument is the value of the second element present in the array.
+ *
+ * @private
+ * @callback geomReduceCallback
+ * @param {*} previousValue The accumulated value previously returned in the last invocation
+ * of the callback, or initialValue, if supplied.
+ * @param {*} currentGeometry The current Feature being processed.
+ * @param {number} currentIndex The index of the current element being processed in the
+ * array.Starts at index 0, if an initialValue is provided, and at index 1 otherwise.
+ * @param {object} currentProperties The current feature properties being processed.
+ */
+
+/**
+ * Reduce geometry in any GeoJSON object, similar to Array.reduce().
+ *
+ * @name geomReduce
+ * @param {Geometry|FeatureCollection|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (previousValue, currentGeometry, currentIndex, currentProperties)
+ * @param {*} [initialValue] Value to use as the first argument to the first call of the callback.
+ * @returns {*} The value that results from the reduction.
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"foo": "bar"},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"hello": "world"},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [36, 53]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.geomReduce(features, function (previousValue, currentGeometry, currentIndex) {
+ *   //=previousValue
+ *   //=currentGeometry
+ *   //=currentIndex
+ *   return currentGeometry
+ * });
+ */
+function geomReduce(geojson, callback, initialValue) {
+    var previousValue = initialValue;
+    geomEach(geojson, function (currentGeometry, currentIndex, currentProperties) {
+        if (currentIndex === 0 && initialValue === undefined) {
+            previousValue = currentGeometry;
+        } else {
+            previousValue = callback(previousValue, currentGeometry, currentIndex, currentProperties);
+        }
+    });
+    return previousValue;
+}
+
+/**
+ * Callback for flattenEach
+ *
+ * @private
+ * @callback flattenEachCallback
+ * @param {Feature<any>} currentFeature The current flattened feature being processed.
+ * @param {number} currentIndex The index of the current element being processed in the
+ * array. Starts at index 0, if an initialValue is provided, and at index 1 otherwise.
+ * @param {number} currentSubIndex The subindex of the current element being processed in the
+ * array. Starts at index 0 and increases if the flattened feature was a multi-geometry.
+ */
+
+/**
+ * Iterate over flattened features in any GeoJSON object, similar to
+ * Array.forEach.
+ *
+ * @name flattenEach
+ * @param {Geometry|FeatureCollection|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (currentFeature, currentIndex, currentSubIndex)
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "MultiPoint",
+ *         "coordinates": [ [36, 53], [46, 69] ]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.flattenEach(features, function (currentFeature, currentIndex, currentSubIndex) {
+ *   //=currentFeature
+ *   //=currentIndex
+ *   //=currentSubIndex
+ * });
+ */
+function flattenEach(geojson, callback) {
+    geomEach(geojson, function (geometry, index, properties) {
+
+        // Callback for single geometry
+        switch (geometry.type) {
+        case 'Point':
+        case 'LineString':
+        case 'Polygon':
+            callback(feature(geometry, properties), index, 0);
+            return;
+        }
+
+        var geomType;
+
+        // Callback for multi-geometry
+        switch (geometry.type) {
+        case 'MultiPoint':
+            geomType = 'Point';
+            break;
+        case 'MultiLineString':
+            geomType = 'LineString';
+            break;
+        case 'MultiPolygon':
+            geomType = 'Polygon';
+            break;
+        }
+
+        geometry.coordinates.forEach(function (coordinate, subindex) {
+            var geom = {
+                type: geomType,
+                coordinates: coordinate
+            };
+            callback(feature(geom, properties), index, subindex);
+        });
+
+    });
+}
+
+/**
+ * Callback for flattenReduce
+ *
+ * The first time the callback function is called, the values provided as arguments depend
+ * on whether the reduce method has an initialValue argument.
+ *
+ * If an initialValue is provided to the reduce method:
+ *  - The previousValue argument is initialValue.
+ *  - The currentValue argument is the value of the first element present in the array.
+ *
+ * If an initialValue is not provided:
+ *  - The previousValue argument is the value of the first element present in the array.
+ *  - The currentValue argument is the value of the second element present in the array.
+ *
+ * @private
+ * @callback flattenReduceCallback
+ * @param {*} previousValue The accumulated value previously returned in the last invocation
+ * of the callback, or initialValue, if supplied.
+ * @param {Feature<any>} currentFeature The current Feature being processed.
+ * @param {number} currentIndex The index of the current element being processed in the
+ * array.Starts at index 0, if an initialValue is provided, and at index 1 otherwise.
+ * @param {number} currentSubIndex The subindex of the current element being processed in the
+ * array. Starts at index 0 and increases if the flattened feature was a multi-geometry.
+ */
+
+/**
+ * Reduce flattened features in any GeoJSON object, similar to Array.reduce().
+ *
+ * @name flattenReduce
+ * @param {Geometry|FeatureCollection|Feature<any>} geojson any GeoJSON object
+ * @param {Function} callback a method that takes (previousValue, currentFeature, currentIndex, currentSubIndex)
+ * @param {*} [initialValue] Value to use as the first argument to the first call of the callback.
+ * @returns {*} The value that results from the reduction.
+ * @example
+ * var features = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"foo": "bar"},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [26, 37]
+ *       }
+ *     },
+ *     {
+ *       "type": "Feature",
+ *       "properties": {"hello": "world"},
+ *       "geometry": {
+ *         "type": "MultiPoint",
+ *         "coordinates": [ [36, 53], [46, 69] ]
+ *       }
+ *     }
+ *   ]
+ * };
+ * turf.flattenReduce(features, function (previousValue, currentFeature, currentIndex, currentSubIndex) {
+ *   //=previousValue
+ *   //=currentFeature
+ *   //=currentIndex
+ *   //=currentSubIndex
+ *   return currentFeature
+ * });
+ */
+function flattenReduce(geojson, callback, initialValue) {
+    var previousValue = initialValue;
+    flattenEach(geojson, function (currentFeature, currentIndex, currentSubIndex) {
+        if (currentIndex === 0 && currentSubIndex === 0 && initialValue === undefined) {
+            previousValue = currentFeature;
+        } else {
+            previousValue = callback(previousValue, currentFeature, currentIndex, currentSubIndex);
+        }
+    });
+    return previousValue;
+}
+
+/**
+ * Create Feature
+ *
+ * @private
+ * @param {Geometry} geometry GeoJSON Geometry
+ * @param {Object} properties Properties
+ * @returns {Feature} GeoJSON Feature
+ */
+function feature(geometry, properties) {
+    if (!geometry) throw new Error('No geometry passed');
+
+    return {
+        type: 'Feature',
+        properties: properties || {},
+        geometry: geometry
+    };
+}
+
+module.exports = {
+    coordEach: coordEach,
+    coordReduce: coordReduce,
+    propEach: propEach,
+    propReduce: propReduce,
+    featureEach: featureEach,
+    featureReduce: featureReduce,
+    coordAll: coordAll,
+    geomEach: geomEach,
+    geomReduce: geomReduce,
+    flattenEach: flattenEach,
+    flattenReduce: flattenReduce
+};
+
+},{}],15:[function(require,module,exports){
+var inside = require('@turf/inside');
+var featureCollection = require('@turf/helpers').featureCollection;
+
+/**
+ * Takes a set of {@link Point|points} and a set of {@link Polygon|polygons} and returns the points that fall within the polygons.
+ *
+ * @name within
+ * @param {FeatureCollection<Point>} points input points
+ * @param {FeatureCollection<Polygon>} polygons input polygons
+ * @returns {FeatureCollection<Point>} points that land within at least one polygon
+ * @example
+ * var searchWithin = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Polygon",
+ *         "coordinates": [[
+ *           [-46.653,-23.543],
+ *           [-46.634,-23.5346],
+ *           [-46.613,-23.543],
+ *           [-46.614,-23.559],
+ *           [-46.631,-23.567],
+ *           [-46.653,-23.560],
+ *           [-46.653,-23.543]
+ *         ]]
+ *       }
+ *     }
+ *   ]
+ * };
+ * var points = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [-46.6318, -23.5523]
+ *       }
+ *     }, {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [-46.6246, -23.5325]
+ *       }
+ *     }, {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [-46.6062, -23.5513]
+ *       }
+ *     }, {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [-46.663, -23.554]
+ *       }
+ *     }, {
+ *       "type": "Feature",
+ *       "properties": {},
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [-46.643, -23.557]
+ *       }
+ *     }
+ *   ]
+ * };
+ *
+ * var ptsWithin = turf.within(points, searchWithin);
+ *
+ * //addToMap
+ * var addToMap = [points, searchWithin, ptsWithin]
+ * turf.featureEach(ptsWithin, function (currentFeature) {
+ *   currentFeature.properties['marker-size'] = 'large';
+ *   currentFeature.properties['marker-color'] = '#000';
+ * });
+ */
+module.exports = function (points, polygons) {
+    var pointsWithin = featureCollection([]);
+    for (var i = 0; i < polygons.features.length; i++) {
+        for (var j = 0; j < points.features.length; j++) {
+            var isInside = inside(points.features[j], polygons.features[i]);
+            if (isInside) {
+                pointsWithin.features.push(points.features[j]);
+            }
+        }
+    }
+    return pointsWithin;
+};
+
+},{"@turf/helpers":11,"@turf/inside":12}],16:[function(require,module,exports){
 /*
  Leaflet 1.0.3, a JS library for interactive maps. http://leafletjs.com
  (c) 2010-2016 Vladimir Agafonkin, (c) 2010-2011 CloudMade
@@ -16781,7 +18599,7 @@ L.control.layers = function (baseLayers, overlays, options) {
 
 }(window, document));
 
-},{}],11:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -16835,7 +18653,7 @@ var AsyncSubject = (function (_super) {
 }(Subject_1.Subject));
 exports.AsyncSubject = AsyncSubject;
 
-},{"./Subject":21,"./Subscription":24}],12:[function(require,module,exports){
+},{"./Subject":27,"./Subscription":30}],18:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -16885,7 +18703,7 @@ var BehaviorSubject = (function (_super) {
 }(Subject_1.Subject));
 exports.BehaviorSubject = BehaviorSubject;
 
-},{"./Subject":21,"./util/ObjectUnsubscribedError":335}],13:[function(require,module,exports){
+},{"./Subject":27,"./util/ObjectUnsubscribedError":341}],19:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -16922,7 +18740,7 @@ var InnerSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.InnerSubscriber = InnerSubscriber;
 
-},{"./Subscriber":23}],14:[function(require,module,exports){
+},{"./Subscriber":29}],20:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('./Observable');
 /**
@@ -17050,7 +18868,7 @@ var Notification = (function () {
 }());
 exports.Notification = Notification;
 
-},{"./Observable":15}],15:[function(require,module,exports){
+},{"./Observable":21}],21:[function(require,module,exports){
 "use strict";
 var root_1 = require('./util/root');
 var toSubscriber_1 = require('./util/toSubscriber');
@@ -17307,7 +19125,7 @@ var Observable = (function () {
 }());
 exports.Observable = Observable;
 
-},{"./symbol/observable":321,"./util/root":352,"./util/toSubscriber":354}],16:[function(require,module,exports){
+},{"./symbol/observable":327,"./util/root":358,"./util/toSubscriber":360}],22:[function(require,module,exports){
 "use strict";
 exports.empty = {
     closed: true,
@@ -17316,7 +19134,7 @@ exports.empty = {
     complete: function () { }
 };
 
-},{}],17:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17347,7 +19165,7 @@ var OuterSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.OuterSubscriber = OuterSubscriber;
 
-},{"./Subscriber":23}],18:[function(require,module,exports){
+},{"./Subscriber":29}],24:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17450,7 +19268,7 @@ var ReplayEvent = (function () {
     return ReplayEvent;
 }());
 
-},{"./Subject":21,"./SubjectSubscription":22,"./Subscription":24,"./operator/observeOn":255,"./scheduler/queue":319,"./util/ObjectUnsubscribedError":335}],19:[function(require,module,exports){
+},{"./Subject":27,"./SubjectSubscription":28,"./Subscription":30,"./operator/observeOn":261,"./scheduler/queue":325,"./util/ObjectUnsubscribedError":341}],25:[function(require,module,exports){
 "use strict";
 /* tslint:disable:no-unused-variable */
 // Subject imported before Observable to bypass circular dependency issue since
@@ -17680,7 +19498,7 @@ var Symbol = {
 };
 exports.Symbol = Symbol;
 
-},{"./AsyncSubject":11,"./BehaviorSubject":12,"./Notification":14,"./Observable":15,"./ReplaySubject":18,"./Subject":21,"./Subscriber":23,"./Subscription":24,"./add/observable/bindCallback":25,"./add/observable/bindNodeCallback":26,"./add/observable/combineLatest":27,"./add/observable/concat":28,"./add/observable/defer":29,"./add/observable/dom/ajax":30,"./add/observable/dom/webSocket":31,"./add/observable/empty":32,"./add/observable/forkJoin":33,"./add/observable/from":34,"./add/observable/fromEvent":35,"./add/observable/fromEventPattern":36,"./add/observable/fromPromise":37,"./add/observable/generate":38,"./add/observable/if":39,"./add/observable/interval":40,"./add/observable/merge":41,"./add/observable/never":42,"./add/observable/of":43,"./add/observable/onErrorResumeNext":44,"./add/observable/pairs":45,"./add/observable/race":46,"./add/observable/range":47,"./add/observable/throw":48,"./add/observable/timer":49,"./add/observable/using":50,"./add/observable/zip":51,"./add/operator/audit":52,"./add/operator/auditTime":53,"./add/operator/buffer":54,"./add/operator/bufferCount":55,"./add/operator/bufferTime":56,"./add/operator/bufferToggle":57,"./add/operator/bufferWhen":58,"./add/operator/catch":59,"./add/operator/combineAll":60,"./add/operator/combineLatest":61,"./add/operator/concat":62,"./add/operator/concatAll":63,"./add/operator/concatMap":64,"./add/operator/concatMapTo":65,"./add/operator/count":66,"./add/operator/debounce":67,"./add/operator/debounceTime":68,"./add/operator/defaultIfEmpty":69,"./add/operator/delay":70,"./add/operator/delayWhen":71,"./add/operator/dematerialize":72,"./add/operator/distinct":73,"./add/operator/distinctUntilChanged":74,"./add/operator/distinctUntilKeyChanged":75,"./add/operator/do":76,"./add/operator/elementAt":77,"./add/operator/every":78,"./add/operator/exhaust":79,"./add/operator/exhaustMap":80,"./add/operator/expand":81,"./add/operator/filter":82,"./add/operator/finally":83,"./add/operator/find":84,"./add/operator/findIndex":85,"./add/operator/first":86,"./add/operator/groupBy":87,"./add/operator/ignoreElements":88,"./add/operator/isEmpty":89,"./add/operator/last":90,"./add/operator/let":91,"./add/operator/map":92,"./add/operator/mapTo":93,"./add/operator/materialize":94,"./add/operator/max":95,"./add/operator/merge":96,"./add/operator/mergeAll":97,"./add/operator/mergeMap":98,"./add/operator/mergeMapTo":99,"./add/operator/mergeScan":100,"./add/operator/min":101,"./add/operator/multicast":102,"./add/operator/observeOn":103,"./add/operator/onErrorResumeNext":104,"./add/operator/pairwise":105,"./add/operator/partition":106,"./add/operator/pluck":107,"./add/operator/publish":108,"./add/operator/publishBehavior":109,"./add/operator/publishLast":110,"./add/operator/publishReplay":111,"./add/operator/race":112,"./add/operator/reduce":113,"./add/operator/repeat":114,"./add/operator/repeatWhen":115,"./add/operator/retry":116,"./add/operator/retryWhen":117,"./add/operator/sample":118,"./add/operator/sampleTime":119,"./add/operator/scan":120,"./add/operator/sequenceEqual":121,"./add/operator/share":122,"./add/operator/shareReplay":123,"./add/operator/single":124,"./add/operator/skip":125,"./add/operator/skipLast":126,"./add/operator/skipUntil":127,"./add/operator/skipWhile":128,"./add/operator/startWith":129,"./add/operator/subscribeOn":130,"./add/operator/switch":131,"./add/operator/switchMap":132,"./add/operator/switchMapTo":133,"./add/operator/take":134,"./add/operator/takeLast":135,"./add/operator/takeUntil":136,"./add/operator/takeWhile":137,"./add/operator/throttle":138,"./add/operator/throttleTime":139,"./add/operator/timeInterval":140,"./add/operator/timeout":141,"./add/operator/timeoutWith":142,"./add/operator/timestamp":143,"./add/operator/toArray":144,"./add/operator/toPromise":145,"./add/operator/window":146,"./add/operator/windowCount":147,"./add/operator/windowTime":148,"./add/operator/windowToggle":149,"./add/operator/windowWhen":150,"./add/operator/withLatestFrom":151,"./add/operator/zip":152,"./add/operator/zipAll":153,"./observable/ConnectableObservable":158,"./observable/dom/AjaxObservable":183,"./operator/timeInterval":292,"./operator/timestamp":295,"./scheduler/VirtualTimeScheduler":315,"./scheduler/animationFrame":316,"./scheduler/asap":317,"./scheduler/async":318,"./scheduler/queue":319,"./symbol/iterator":320,"./symbol/observable":321,"./symbol/rxSubscriber":322,"./testing/TestScheduler":327,"./util/ArgumentOutOfRangeError":329,"./util/EmptyError":330,"./util/ObjectUnsubscribedError":335,"./util/TimeoutError":337,"./util/UnsubscriptionError":338}],20:[function(require,module,exports){
+},{"./AsyncSubject":17,"./BehaviorSubject":18,"./Notification":20,"./Observable":21,"./ReplaySubject":24,"./Subject":27,"./Subscriber":29,"./Subscription":30,"./add/observable/bindCallback":31,"./add/observable/bindNodeCallback":32,"./add/observable/combineLatest":33,"./add/observable/concat":34,"./add/observable/defer":35,"./add/observable/dom/ajax":36,"./add/observable/dom/webSocket":37,"./add/observable/empty":38,"./add/observable/forkJoin":39,"./add/observable/from":40,"./add/observable/fromEvent":41,"./add/observable/fromEventPattern":42,"./add/observable/fromPromise":43,"./add/observable/generate":44,"./add/observable/if":45,"./add/observable/interval":46,"./add/observable/merge":47,"./add/observable/never":48,"./add/observable/of":49,"./add/observable/onErrorResumeNext":50,"./add/observable/pairs":51,"./add/observable/race":52,"./add/observable/range":53,"./add/observable/throw":54,"./add/observable/timer":55,"./add/observable/using":56,"./add/observable/zip":57,"./add/operator/audit":58,"./add/operator/auditTime":59,"./add/operator/buffer":60,"./add/operator/bufferCount":61,"./add/operator/bufferTime":62,"./add/operator/bufferToggle":63,"./add/operator/bufferWhen":64,"./add/operator/catch":65,"./add/operator/combineAll":66,"./add/operator/combineLatest":67,"./add/operator/concat":68,"./add/operator/concatAll":69,"./add/operator/concatMap":70,"./add/operator/concatMapTo":71,"./add/operator/count":72,"./add/operator/debounce":73,"./add/operator/debounceTime":74,"./add/operator/defaultIfEmpty":75,"./add/operator/delay":76,"./add/operator/delayWhen":77,"./add/operator/dematerialize":78,"./add/operator/distinct":79,"./add/operator/distinctUntilChanged":80,"./add/operator/distinctUntilKeyChanged":81,"./add/operator/do":82,"./add/operator/elementAt":83,"./add/operator/every":84,"./add/operator/exhaust":85,"./add/operator/exhaustMap":86,"./add/operator/expand":87,"./add/operator/filter":88,"./add/operator/finally":89,"./add/operator/find":90,"./add/operator/findIndex":91,"./add/operator/first":92,"./add/operator/groupBy":93,"./add/operator/ignoreElements":94,"./add/operator/isEmpty":95,"./add/operator/last":96,"./add/operator/let":97,"./add/operator/map":98,"./add/operator/mapTo":99,"./add/operator/materialize":100,"./add/operator/max":101,"./add/operator/merge":102,"./add/operator/mergeAll":103,"./add/operator/mergeMap":104,"./add/operator/mergeMapTo":105,"./add/operator/mergeScan":106,"./add/operator/min":107,"./add/operator/multicast":108,"./add/operator/observeOn":109,"./add/operator/onErrorResumeNext":110,"./add/operator/pairwise":111,"./add/operator/partition":112,"./add/operator/pluck":113,"./add/operator/publish":114,"./add/operator/publishBehavior":115,"./add/operator/publishLast":116,"./add/operator/publishReplay":117,"./add/operator/race":118,"./add/operator/reduce":119,"./add/operator/repeat":120,"./add/operator/repeatWhen":121,"./add/operator/retry":122,"./add/operator/retryWhen":123,"./add/operator/sample":124,"./add/operator/sampleTime":125,"./add/operator/scan":126,"./add/operator/sequenceEqual":127,"./add/operator/share":128,"./add/operator/shareReplay":129,"./add/operator/single":130,"./add/operator/skip":131,"./add/operator/skipLast":132,"./add/operator/skipUntil":133,"./add/operator/skipWhile":134,"./add/operator/startWith":135,"./add/operator/subscribeOn":136,"./add/operator/switch":137,"./add/operator/switchMap":138,"./add/operator/switchMapTo":139,"./add/operator/take":140,"./add/operator/takeLast":141,"./add/operator/takeUntil":142,"./add/operator/takeWhile":143,"./add/operator/throttle":144,"./add/operator/throttleTime":145,"./add/operator/timeInterval":146,"./add/operator/timeout":147,"./add/operator/timeoutWith":148,"./add/operator/timestamp":149,"./add/operator/toArray":150,"./add/operator/toPromise":151,"./add/operator/window":152,"./add/operator/windowCount":153,"./add/operator/windowTime":154,"./add/operator/windowToggle":155,"./add/operator/windowWhen":156,"./add/operator/withLatestFrom":157,"./add/operator/zip":158,"./add/operator/zipAll":159,"./observable/ConnectableObservable":164,"./observable/dom/AjaxObservable":189,"./operator/timeInterval":298,"./operator/timestamp":301,"./scheduler/VirtualTimeScheduler":321,"./scheduler/animationFrame":322,"./scheduler/asap":323,"./scheduler/async":324,"./scheduler/queue":325,"./symbol/iterator":326,"./symbol/observable":327,"./symbol/rxSubscriber":328,"./testing/TestScheduler":333,"./util/ArgumentOutOfRangeError":335,"./util/EmptyError":336,"./util/ObjectUnsubscribedError":341,"./util/TimeoutError":343,"./util/UnsubscriptionError":344}],26:[function(require,module,exports){
 "use strict";
 /**
  * An execution context and a data structure to order tasks and schedule their
@@ -17730,7 +19548,7 @@ var Scheduler = (function () {
 }());
 exports.Scheduler = Scheduler;
 
-},{}],21:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17899,7 +19717,7 @@ var AnonymousSubject = (function (_super) {
 }(Subject));
 exports.AnonymousSubject = AnonymousSubject;
 
-},{"./Observable":15,"./SubjectSubscription":22,"./Subscriber":23,"./Subscription":24,"./symbol/rxSubscriber":322,"./util/ObjectUnsubscribedError":335}],22:[function(require,module,exports){
+},{"./Observable":21,"./SubjectSubscription":28,"./Subscriber":29,"./Subscription":30,"./symbol/rxSubscriber":328,"./util/ObjectUnsubscribedError":341}],28:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -17940,7 +19758,7 @@ var SubjectSubscription = (function (_super) {
 }(Subscription_1.Subscription));
 exports.SubjectSubscription = SubjectSubscription;
 
-},{"./Subscription":24}],23:[function(require,module,exports){
+},{"./Subscription":30}],29:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -18205,7 +20023,7 @@ var SafeSubscriber = (function (_super) {
     return SafeSubscriber;
 }(Subscriber));
 
-},{"./Observer":16,"./Subscription":24,"./symbol/rxSubscriber":322,"./util/isFunction":345}],24:[function(require,module,exports){
+},{"./Observer":22,"./Subscription":30,"./symbol/rxSubscriber":328,"./util/isFunction":351}],30:[function(require,module,exports){
 "use strict";
 var isArray_1 = require('./util/isArray');
 var isObject_1 = require('./util/isObject');
@@ -18399,788 +20217,788 @@ function flattenUnsubscriptionErrors(errors) {
     return errors.reduce(function (errs, err) { return errs.concat((err instanceof UnsubscriptionError_1.UnsubscriptionError) ? err.errors : err); }, []);
 }
 
-},{"./util/UnsubscriptionError":338,"./util/errorObject":341,"./util/isArray":342,"./util/isFunction":345,"./util/isObject":347,"./util/tryCatch":355}],25:[function(require,module,exports){
+},{"./util/UnsubscriptionError":344,"./util/errorObject":347,"./util/isArray":348,"./util/isFunction":351,"./util/isObject":353,"./util/tryCatch":361}],31:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bindCallback_1 = require('../../observable/bindCallback');
 Observable_1.Observable.bindCallback = bindCallback_1.bindCallback;
 
-},{"../../Observable":15,"../../observable/bindCallback":178}],26:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/bindCallback":184}],32:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bindNodeCallback_1 = require('../../observable/bindNodeCallback');
 Observable_1.Observable.bindNodeCallback = bindNodeCallback_1.bindNodeCallback;
 
-},{"../../Observable":15,"../../observable/bindNodeCallback":179}],27:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/bindNodeCallback":185}],33:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var combineLatest_1 = require('../../observable/combineLatest');
 Observable_1.Observable.combineLatest = combineLatest_1.combineLatest;
 
-},{"../../Observable":15,"../../observable/combineLatest":180}],28:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/combineLatest":186}],34:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concat_1 = require('../../observable/concat');
 Observable_1.Observable.concat = concat_1.concat;
 
-},{"../../Observable":15,"../../observable/concat":181}],29:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/concat":187}],35:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var defer_1 = require('../../observable/defer');
 Observable_1.Observable.defer = defer_1.defer;
 
-},{"../../Observable":15,"../../observable/defer":182}],30:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/defer":188}],36:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../../Observable');
 var ajax_1 = require('../../../observable/dom/ajax');
 Observable_1.Observable.ajax = ajax_1.ajax;
 
-},{"../../../Observable":15,"../../../observable/dom/ajax":185}],31:[function(require,module,exports){
+},{"../../../Observable":21,"../../../observable/dom/ajax":191}],37:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../../Observable');
 var webSocket_1 = require('../../../observable/dom/webSocket');
 Observable_1.Observable.webSocket = webSocket_1.webSocket;
 
-},{"../../../Observable":15,"../../../observable/dom/webSocket":186}],32:[function(require,module,exports){
+},{"../../../Observable":21,"../../../observable/dom/webSocket":192}],38:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var empty_1 = require('../../observable/empty');
 Observable_1.Observable.empty = empty_1.empty;
 
-},{"../../Observable":15,"../../observable/empty":187}],33:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/empty":193}],39:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var forkJoin_1 = require('../../observable/forkJoin');
 Observable_1.Observable.forkJoin = forkJoin_1.forkJoin;
 
-},{"../../Observable":15,"../../observable/forkJoin":188}],34:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/forkJoin":194}],40:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var from_1 = require('../../observable/from');
 Observable_1.Observable.from = from_1.from;
 
-},{"../../Observable":15,"../../observable/from":189}],35:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/from":195}],41:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var fromEvent_1 = require('../../observable/fromEvent');
 Observable_1.Observable.fromEvent = fromEvent_1.fromEvent;
 
-},{"../../Observable":15,"../../observable/fromEvent":190}],36:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/fromEvent":196}],42:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var fromEventPattern_1 = require('../../observable/fromEventPattern');
 Observable_1.Observable.fromEventPattern = fromEventPattern_1.fromEventPattern;
 
-},{"../../Observable":15,"../../observable/fromEventPattern":191}],37:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/fromEventPattern":197}],43:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var fromPromise_1 = require('../../observable/fromPromise');
 Observable_1.Observable.fromPromise = fromPromise_1.fromPromise;
 
-},{"../../Observable":15,"../../observable/fromPromise":192}],38:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/fromPromise":198}],44:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var GenerateObservable_1 = require('../../observable/GenerateObservable');
 Observable_1.Observable.generate = GenerateObservable_1.GenerateObservable.create;
 
-},{"../../Observable":15,"../../observable/GenerateObservable":166}],39:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/GenerateObservable":172}],45:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var if_1 = require('../../observable/if');
 Observable_1.Observable.if = if_1._if;
 
-},{"../../Observable":15,"../../observable/if":193}],40:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/if":199}],46:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var interval_1 = require('../../observable/interval');
 Observable_1.Observable.interval = interval_1.interval;
 
-},{"../../Observable":15,"../../observable/interval":194}],41:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/interval":200}],47:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var merge_1 = require('../../observable/merge');
 Observable_1.Observable.merge = merge_1.merge;
 
-},{"../../Observable":15,"../../observable/merge":195}],42:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/merge":201}],48:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var never_1 = require('../../observable/never');
 Observable_1.Observable.never = never_1.never;
 
-},{"../../Observable":15,"../../observable/never":196}],43:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/never":202}],49:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var of_1 = require('../../observable/of');
 Observable_1.Observable.of = of_1.of;
 
-},{"../../Observable":15,"../../observable/of":197}],44:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/of":203}],50:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var onErrorResumeNext_1 = require('../../operator/onErrorResumeNext');
 Observable_1.Observable.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNextStatic;
 
-},{"../../Observable":15,"../../operator/onErrorResumeNext":256}],45:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/onErrorResumeNext":262}],51:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var pairs_1 = require('../../observable/pairs');
 Observable_1.Observable.pairs = pairs_1.pairs;
 
-},{"../../Observable":15,"../../observable/pairs":198}],46:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/pairs":204}],52:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var race_1 = require('../../operator/race');
 Observable_1.Observable.race = race_1.raceStatic;
 
-},{"../../Observable":15,"../../operator/race":264}],47:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/race":270}],53:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var range_1 = require('../../observable/range');
 Observable_1.Observable.range = range_1.range;
 
-},{"../../Observable":15,"../../observable/range":199}],48:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/range":205}],54:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var throw_1 = require('../../observable/throw');
 Observable_1.Observable.throw = throw_1._throw;
 
-},{"../../Observable":15,"../../observable/throw":200}],49:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/throw":206}],55:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timer_1 = require('../../observable/timer');
 Observable_1.Observable.timer = timer_1.timer;
 
-},{"../../Observable":15,"../../observable/timer":201}],50:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/timer":207}],56:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var using_1 = require('../../observable/using');
 Observable_1.Observable.using = using_1.using;
 
-},{"../../Observable":15,"../../observable/using":202}],51:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/using":208}],57:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var zip_1 = require('../../observable/zip');
 Observable_1.Observable.zip = zip_1.zip;
 
-},{"../../Observable":15,"../../observable/zip":203}],52:[function(require,module,exports){
+},{"../../Observable":21,"../../observable/zip":209}],58:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var audit_1 = require('../../operator/audit');
 Observable_1.Observable.prototype.audit = audit_1.audit;
 
-},{"../../Observable":15,"../../operator/audit":204}],53:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/audit":210}],59:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var auditTime_1 = require('../../operator/auditTime');
 Observable_1.Observable.prototype.auditTime = auditTime_1.auditTime;
 
-},{"../../Observable":15,"../../operator/auditTime":205}],54:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/auditTime":211}],60:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var buffer_1 = require('../../operator/buffer');
 Observable_1.Observable.prototype.buffer = buffer_1.buffer;
 
-},{"../../Observable":15,"../../operator/buffer":206}],55:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/buffer":212}],61:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bufferCount_1 = require('../../operator/bufferCount');
 Observable_1.Observable.prototype.bufferCount = bufferCount_1.bufferCount;
 
-},{"../../Observable":15,"../../operator/bufferCount":207}],56:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/bufferCount":213}],62:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bufferTime_1 = require('../../operator/bufferTime');
 Observable_1.Observable.prototype.bufferTime = bufferTime_1.bufferTime;
 
-},{"../../Observable":15,"../../operator/bufferTime":208}],57:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/bufferTime":214}],63:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bufferToggle_1 = require('../../operator/bufferToggle');
 Observable_1.Observable.prototype.bufferToggle = bufferToggle_1.bufferToggle;
 
-},{"../../Observable":15,"../../operator/bufferToggle":209}],58:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/bufferToggle":215}],64:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bufferWhen_1 = require('../../operator/bufferWhen');
 Observable_1.Observable.prototype.bufferWhen = bufferWhen_1.bufferWhen;
 
-},{"../../Observable":15,"../../operator/bufferWhen":210}],59:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/bufferWhen":216}],65:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var catch_1 = require('../../operator/catch');
 Observable_1.Observable.prototype.catch = catch_1._catch;
 Observable_1.Observable.prototype._catch = catch_1._catch;
 
-},{"../../Observable":15,"../../operator/catch":211}],60:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/catch":217}],66:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var combineAll_1 = require('../../operator/combineAll');
 Observable_1.Observable.prototype.combineAll = combineAll_1.combineAll;
 
-},{"../../Observable":15,"../../operator/combineAll":212}],61:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/combineAll":218}],67:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var combineLatest_1 = require('../../operator/combineLatest');
 Observable_1.Observable.prototype.combineLatest = combineLatest_1.combineLatest;
 
-},{"../../Observable":15,"../../operator/combineLatest":213}],62:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/combineLatest":219}],68:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concat_1 = require('../../operator/concat');
 Observable_1.Observable.prototype.concat = concat_1.concat;
 
-},{"../../Observable":15,"../../operator/concat":214}],63:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/concat":220}],69:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concatAll_1 = require('../../operator/concatAll');
 Observable_1.Observable.prototype.concatAll = concatAll_1.concatAll;
 
-},{"../../Observable":15,"../../operator/concatAll":215}],64:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/concatAll":221}],70:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concatMap_1 = require('../../operator/concatMap');
 Observable_1.Observable.prototype.concatMap = concatMap_1.concatMap;
 
-},{"../../Observable":15,"../../operator/concatMap":216}],65:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/concatMap":222}],71:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concatMapTo_1 = require('../../operator/concatMapTo');
 Observable_1.Observable.prototype.concatMapTo = concatMapTo_1.concatMapTo;
 
-},{"../../Observable":15,"../../operator/concatMapTo":217}],66:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/concatMapTo":223}],72:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var count_1 = require('../../operator/count');
 Observable_1.Observable.prototype.count = count_1.count;
 
-},{"../../Observable":15,"../../operator/count":218}],67:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/count":224}],73:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var debounce_1 = require('../../operator/debounce');
 Observable_1.Observable.prototype.debounce = debounce_1.debounce;
 
-},{"../../Observable":15,"../../operator/debounce":219}],68:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/debounce":225}],74:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var debounceTime_1 = require('../../operator/debounceTime');
 Observable_1.Observable.prototype.debounceTime = debounceTime_1.debounceTime;
 
-},{"../../Observable":15,"../../operator/debounceTime":220}],69:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/debounceTime":226}],75:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var defaultIfEmpty_1 = require('../../operator/defaultIfEmpty');
 Observable_1.Observable.prototype.defaultIfEmpty = defaultIfEmpty_1.defaultIfEmpty;
 
-},{"../../Observable":15,"../../operator/defaultIfEmpty":221}],70:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/defaultIfEmpty":227}],76:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var delay_1 = require('../../operator/delay');
 Observable_1.Observable.prototype.delay = delay_1.delay;
 
-},{"../../Observable":15,"../../operator/delay":222}],71:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/delay":228}],77:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var delayWhen_1 = require('../../operator/delayWhen');
 Observable_1.Observable.prototype.delayWhen = delayWhen_1.delayWhen;
 
-},{"../../Observable":15,"../../operator/delayWhen":223}],72:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/delayWhen":229}],78:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var dematerialize_1 = require('../../operator/dematerialize');
 Observable_1.Observable.prototype.dematerialize = dematerialize_1.dematerialize;
 
-},{"../../Observable":15,"../../operator/dematerialize":224}],73:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/dematerialize":230}],79:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var distinct_1 = require('../../operator/distinct');
 Observable_1.Observable.prototype.distinct = distinct_1.distinct;
 
-},{"../../Observable":15,"../../operator/distinct":225}],74:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/distinct":231}],80:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var distinctUntilChanged_1 = require('../../operator/distinctUntilChanged');
 Observable_1.Observable.prototype.distinctUntilChanged = distinctUntilChanged_1.distinctUntilChanged;
 
-},{"../../Observable":15,"../../operator/distinctUntilChanged":226}],75:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/distinctUntilChanged":232}],81:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var distinctUntilKeyChanged_1 = require('../../operator/distinctUntilKeyChanged');
 Observable_1.Observable.prototype.distinctUntilKeyChanged = distinctUntilKeyChanged_1.distinctUntilKeyChanged;
 
-},{"../../Observable":15,"../../operator/distinctUntilKeyChanged":227}],76:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/distinctUntilKeyChanged":233}],82:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var do_1 = require('../../operator/do');
 Observable_1.Observable.prototype.do = do_1._do;
 Observable_1.Observable.prototype._do = do_1._do;
 
-},{"../../Observable":15,"../../operator/do":228}],77:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/do":234}],83:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var elementAt_1 = require('../../operator/elementAt');
 Observable_1.Observable.prototype.elementAt = elementAt_1.elementAt;
 
-},{"../../Observable":15,"../../operator/elementAt":229}],78:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/elementAt":235}],84:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var every_1 = require('../../operator/every');
 Observable_1.Observable.prototype.every = every_1.every;
 
-},{"../../Observable":15,"../../operator/every":230}],79:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/every":236}],85:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var exhaust_1 = require('../../operator/exhaust');
 Observable_1.Observable.prototype.exhaust = exhaust_1.exhaust;
 
-},{"../../Observable":15,"../../operator/exhaust":231}],80:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/exhaust":237}],86:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var exhaustMap_1 = require('../../operator/exhaustMap');
 Observable_1.Observable.prototype.exhaustMap = exhaustMap_1.exhaustMap;
 
-},{"../../Observable":15,"../../operator/exhaustMap":232}],81:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/exhaustMap":238}],87:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var expand_1 = require('../../operator/expand');
 Observable_1.Observable.prototype.expand = expand_1.expand;
 
-},{"../../Observable":15,"../../operator/expand":233}],82:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/expand":239}],88:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var filter_1 = require('../../operator/filter');
 Observable_1.Observable.prototype.filter = filter_1.filter;
 
-},{"../../Observable":15,"../../operator/filter":234}],83:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/filter":240}],89:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var finally_1 = require('../../operator/finally');
 Observable_1.Observable.prototype.finally = finally_1._finally;
 Observable_1.Observable.prototype._finally = finally_1._finally;
 
-},{"../../Observable":15,"../../operator/finally":235}],84:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/finally":241}],90:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var find_1 = require('../../operator/find');
 Observable_1.Observable.prototype.find = find_1.find;
 
-},{"../../Observable":15,"../../operator/find":236}],85:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/find":242}],91:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var findIndex_1 = require('../../operator/findIndex');
 Observable_1.Observable.prototype.findIndex = findIndex_1.findIndex;
 
-},{"../../Observable":15,"../../operator/findIndex":237}],86:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/findIndex":243}],92:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var first_1 = require('../../operator/first');
 Observable_1.Observable.prototype.first = first_1.first;
 
-},{"../../Observable":15,"../../operator/first":238}],87:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/first":244}],93:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var groupBy_1 = require('../../operator/groupBy');
 Observable_1.Observable.prototype.groupBy = groupBy_1.groupBy;
 
-},{"../../Observable":15,"../../operator/groupBy":239}],88:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/groupBy":245}],94:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var ignoreElements_1 = require('../../operator/ignoreElements');
 Observable_1.Observable.prototype.ignoreElements = ignoreElements_1.ignoreElements;
 
-},{"../../Observable":15,"../../operator/ignoreElements":240}],89:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/ignoreElements":246}],95:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var isEmpty_1 = require('../../operator/isEmpty');
 Observable_1.Observable.prototype.isEmpty = isEmpty_1.isEmpty;
 
-},{"../../Observable":15,"../../operator/isEmpty":241}],90:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/isEmpty":247}],96:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var last_1 = require('../../operator/last');
 Observable_1.Observable.prototype.last = last_1.last;
 
-},{"../../Observable":15,"../../operator/last":242}],91:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/last":248}],97:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var let_1 = require('../../operator/let');
 Observable_1.Observable.prototype.let = let_1.letProto;
 Observable_1.Observable.prototype.letBind = let_1.letProto;
 
-},{"../../Observable":15,"../../operator/let":243}],92:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/let":249}],98:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var map_1 = require('../../operator/map');
 Observable_1.Observable.prototype.map = map_1.map;
 
-},{"../../Observable":15,"../../operator/map":244}],93:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/map":250}],99:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mapTo_1 = require('../../operator/mapTo');
 Observable_1.Observable.prototype.mapTo = mapTo_1.mapTo;
 
-},{"../../Observable":15,"../../operator/mapTo":245}],94:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/mapTo":251}],100:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var materialize_1 = require('../../operator/materialize');
 Observable_1.Observable.prototype.materialize = materialize_1.materialize;
 
-},{"../../Observable":15,"../../operator/materialize":246}],95:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/materialize":252}],101:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var max_1 = require('../../operator/max');
 Observable_1.Observable.prototype.max = max_1.max;
 
-},{"../../Observable":15,"../../operator/max":247}],96:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/max":253}],102:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var merge_1 = require('../../operator/merge');
 Observable_1.Observable.prototype.merge = merge_1.merge;
 
-},{"../../Observable":15,"../../operator/merge":248}],97:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/merge":254}],103:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeAll_1 = require('../../operator/mergeAll');
 Observable_1.Observable.prototype.mergeAll = mergeAll_1.mergeAll;
 
-},{"../../Observable":15,"../../operator/mergeAll":249}],98:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/mergeAll":255}],104:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeMap_1 = require('../../operator/mergeMap');
 Observable_1.Observable.prototype.mergeMap = mergeMap_1.mergeMap;
 Observable_1.Observable.prototype.flatMap = mergeMap_1.mergeMap;
 
-},{"../../Observable":15,"../../operator/mergeMap":250}],99:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/mergeMap":256}],105:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeMapTo_1 = require('../../operator/mergeMapTo');
 Observable_1.Observable.prototype.flatMapTo = mergeMapTo_1.mergeMapTo;
 Observable_1.Observable.prototype.mergeMapTo = mergeMapTo_1.mergeMapTo;
 
-},{"../../Observable":15,"../../operator/mergeMapTo":251}],100:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/mergeMapTo":257}],106:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeScan_1 = require('../../operator/mergeScan');
 Observable_1.Observable.prototype.mergeScan = mergeScan_1.mergeScan;
 
-},{"../../Observable":15,"../../operator/mergeScan":252}],101:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/mergeScan":258}],107:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var min_1 = require('../../operator/min');
 Observable_1.Observable.prototype.min = min_1.min;
 
-},{"../../Observable":15,"../../operator/min":253}],102:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/min":259}],108:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var multicast_1 = require('../../operator/multicast');
 Observable_1.Observable.prototype.multicast = multicast_1.multicast;
 
-},{"../../Observable":15,"../../operator/multicast":254}],103:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/multicast":260}],109:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var observeOn_1 = require('../../operator/observeOn');
 Observable_1.Observable.prototype.observeOn = observeOn_1.observeOn;
 
-},{"../../Observable":15,"../../operator/observeOn":255}],104:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/observeOn":261}],110:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var onErrorResumeNext_1 = require('../../operator/onErrorResumeNext');
 Observable_1.Observable.prototype.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNext;
 
-},{"../../Observable":15,"../../operator/onErrorResumeNext":256}],105:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/onErrorResumeNext":262}],111:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var pairwise_1 = require('../../operator/pairwise');
 Observable_1.Observable.prototype.pairwise = pairwise_1.pairwise;
 
-},{"../../Observable":15,"../../operator/pairwise":257}],106:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/pairwise":263}],112:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var partition_1 = require('../../operator/partition');
 Observable_1.Observable.prototype.partition = partition_1.partition;
 
-},{"../../Observable":15,"../../operator/partition":258}],107:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/partition":264}],113:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var pluck_1 = require('../../operator/pluck');
 Observable_1.Observable.prototype.pluck = pluck_1.pluck;
 
-},{"../../Observable":15,"../../operator/pluck":259}],108:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/pluck":265}],114:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var publish_1 = require('../../operator/publish');
 Observable_1.Observable.prototype.publish = publish_1.publish;
 
-},{"../../Observable":15,"../../operator/publish":260}],109:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/publish":266}],115:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var publishBehavior_1 = require('../../operator/publishBehavior');
 Observable_1.Observable.prototype.publishBehavior = publishBehavior_1.publishBehavior;
 
-},{"../../Observable":15,"../../operator/publishBehavior":261}],110:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/publishBehavior":267}],116:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var publishLast_1 = require('../../operator/publishLast');
 Observable_1.Observable.prototype.publishLast = publishLast_1.publishLast;
 
-},{"../../Observable":15,"../../operator/publishLast":262}],111:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/publishLast":268}],117:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var publishReplay_1 = require('../../operator/publishReplay');
 Observable_1.Observable.prototype.publishReplay = publishReplay_1.publishReplay;
 
-},{"../../Observable":15,"../../operator/publishReplay":263}],112:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/publishReplay":269}],118:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var race_1 = require('../../operator/race');
 Observable_1.Observable.prototype.race = race_1.race;
 
-},{"../../Observable":15,"../../operator/race":264}],113:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/race":270}],119:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var reduce_1 = require('../../operator/reduce');
 Observable_1.Observable.prototype.reduce = reduce_1.reduce;
 
-},{"../../Observable":15,"../../operator/reduce":265}],114:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/reduce":271}],120:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var repeat_1 = require('../../operator/repeat');
 Observable_1.Observable.prototype.repeat = repeat_1.repeat;
 
-},{"../../Observable":15,"../../operator/repeat":266}],115:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/repeat":272}],121:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var repeatWhen_1 = require('../../operator/repeatWhen');
 Observable_1.Observable.prototype.repeatWhen = repeatWhen_1.repeatWhen;
 
-},{"../../Observable":15,"../../operator/repeatWhen":267}],116:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/repeatWhen":273}],122:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var retry_1 = require('../../operator/retry');
 Observable_1.Observable.prototype.retry = retry_1.retry;
 
-},{"../../Observable":15,"../../operator/retry":268}],117:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/retry":274}],123:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var retryWhen_1 = require('../../operator/retryWhen');
 Observable_1.Observable.prototype.retryWhen = retryWhen_1.retryWhen;
 
-},{"../../Observable":15,"../../operator/retryWhen":269}],118:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/retryWhen":275}],124:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var sample_1 = require('../../operator/sample');
 Observable_1.Observable.prototype.sample = sample_1.sample;
 
-},{"../../Observable":15,"../../operator/sample":270}],119:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/sample":276}],125:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var sampleTime_1 = require('../../operator/sampleTime');
 Observable_1.Observable.prototype.sampleTime = sampleTime_1.sampleTime;
 
-},{"../../Observable":15,"../../operator/sampleTime":271}],120:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/sampleTime":277}],126:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var scan_1 = require('../../operator/scan');
 Observable_1.Observable.prototype.scan = scan_1.scan;
 
-},{"../../Observable":15,"../../operator/scan":272}],121:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/scan":278}],127:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var sequenceEqual_1 = require('../../operator/sequenceEqual');
 Observable_1.Observable.prototype.sequenceEqual = sequenceEqual_1.sequenceEqual;
 
-},{"../../Observable":15,"../../operator/sequenceEqual":273}],122:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/sequenceEqual":279}],128:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var share_1 = require('../../operator/share');
 Observable_1.Observable.prototype.share = share_1.share;
 
-},{"../../Observable":15,"../../operator/share":274}],123:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/share":280}],129:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var shareReplay_1 = require('../../operator/shareReplay');
 Observable_1.Observable.prototype.shareReplay = shareReplay_1.shareReplay;
 
-},{"../../Observable":15,"../../operator/shareReplay":275}],124:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/shareReplay":281}],130:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var single_1 = require('../../operator/single');
 Observable_1.Observable.prototype.single = single_1.single;
 
-},{"../../Observable":15,"../../operator/single":276}],125:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/single":282}],131:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var skip_1 = require('../../operator/skip');
 Observable_1.Observable.prototype.skip = skip_1.skip;
 
-},{"../../Observable":15,"../../operator/skip":277}],126:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/skip":283}],132:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var skipLast_1 = require('../../operator/skipLast');
 Observable_1.Observable.prototype.skipLast = skipLast_1.skipLast;
 
-},{"../../Observable":15,"../../operator/skipLast":278}],127:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/skipLast":284}],133:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var skipUntil_1 = require('../../operator/skipUntil');
 Observable_1.Observable.prototype.skipUntil = skipUntil_1.skipUntil;
 
-},{"../../Observable":15,"../../operator/skipUntil":279}],128:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/skipUntil":285}],134:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var skipWhile_1 = require('../../operator/skipWhile');
 Observable_1.Observable.prototype.skipWhile = skipWhile_1.skipWhile;
 
-},{"../../Observable":15,"../../operator/skipWhile":280}],129:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/skipWhile":286}],135:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var startWith_1 = require('../../operator/startWith');
 Observable_1.Observable.prototype.startWith = startWith_1.startWith;
 
-},{"../../Observable":15,"../../operator/startWith":281}],130:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/startWith":287}],136:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var subscribeOn_1 = require('../../operator/subscribeOn');
 Observable_1.Observable.prototype.subscribeOn = subscribeOn_1.subscribeOn;
 
-},{"../../Observable":15,"../../operator/subscribeOn":282}],131:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/subscribeOn":288}],137:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var switch_1 = require('../../operator/switch');
 Observable_1.Observable.prototype.switch = switch_1._switch;
 Observable_1.Observable.prototype._switch = switch_1._switch;
 
-},{"../../Observable":15,"../../operator/switch":283}],132:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/switch":289}],138:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var switchMap_1 = require('../../operator/switchMap');
 Observable_1.Observable.prototype.switchMap = switchMap_1.switchMap;
 
-},{"../../Observable":15,"../../operator/switchMap":284}],133:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/switchMap":290}],139:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var switchMapTo_1 = require('../../operator/switchMapTo');
 Observable_1.Observable.prototype.switchMapTo = switchMapTo_1.switchMapTo;
 
-},{"../../Observable":15,"../../operator/switchMapTo":285}],134:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/switchMapTo":291}],140:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var take_1 = require('../../operator/take');
 Observable_1.Observable.prototype.take = take_1.take;
 
-},{"../../Observable":15,"../../operator/take":286}],135:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/take":292}],141:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var takeLast_1 = require('../../operator/takeLast');
 Observable_1.Observable.prototype.takeLast = takeLast_1.takeLast;
 
-},{"../../Observable":15,"../../operator/takeLast":287}],136:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/takeLast":293}],142:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var takeUntil_1 = require('../../operator/takeUntil');
 Observable_1.Observable.prototype.takeUntil = takeUntil_1.takeUntil;
 
-},{"../../Observable":15,"../../operator/takeUntil":288}],137:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/takeUntil":294}],143:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var takeWhile_1 = require('../../operator/takeWhile');
 Observable_1.Observable.prototype.takeWhile = takeWhile_1.takeWhile;
 
-},{"../../Observable":15,"../../operator/takeWhile":289}],138:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/takeWhile":295}],144:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var throttle_1 = require('../../operator/throttle');
 Observable_1.Observable.prototype.throttle = throttle_1.throttle;
 
-},{"../../Observable":15,"../../operator/throttle":290}],139:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/throttle":296}],145:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var throttleTime_1 = require('../../operator/throttleTime');
 Observable_1.Observable.prototype.throttleTime = throttleTime_1.throttleTime;
 
-},{"../../Observable":15,"../../operator/throttleTime":291}],140:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/throttleTime":297}],146:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timeInterval_1 = require('../../operator/timeInterval');
 Observable_1.Observable.prototype.timeInterval = timeInterval_1.timeInterval;
 
-},{"../../Observable":15,"../../operator/timeInterval":292}],141:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/timeInterval":298}],147:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timeout_1 = require('../../operator/timeout');
 Observable_1.Observable.prototype.timeout = timeout_1.timeout;
 
-},{"../../Observable":15,"../../operator/timeout":293}],142:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/timeout":299}],148:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timeoutWith_1 = require('../../operator/timeoutWith');
 Observable_1.Observable.prototype.timeoutWith = timeoutWith_1.timeoutWith;
 
-},{"../../Observable":15,"../../operator/timeoutWith":294}],143:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/timeoutWith":300}],149:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timestamp_1 = require('../../operator/timestamp');
 Observable_1.Observable.prototype.timestamp = timestamp_1.timestamp;
 
-},{"../../Observable":15,"../../operator/timestamp":295}],144:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/timestamp":301}],150:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var toArray_1 = require('../../operator/toArray');
 Observable_1.Observable.prototype.toArray = toArray_1.toArray;
 
-},{"../../Observable":15,"../../operator/toArray":296}],145:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/toArray":302}],151:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var toPromise_1 = require('../../operator/toPromise');
 Observable_1.Observable.prototype.toPromise = toPromise_1.toPromise;
 
-},{"../../Observable":15,"../../operator/toPromise":297}],146:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/toPromise":303}],152:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var window_1 = require('../../operator/window');
 Observable_1.Observable.prototype.window = window_1.window;
 
-},{"../../Observable":15,"../../operator/window":298}],147:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/window":304}],153:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var windowCount_1 = require('../../operator/windowCount');
 Observable_1.Observable.prototype.windowCount = windowCount_1.windowCount;
 
-},{"../../Observable":15,"../../operator/windowCount":299}],148:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/windowCount":305}],154:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var windowTime_1 = require('../../operator/windowTime');
 Observable_1.Observable.prototype.windowTime = windowTime_1.windowTime;
 
-},{"../../Observable":15,"../../operator/windowTime":300}],149:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/windowTime":306}],155:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var windowToggle_1 = require('../../operator/windowToggle');
 Observable_1.Observable.prototype.windowToggle = windowToggle_1.windowToggle;
 
-},{"../../Observable":15,"../../operator/windowToggle":301}],150:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/windowToggle":307}],156:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var windowWhen_1 = require('../../operator/windowWhen');
 Observable_1.Observable.prototype.windowWhen = windowWhen_1.windowWhen;
 
-},{"../../Observable":15,"../../operator/windowWhen":302}],151:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/windowWhen":308}],157:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var withLatestFrom_1 = require('../../operator/withLatestFrom');
 Observable_1.Observable.prototype.withLatestFrom = withLatestFrom_1.withLatestFrom;
 
-},{"../../Observable":15,"../../operator/withLatestFrom":303}],152:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/withLatestFrom":309}],158:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var zip_1 = require('../../operator/zip');
 Observable_1.Observable.prototype.zip = zip_1.zipProto;
 
-},{"../../Observable":15,"../../operator/zip":304}],153:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/zip":310}],159:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var zipAll_1 = require('../../operator/zipAll');
 Observable_1.Observable.prototype.zipAll = zipAll_1.zipAll;
 
-},{"../../Observable":15,"../../operator/zipAll":305}],154:[function(require,module,exports){
+},{"../../Observable":21,"../../operator/zipAll":311}],160:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -19251,7 +21069,7 @@ var ArrayLikeObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayLikeObservable = ArrayLikeObservable;
 
-},{"../Observable":15,"./EmptyObservable":160,"./ScalarObservable":174}],155:[function(require,module,exports){
+},{"../Observable":21,"./EmptyObservable":166,"./ScalarObservable":180}],161:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -19374,7 +21192,7 @@ var ArrayObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayObservable = ArrayObservable;
 
-},{"../Observable":15,"../util/isScheduler":349,"./EmptyObservable":160,"./ScalarObservable":174}],156:[function(require,module,exports){
+},{"../Observable":21,"../util/isScheduler":355,"./EmptyObservable":166,"./ScalarObservable":180}],162:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -19643,7 +21461,7 @@ function dispatchError(arg) {
     subject.error(err);
 }
 
-},{"../AsyncSubject":11,"../Observable":15,"../util/errorObject":341,"../util/tryCatch":355}],157:[function(require,module,exports){
+},{"../AsyncSubject":17,"../Observable":21,"../util/errorObject":347,"../util/tryCatch":361}],163:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -19907,7 +21725,7 @@ function dispatchError(arg) {
     subject.error(err);
 }
 
-},{"../AsyncSubject":11,"../Observable":15,"../util/errorObject":341,"../util/tryCatch":355}],158:[function(require,module,exports){
+},{"../AsyncSubject":17,"../Observable":21,"../util/errorObject":347,"../util/tryCatch":361}],164:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20077,7 +21895,7 @@ var RefCountSubscriber = (function (_super) {
     return RefCountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Observable":15,"../Subject":21,"../Subscriber":23,"../Subscription":24}],159:[function(require,module,exports){
+},{"../Observable":21,"../Subject":27,"../Subscriber":29,"../Subscription":30}],165:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20177,7 +21995,7 @@ var DeferSubscriber = (function (_super) {
     return DeferSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../Observable":15,"../OuterSubscriber":17,"../util/subscribeToResult":353}],160:[function(require,module,exports){
+},{"../Observable":21,"../OuterSubscriber":23,"../util/subscribeToResult":359}],166:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20259,7 +22077,7 @@ var EmptyObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.EmptyObservable = EmptyObservable;
 
-},{"../Observable":15}],161:[function(require,module,exports){
+},{"../Observable":21}],167:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20343,7 +22161,7 @@ var ErrorObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ErrorObservable = ErrorObservable;
 
-},{"../Observable":15}],162:[function(require,module,exports){
+},{"../Observable":21}],168:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20456,7 +22274,7 @@ var ForkJoinSubscriber = (function (_super) {
     return ForkJoinSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../Observable":15,"../OuterSubscriber":17,"../util/isArray":342,"../util/subscribeToResult":353,"./EmptyObservable":160}],163:[function(require,module,exports){
+},{"../Observable":21,"../OuterSubscriber":23,"../util/isArray":348,"../util/subscribeToResult":359,"./EmptyObservable":166}],169:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20597,7 +22415,7 @@ var FromEventObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.FromEventObservable = FromEventObservable;
 
-},{"../Observable":15,"../Subscription":24,"../util/errorObject":341,"../util/isFunction":345,"../util/tryCatch":355}],164:[function(require,module,exports){
+},{"../Observable":21,"../Subscription":30,"../util/errorObject":347,"../util/isFunction":351,"../util/tryCatch":361}],170:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20711,7 +22529,7 @@ var FromEventPatternObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.FromEventPatternObservable = FromEventPatternObservable;
 
-},{"../Observable":15,"../Subscription":24,"../util/isFunction":345}],165:[function(require,module,exports){
+},{"../Observable":21,"../Subscription":30,"../util/isFunction":351}],171:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20834,7 +22652,7 @@ var FromObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.FromObservable = FromObservable;
 
-},{"../Observable":15,"../operator/observeOn":255,"../symbol/iterator":320,"../symbol/observable":321,"../util/isArray":342,"../util/isArrayLike":343,"../util/isPromise":348,"./ArrayLikeObservable":154,"./ArrayObservable":155,"./IteratorObservable":169,"./PromiseObservable":172}],166:[function(require,module,exports){
+},{"../Observable":21,"../operator/observeOn":261,"../symbol/iterator":326,"../symbol/observable":327,"../util/isArray":348,"../util/isArrayLike":349,"../util/isPromise":354,"./ArrayLikeObservable":160,"./ArrayObservable":161,"./IteratorObservable":175,"./PromiseObservable":178}],172:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -20970,7 +22788,7 @@ var GenerateObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.GenerateObservable = GenerateObservable;
 
-},{"../Observable":15,"../util/isScheduler":349}],167:[function(require,module,exports){
+},{"../Observable":21,"../util/isScheduler":355}],173:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21032,7 +22850,7 @@ var IfSubscriber = (function (_super) {
     return IfSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../Observable":15,"../OuterSubscriber":17,"../util/subscribeToResult":353}],168:[function(require,module,exports){
+},{"../Observable":21,"../OuterSubscriber":23,"../util/subscribeToResult":359}],174:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21121,7 +22939,7 @@ var IntervalObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.IntervalObservable = IntervalObservable;
 
-},{"../Observable":15,"../scheduler/async":318,"../util/isNumeric":346}],169:[function(require,module,exports){
+},{"../Observable":21,"../scheduler/async":324,"../util/isNumeric":352}],175:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21285,7 +23103,7 @@ function sign(value) {
     return valueAsNumber < 0 ? -1 : 1;
 }
 
-},{"../Observable":15,"../symbol/iterator":320,"../util/root":352}],170:[function(require,module,exports){
+},{"../Observable":21,"../symbol/iterator":326,"../util/root":358}],176:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21345,7 +23163,7 @@ var NeverObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.NeverObservable = NeverObservable;
 
-},{"../Observable":15,"../util/noop":350}],171:[function(require,module,exports){
+},{"../Observable":21,"../util/noop":356}],177:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21431,7 +23249,7 @@ var PairsObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.PairsObservable = PairsObservable;
 
-},{"../Observable":15}],172:[function(require,module,exports){
+},{"../Observable":21}],178:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21553,7 +23371,7 @@ function dispatchError(arg) {
     }
 }
 
-},{"../Observable":15,"../util/root":352}],173:[function(require,module,exports){
+},{"../Observable":21,"../util/root":358}],179:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21650,7 +23468,7 @@ var RangeObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.RangeObservable = RangeObservable;
 
-},{"../Observable":15}],174:[function(require,module,exports){
+},{"../Observable":21}],180:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21709,7 +23527,7 @@ var ScalarObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ScalarObservable = ScalarObservable;
 
-},{"../Observable":15}],175:[function(require,module,exports){
+},{"../Observable":21}],181:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21761,7 +23579,7 @@ var SubscribeOnObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.SubscribeOnObservable = SubscribeOnObservable;
 
-},{"../Observable":15,"../scheduler/asap":317,"../util/isNumeric":346}],176:[function(require,module,exports){
+},{"../Observable":21,"../scheduler/asap":323,"../util/isNumeric":352}],182:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21869,7 +23687,7 @@ var TimerObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.TimerObservable = TimerObservable;
 
-},{"../Observable":15,"../scheduler/async":318,"../util/isDate":344,"../util/isNumeric":346,"../util/isScheduler":349}],177:[function(require,module,exports){
+},{"../Observable":21,"../scheduler/async":324,"../util/isDate":350,"../util/isNumeric":352,"../util/isScheduler":355}],183:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -21931,17 +23749,17 @@ var UsingSubscriber = (function (_super) {
     return UsingSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../Observable":15,"../OuterSubscriber":17,"../util/subscribeToResult":353}],178:[function(require,module,exports){
+},{"../Observable":21,"../OuterSubscriber":23,"../util/subscribeToResult":359}],184:[function(require,module,exports){
 "use strict";
 var BoundCallbackObservable_1 = require('./BoundCallbackObservable');
 exports.bindCallback = BoundCallbackObservable_1.BoundCallbackObservable.create;
 
-},{"./BoundCallbackObservable":156}],179:[function(require,module,exports){
+},{"./BoundCallbackObservable":162}],185:[function(require,module,exports){
 "use strict";
 var BoundNodeCallbackObservable_1 = require('./BoundNodeCallbackObservable');
 exports.bindNodeCallback = BoundNodeCallbackObservable_1.BoundNodeCallbackObservable.create;
 
-},{"./BoundNodeCallbackObservable":157}],180:[function(require,module,exports){
+},{"./BoundNodeCallbackObservable":163}],186:[function(require,module,exports){
 "use strict";
 var isScheduler_1 = require('../util/isScheduler');
 var isArray_1 = require('../util/isArray');
@@ -22078,17 +23896,17 @@ function combineLatest() {
 }
 exports.combineLatest = combineLatest;
 
-},{"../operator/combineLatest":213,"../util/isArray":342,"../util/isScheduler":349,"./ArrayObservable":155}],181:[function(require,module,exports){
+},{"../operator/combineLatest":219,"../util/isArray":348,"../util/isScheduler":355,"./ArrayObservable":161}],187:[function(require,module,exports){
 "use strict";
 var concat_1 = require('../operator/concat');
 exports.concat = concat_1.concatStatic;
 
-},{"../operator/concat":214}],182:[function(require,module,exports){
+},{"../operator/concat":220}],188:[function(require,module,exports){
 "use strict";
 var DeferObservable_1 = require('./DeferObservable');
 exports.defer = DeferObservable_1.DeferObservable.create;
 
-},{"./DeferObservable":159}],183:[function(require,module,exports){
+},{"./DeferObservable":165}],189:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -22504,7 +24322,7 @@ var AjaxTimeoutError = (function (_super) {
 }(AjaxError));
 exports.AjaxTimeoutError = AjaxTimeoutError;
 
-},{"../../Observable":15,"../../Subscriber":23,"../../operator/map":244,"../../util/errorObject":341,"../../util/root":352,"../../util/tryCatch":355}],184:[function(require,module,exports){
+},{"../../Observable":21,"../../Subscriber":29,"../../operator/map":250,"../../util/errorObject":347,"../../util/root":358,"../../util/tryCatch":361}],190:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -22755,102 +24573,102 @@ var WebSocketSubject = (function (_super) {
 }(Subject_1.AnonymousSubject));
 exports.WebSocketSubject = WebSocketSubject;
 
-},{"../../Observable":15,"../../ReplaySubject":18,"../../Subject":21,"../../Subscriber":23,"../../Subscription":24,"../../util/assign":340,"../../util/errorObject":341,"../../util/root":352,"../../util/tryCatch":355}],185:[function(require,module,exports){
+},{"../../Observable":21,"../../ReplaySubject":24,"../../Subject":27,"../../Subscriber":29,"../../Subscription":30,"../../util/assign":346,"../../util/errorObject":347,"../../util/root":358,"../../util/tryCatch":361}],191:[function(require,module,exports){
 "use strict";
 var AjaxObservable_1 = require('./AjaxObservable');
 exports.ajax = AjaxObservable_1.AjaxObservable.create;
 
-},{"./AjaxObservable":183}],186:[function(require,module,exports){
+},{"./AjaxObservable":189}],192:[function(require,module,exports){
 "use strict";
 var WebSocketSubject_1 = require('./WebSocketSubject');
 exports.webSocket = WebSocketSubject_1.WebSocketSubject.create;
 
-},{"./WebSocketSubject":184}],187:[function(require,module,exports){
+},{"./WebSocketSubject":190}],193:[function(require,module,exports){
 "use strict";
 var EmptyObservable_1 = require('./EmptyObservable');
 exports.empty = EmptyObservable_1.EmptyObservable.create;
 
-},{"./EmptyObservable":160}],188:[function(require,module,exports){
+},{"./EmptyObservable":166}],194:[function(require,module,exports){
 "use strict";
 var ForkJoinObservable_1 = require('./ForkJoinObservable');
 exports.forkJoin = ForkJoinObservable_1.ForkJoinObservable.create;
 
-},{"./ForkJoinObservable":162}],189:[function(require,module,exports){
+},{"./ForkJoinObservable":168}],195:[function(require,module,exports){
 "use strict";
 var FromObservable_1 = require('./FromObservable');
 exports.from = FromObservable_1.FromObservable.create;
 
-},{"./FromObservable":165}],190:[function(require,module,exports){
+},{"./FromObservable":171}],196:[function(require,module,exports){
 "use strict";
 var FromEventObservable_1 = require('./FromEventObservable');
 exports.fromEvent = FromEventObservable_1.FromEventObservable.create;
 
-},{"./FromEventObservable":163}],191:[function(require,module,exports){
+},{"./FromEventObservable":169}],197:[function(require,module,exports){
 "use strict";
 var FromEventPatternObservable_1 = require('./FromEventPatternObservable');
 exports.fromEventPattern = FromEventPatternObservable_1.FromEventPatternObservable.create;
 
-},{"./FromEventPatternObservable":164}],192:[function(require,module,exports){
+},{"./FromEventPatternObservable":170}],198:[function(require,module,exports){
 "use strict";
 var PromiseObservable_1 = require('./PromiseObservable');
 exports.fromPromise = PromiseObservable_1.PromiseObservable.create;
 
-},{"./PromiseObservable":172}],193:[function(require,module,exports){
+},{"./PromiseObservable":178}],199:[function(require,module,exports){
 "use strict";
 var IfObservable_1 = require('./IfObservable');
 exports._if = IfObservable_1.IfObservable.create;
 
-},{"./IfObservable":167}],194:[function(require,module,exports){
+},{"./IfObservable":173}],200:[function(require,module,exports){
 "use strict";
 var IntervalObservable_1 = require('./IntervalObservable');
 exports.interval = IntervalObservable_1.IntervalObservable.create;
 
-},{"./IntervalObservable":168}],195:[function(require,module,exports){
+},{"./IntervalObservable":174}],201:[function(require,module,exports){
 "use strict";
 var merge_1 = require('../operator/merge');
 exports.merge = merge_1.mergeStatic;
 
-},{"../operator/merge":248}],196:[function(require,module,exports){
+},{"../operator/merge":254}],202:[function(require,module,exports){
 "use strict";
 var NeverObservable_1 = require('./NeverObservable');
 exports.never = NeverObservable_1.NeverObservable.create;
 
-},{"./NeverObservable":170}],197:[function(require,module,exports){
+},{"./NeverObservable":176}],203:[function(require,module,exports){
 "use strict";
 var ArrayObservable_1 = require('./ArrayObservable');
 exports.of = ArrayObservable_1.ArrayObservable.of;
 
-},{"./ArrayObservable":155}],198:[function(require,module,exports){
+},{"./ArrayObservable":161}],204:[function(require,module,exports){
 "use strict";
 var PairsObservable_1 = require('./PairsObservable');
 exports.pairs = PairsObservable_1.PairsObservable.create;
 
-},{"./PairsObservable":171}],199:[function(require,module,exports){
+},{"./PairsObservable":177}],205:[function(require,module,exports){
 "use strict";
 var RangeObservable_1 = require('./RangeObservable');
 exports.range = RangeObservable_1.RangeObservable.create;
 
-},{"./RangeObservable":173}],200:[function(require,module,exports){
+},{"./RangeObservable":179}],206:[function(require,module,exports){
 "use strict";
 var ErrorObservable_1 = require('./ErrorObservable');
 exports._throw = ErrorObservable_1.ErrorObservable.create;
 
-},{"./ErrorObservable":161}],201:[function(require,module,exports){
+},{"./ErrorObservable":167}],207:[function(require,module,exports){
 "use strict";
 var TimerObservable_1 = require('./TimerObservable');
 exports.timer = TimerObservable_1.TimerObservable.create;
 
-},{"./TimerObservable":176}],202:[function(require,module,exports){
+},{"./TimerObservable":182}],208:[function(require,module,exports){
 "use strict";
 var UsingObservable_1 = require('./UsingObservable');
 exports.using = UsingObservable_1.UsingObservable.create;
 
-},{"./UsingObservable":177}],203:[function(require,module,exports){
+},{"./UsingObservable":183}],209:[function(require,module,exports){
 "use strict";
 var zip_1 = require('../operator/zip');
 exports.zip = zip_1.zipStatic;
 
-},{"../operator/zip":304}],204:[function(require,module,exports){
+},{"../operator/zip":310}],210:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -22967,7 +24785,7 @@ var AuditSubscriber = (function (_super) {
     return AuditSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/errorObject":341,"../util/subscribeToResult":353,"../util/tryCatch":355}],205:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/errorObject":347,"../util/subscribeToResult":359,"../util/tryCatch":361}],211:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23072,7 +24890,7 @@ function dispatchNext(subscriber) {
     subscriber.clearThrottle();
 }
 
-},{"../Subscriber":23,"../scheduler/async":318}],206:[function(require,module,exports){
+},{"../Subscriber":29,"../scheduler/async":324}],212:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23149,7 +24967,7 @@ var BufferSubscriber = (function (_super) {
     return BufferSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],207:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],213:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23290,7 +25108,7 @@ var BufferSkipCountSubscriber = (function (_super) {
     return BufferSkipCountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],208:[function(require,module,exports){
+},{"../Subscriber":29}],214:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23490,7 +25308,7 @@ function dispatchBufferClose(arg) {
     subscriber.closeContext(context);
 }
 
-},{"../Subscriber":23,"../scheduler/async":318,"../util/isScheduler":349}],209:[function(require,module,exports){
+},{"../Subscriber":29,"../scheduler/async":324,"../util/isScheduler":355}],215:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23643,7 +25461,7 @@ var BufferToggleSubscriber = (function (_super) {
     return BufferToggleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../Subscription":24,"../util/subscribeToResult":353}],210:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../Subscription":30,"../util/subscribeToResult":359}],216:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23766,7 +25584,7 @@ var BufferWhenSubscriber = (function (_super) {
     return BufferWhenSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../Subscription":24,"../util/errorObject":341,"../util/subscribeToResult":353,"../util/tryCatch":355}],211:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../Subscription":30,"../util/errorObject":347,"../util/subscribeToResult":359,"../util/tryCatch":361}],217:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -23883,7 +25701,7 @@ var CatchSubscriber = (function (_super) {
     return CatchSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],212:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],218:[function(require,module,exports){
 "use strict";
 var combineLatest_1 = require('./combineLatest');
 /**
@@ -23931,7 +25749,7 @@ function combineAll(project) {
 }
 exports.combineAll = combineAll;
 
-},{"./combineLatest":213}],213:[function(require,module,exports){
+},{"./combineLatest":219}],219:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24084,7 +25902,7 @@ var CombineLatestSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.CombineLatestSubscriber = CombineLatestSubscriber;
 
-},{"../OuterSubscriber":17,"../observable/ArrayObservable":155,"../util/isArray":342,"../util/subscribeToResult":353}],214:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../observable/ArrayObservable":161,"../util/isArray":348,"../util/subscribeToResult":359}],220:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../Observable');
 var isScheduler_1 = require('../util/isScheduler');
@@ -24259,7 +26077,7 @@ function concatStatic() {
 }
 exports.concatStatic = concatStatic;
 
-},{"../Observable":15,"../observable/ArrayObservable":155,"../util/isScheduler":349,"./mergeAll":249}],215:[function(require,module,exports){
+},{"../Observable":21,"../observable/ArrayObservable":161,"../util/isScheduler":355,"./mergeAll":255}],221:[function(require,module,exports){
 "use strict";
 var mergeAll_1 = require('./mergeAll');
 /* tslint:enable:max-line-length */
@@ -24316,7 +26134,7 @@ function concatAll() {
 }
 exports.concatAll = concatAll;
 
-},{"./mergeAll":249}],216:[function(require,module,exports){
+},{"./mergeAll":255}],222:[function(require,module,exports){
 "use strict";
 var mergeMap_1 = require('./mergeMap');
 /* tslint:enable:max-line-length */
@@ -24384,7 +26202,7 @@ function concatMap(project, resultSelector) {
 }
 exports.concatMap = concatMap;
 
-},{"./mergeMap":250}],217:[function(require,module,exports){
+},{"./mergeMap":256}],223:[function(require,module,exports){
 "use strict";
 var mergeMapTo_1 = require('./mergeMapTo');
 /* tslint:enable:max-line-length */
@@ -24449,7 +26267,7 @@ function concatMapTo(innerObservable, resultSelector) {
 }
 exports.concatMapTo = concatMapTo;
 
-},{"./mergeMapTo":251}],218:[function(require,module,exports){
+},{"./mergeMapTo":257}],224:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24561,7 +26379,7 @@ var CountSubscriber = (function (_super) {
     return CountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],219:[function(require,module,exports){
+},{"../Subscriber":29}],225:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24689,7 +26507,7 @@ var DebounceSubscriber = (function (_super) {
     return DebounceSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],220:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],226:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24806,7 +26624,7 @@ function dispatchNext(subscriber) {
     subscriber.debouncedNext();
 }
 
-},{"../Subscriber":23,"../scheduler/async":318}],221:[function(require,module,exports){
+},{"../Subscriber":29,"../scheduler/async":324}],227:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -24884,7 +26702,7 @@ var DefaultIfEmptySubscriber = (function (_super) {
     return DefaultIfEmptySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],222:[function(require,module,exports){
+},{"../Subscriber":29}],228:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25020,7 +26838,7 @@ var DelayMessage = (function () {
     return DelayMessage;
 }());
 
-},{"../Notification":14,"../Subscriber":23,"../scheduler/async":318,"../util/isDate":344}],223:[function(require,module,exports){
+},{"../Notification":20,"../Subscriber":29,"../scheduler/async":324,"../util/isDate":350}],229:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25213,7 +27031,7 @@ var SubscriptionDelaySubscriber = (function (_super) {
     return SubscriptionDelaySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Observable":15,"../OuterSubscriber":17,"../Subscriber":23,"../util/subscribeToResult":353}],224:[function(require,module,exports){
+},{"../Observable":21,"../OuterSubscriber":23,"../Subscriber":29,"../util/subscribeToResult":359}],230:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25289,7 +27107,7 @@ var DeMaterializeSubscriber = (function (_super) {
     return DeMaterializeSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],225:[function(require,module,exports){
+},{"../Subscriber":29}],231:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25410,7 +27228,7 @@ var DistinctSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.DistinctSubscriber = DistinctSubscriber;
 
-},{"../OuterSubscriber":17,"../util/Set":336,"../util/subscribeToResult":353}],226:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/Set":342,"../util/subscribeToResult":359}],232:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25519,7 +27337,7 @@ var DistinctUntilChangedSubscriber = (function (_super) {
     return DistinctUntilChangedSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../util/errorObject":341,"../util/tryCatch":355}],227:[function(require,module,exports){
+},{"../Subscriber":29,"../util/errorObject":347,"../util/tryCatch":361}],233:[function(require,module,exports){
 "use strict";
 var distinctUntilChanged_1 = require('./distinctUntilChanged');
 /* tslint:enable:max-line-length */
@@ -25590,7 +27408,7 @@ function distinctUntilKeyChanged(key, compare) {
 }
 exports.distinctUntilKeyChanged = distinctUntilKeyChanged;
 
-},{"./distinctUntilChanged":226}],228:[function(require,module,exports){
+},{"./distinctUntilChanged":232}],234:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25704,7 +27522,7 @@ var DoSubscriber = (function (_super) {
     return DoSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],229:[function(require,module,exports){
+},{"../Subscriber":29}],235:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25805,7 +27623,7 @@ var ElementAtSubscriber = (function (_super) {
     return ElementAtSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../util/ArgumentOutOfRangeError":329}],230:[function(require,module,exports){
+},{"../Subscriber":29,"../util/ArgumentOutOfRangeError":335}],236:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25880,7 +27698,7 @@ var EverySubscriber = (function (_super) {
     return EverySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],231:[function(require,module,exports){
+},{"../Subscriber":29}],237:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -25970,7 +27788,7 @@ var SwitchFirstSubscriber = (function (_super) {
     return SwitchFirstSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],232:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],238:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26109,7 +27927,7 @@ var SwitchFirstMapSubscriber = (function (_super) {
     return SwitchFirstMapSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],233:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],239:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26261,7 +28079,7 @@ var ExpandSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.ExpandSubscriber = ExpandSubscriber;
 
-},{"../OuterSubscriber":17,"../util/errorObject":341,"../util/subscribeToResult":353,"../util/tryCatch":355}],234:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/errorObject":347,"../util/subscribeToResult":359,"../util/tryCatch":361}],240:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26355,7 +28173,7 @@ var FilterSubscriber = (function (_super) {
     return FilterSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],235:[function(require,module,exports){
+},{"../Subscriber":29}],241:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26399,7 +28217,7 @@ var FinallySubscriber = (function (_super) {
     return FinallySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../Subscription":24}],236:[function(require,module,exports){
+},{"../Subscriber":29,"../Subscription":30}],242:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26501,7 +28319,7 @@ var FindValueSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.FindValueSubscriber = FindValueSubscriber;
 
-},{"../Subscriber":23}],237:[function(require,module,exports){
+},{"../Subscriber":29}],243:[function(require,module,exports){
 "use strict";
 var find_1 = require('./find');
 /**
@@ -26543,7 +28361,7 @@ function findIndex(predicate, thisArg) {
 }
 exports.findIndex = findIndex;
 
-},{"./find":236}],238:[function(require,module,exports){
+},{"./find":242}],244:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26696,7 +28514,7 @@ var FirstSubscriber = (function (_super) {
     return FirstSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../util/EmptyError":330}],239:[function(require,module,exports){
+},{"../Subscriber":29,"../util/EmptyError":336}],245:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -26971,7 +28789,7 @@ var InnerRefCountSubscription = (function (_super) {
     return InnerRefCountSubscription;
 }(Subscription_1.Subscription));
 
-},{"../Observable":15,"../Subject":21,"../Subscriber":23,"../Subscription":24,"../util/FastMap":331,"../util/Map":333}],240:[function(require,module,exports){
+},{"../Observable":21,"../Subject":27,"../Subscriber":29,"../Subscription":30,"../util/FastMap":337,"../util/Map":339}],246:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27019,7 +28837,7 @@ var IgnoreElementsSubscriber = (function (_super) {
     return IgnoreElementsSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../util/noop":350}],241:[function(require,module,exports){
+},{"../Subscriber":29,"../util/noop":356}],247:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27072,7 +28890,7 @@ var IsEmptySubscriber = (function (_super) {
     return IsEmptySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],242:[function(require,module,exports){
+},{"../Subscriber":29}],248:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27192,7 +29010,7 @@ var LastSubscriber = (function (_super) {
     return LastSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../util/EmptyError":330}],243:[function(require,module,exports){
+},{"../Subscriber":29,"../util/EmptyError":336}],249:[function(require,module,exports){
 "use strict";
 /**
  * @param func
@@ -27205,7 +29023,7 @@ function letProto(func) {
 }
 exports.letProto = letProto;
 
-},{}],244:[function(require,module,exports){
+},{}],250:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27293,7 +29111,7 @@ var MapSubscriber = (function (_super) {
     return MapSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],245:[function(require,module,exports){
+},{"../Subscriber":29}],251:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27357,7 +29175,7 @@ var MapToSubscriber = (function (_super) {
     return MapToSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],246:[function(require,module,exports){
+},{"../Subscriber":29}],252:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27448,7 +29266,7 @@ var MaterializeSubscriber = (function (_super) {
     return MaterializeSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Notification":14,"../Subscriber":23}],247:[function(require,module,exports){
+},{"../Notification":20,"../Subscriber":29}],253:[function(require,module,exports){
 "use strict";
 var reduce_1 = require('./reduce');
 /**
@@ -27490,7 +29308,7 @@ function max(comparer) {
 }
 exports.max = max;
 
-},{"./reduce":265}],248:[function(require,module,exports){
+},{"./reduce":271}],254:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../Observable');
 var ArrayObservable_1 = require('../observable/ArrayObservable');
@@ -27636,7 +29454,7 @@ function mergeStatic() {
 }
 exports.mergeStatic = mergeStatic;
 
-},{"../Observable":15,"../observable/ArrayObservable":155,"../util/isScheduler":349,"./mergeAll":249}],249:[function(require,module,exports){
+},{"../Observable":21,"../observable/ArrayObservable":161,"../util/isScheduler":355,"./mergeAll":255}],255:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27748,7 +29566,7 @@ var MergeAllSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeAllSubscriber = MergeAllSubscriber;
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],250:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],256:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -27920,7 +29738,7 @@ var MergeMapSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeMapSubscriber = MergeMapSubscriber;
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],251:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],257:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28076,7 +29894,7 @@ var MergeMapToSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeMapToSubscriber = MergeMapToSubscriber;
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],252:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],258:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28206,7 +30024,7 @@ var MergeScanSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeScanSubscriber = MergeScanSubscriber;
 
-},{"../OuterSubscriber":17,"../util/errorObject":341,"../util/subscribeToResult":353,"../util/tryCatch":355}],253:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/errorObject":347,"../util/subscribeToResult":359,"../util/tryCatch":361}],259:[function(require,module,exports){
 "use strict";
 var reduce_1 = require('./reduce');
 /**
@@ -28248,7 +30066,7 @@ function min(comparer) {
 }
 exports.min = min;
 
-},{"./reduce":265}],254:[function(require,module,exports){
+},{"./reduce":271}],260:[function(require,module,exports){
 "use strict";
 var ConnectableObservable_1 = require('../observable/ConnectableObservable');
 /* tslint:enable:max-line-length */
@@ -28306,7 +30124,7 @@ var MulticastOperator = (function () {
 }());
 exports.MulticastOperator = MulticastOperator;
 
-},{"../observable/ConnectableObservable":158}],255:[function(require,module,exports){
+},{"../observable/ConnectableObservable":164}],261:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28420,7 +30238,7 @@ var ObserveOnMessage = (function () {
 }());
 exports.ObserveOnMessage = ObserveOnMessage;
 
-},{"../Notification":14,"../Subscriber":23}],256:[function(require,module,exports){
+},{"../Notification":20,"../Subscriber":29}],262:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28558,7 +30376,7 @@ var OnErrorResumeNextSubscriber = (function (_super) {
     return OnErrorResumeNextSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../observable/FromObservable":165,"../util/isArray":342,"../util/subscribeToResult":353}],257:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../observable/FromObservable":171,"../util/isArray":348,"../util/subscribeToResult":359}],263:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28636,7 +30454,7 @@ var PairwiseSubscriber = (function (_super) {
     return PairwiseSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],258:[function(require,module,exports){
+},{"../Subscriber":29}],264:[function(require,module,exports){
 "use strict";
 var not_1 = require('../util/not');
 var filter_1 = require('./filter');
@@ -28689,7 +30507,7 @@ function partition(predicate, thisArg) {
 }
 exports.partition = partition;
 
-},{"../util/not":351,"./filter":234}],259:[function(require,module,exports){
+},{"../util/not":357,"./filter":240}],265:[function(require,module,exports){
 "use strict";
 var map_1 = require('./map');
 /**
@@ -28747,7 +30565,7 @@ function plucker(props, length) {
     return mapper;
 }
 
-},{"./map":244}],260:[function(require,module,exports){
+},{"./map":250}],266:[function(require,module,exports){
 "use strict";
 var Subject_1 = require('../Subject');
 var multicast_1 = require('./multicast');
@@ -28771,7 +30589,7 @@ function publish(selector) {
 }
 exports.publish = publish;
 
-},{"../Subject":21,"./multicast":254}],261:[function(require,module,exports){
+},{"../Subject":27,"./multicast":260}],267:[function(require,module,exports){
 "use strict";
 var BehaviorSubject_1 = require('../BehaviorSubject');
 var multicast_1 = require('./multicast');
@@ -28786,7 +30604,7 @@ function publishBehavior(value) {
 }
 exports.publishBehavior = publishBehavior;
 
-},{"../BehaviorSubject":12,"./multicast":254}],262:[function(require,module,exports){
+},{"../BehaviorSubject":18,"./multicast":260}],268:[function(require,module,exports){
 "use strict";
 var AsyncSubject_1 = require('../AsyncSubject');
 var multicast_1 = require('./multicast');
@@ -28800,7 +30618,7 @@ function publishLast() {
 }
 exports.publishLast = publishLast;
 
-},{"../AsyncSubject":11,"./multicast":254}],263:[function(require,module,exports){
+},{"../AsyncSubject":17,"./multicast":260}],269:[function(require,module,exports){
 "use strict";
 var ReplaySubject_1 = require('../ReplaySubject');
 var multicast_1 = require('./multicast');
@@ -28819,7 +30637,7 @@ function publishReplay(bufferSize, windowTime, scheduler) {
 }
 exports.publishReplay = publishReplay;
 
-},{"../ReplaySubject":18,"./multicast":254}],264:[function(require,module,exports){
+},{"../ReplaySubject":24,"./multicast":260}],270:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -28931,7 +30749,7 @@ var RaceSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.RaceSubscriber = RaceSubscriber;
 
-},{"../OuterSubscriber":17,"../observable/ArrayObservable":155,"../util/isArray":342,"../util/subscribeToResult":353}],265:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../observable/ArrayObservable":161,"../util/isArray":348,"../util/subscribeToResult":359}],271:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29058,7 +30876,7 @@ var ReduceSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.ReduceSubscriber = ReduceSubscriber;
 
-},{"../Subscriber":23}],266:[function(require,module,exports){
+},{"../Subscriber":29}],272:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29129,7 +30947,7 @@ var RepeatSubscriber = (function (_super) {
     return RepeatSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../observable/EmptyObservable":160}],267:[function(require,module,exports){
+},{"../Subscriber":29,"../observable/EmptyObservable":166}],273:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29238,7 +31056,7 @@ var RepeatWhenSubscriber = (function (_super) {
     return RepeatWhenSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../Subject":21,"../util/errorObject":341,"../util/subscribeToResult":353,"../util/tryCatch":355}],268:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../Subject":27,"../util/errorObject":347,"../util/subscribeToResult":359,"../util/tryCatch":361}],274:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29304,7 +31122,7 @@ var RetrySubscriber = (function (_super) {
     return RetrySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],269:[function(require,module,exports){
+},{"../Subscriber":29}],275:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29406,7 +31224,7 @@ var RetryWhenSubscriber = (function (_super) {
     return RetryWhenSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../Subject":21,"../util/errorObject":341,"../util/subscribeToResult":353,"../util/tryCatch":355}],270:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../Subject":27,"../util/errorObject":347,"../util/subscribeToResult":359,"../util/tryCatch":361}],276:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29495,7 +31313,7 @@ var SampleSubscriber = (function (_super) {
     return SampleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],271:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],277:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29587,7 +31405,7 @@ function dispatchNotification(state) {
     this.schedule(state, period);
 }
 
-},{"../Subscriber":23,"../scheduler/async":318}],272:[function(require,module,exports){
+},{"../Subscriber":29,"../scheduler/async":324}],278:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29707,7 +31525,7 @@ var ScanSubscriber = (function (_super) {
     return ScanSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],273:[function(require,module,exports){
+},{"../Subscriber":29}],279:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -29872,7 +31690,7 @@ var SequenceEqualCompareToSubscriber = (function (_super) {
     return SequenceEqualCompareToSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../util/errorObject":341,"../util/tryCatch":355}],274:[function(require,module,exports){
+},{"../Subscriber":29,"../util/errorObject":347,"../util/tryCatch":361}],280:[function(require,module,exports){
 "use strict";
 var multicast_1 = require('./multicast');
 var Subject_1 = require('../Subject');
@@ -29897,7 +31715,7 @@ function share() {
 exports.share = share;
 ;
 
-},{"../Subject":21,"./multicast":254}],275:[function(require,module,exports){
+},{"../Subject":27,"./multicast":260}],281:[function(require,module,exports){
 "use strict";
 var multicast_1 = require('./multicast');
 var ReplaySubject_1 = require('../ReplaySubject');
@@ -29920,7 +31738,7 @@ function shareReplay(bufferSize, windowTime, scheduler) {
 exports.shareReplay = shareReplay;
 ;
 
-},{"../ReplaySubject":18,"./multicast":254}],276:[function(require,module,exports){
+},{"../ReplaySubject":24,"./multicast":260}],282:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30014,7 +31832,7 @@ var SingleSubscriber = (function (_super) {
     return SingleSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../util/EmptyError":330}],277:[function(require,module,exports){
+},{"../Subscriber":29,"../util/EmptyError":336}],283:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30066,7 +31884,7 @@ var SkipSubscriber = (function (_super) {
     return SkipSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],278:[function(require,module,exports){
+},{"../Subscriber":29}],284:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30160,7 +31978,7 @@ var SkipLastSubscriber = (function (_super) {
     return SkipLastSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../util/ArgumentOutOfRangeError":329}],279:[function(require,module,exports){
+},{"../Subscriber":29,"../util/ArgumentOutOfRangeError":335}],285:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30232,7 +32050,7 @@ var SkipUntilSubscriber = (function (_super) {
     return SkipUntilSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],280:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],286:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30299,7 +32117,7 @@ var SkipWhileSubscriber = (function (_super) {
     return SkipWhileSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],281:[function(require,module,exports){
+},{"../Subscriber":29}],287:[function(require,module,exports){
 "use strict";
 var ArrayObservable_1 = require('../observable/ArrayObservable');
 var ScalarObservable_1 = require('../observable/ScalarObservable');
@@ -30346,7 +32164,7 @@ function startWith() {
 }
 exports.startWith = startWith;
 
-},{"../observable/ArrayObservable":155,"../observable/EmptyObservable":160,"../observable/ScalarObservable":174,"../util/isScheduler":349,"./concat":214}],282:[function(require,module,exports){
+},{"../observable/ArrayObservable":161,"../observable/EmptyObservable":166,"../observable/ScalarObservable":180,"../util/isScheduler":355,"./concat":220}],288:[function(require,module,exports){
 "use strict";
 var SubscribeOnObservable_1 = require('../observable/SubscribeOnObservable');
 /**
@@ -30376,7 +32194,7 @@ var SubscribeOnOperator = (function () {
     return SubscribeOnOperator;
 }());
 
-},{"../observable/SubscribeOnObservable":175}],283:[function(require,module,exports){
+},{"../observable/SubscribeOnObservable":181}],289:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30485,7 +32303,7 @@ var SwitchSubscriber = (function (_super) {
     return SwitchSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],284:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],290:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30626,7 +32444,7 @@ var SwitchMapSubscriber = (function (_super) {
     return SwitchMapSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],285:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],291:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30752,7 +32570,7 @@ var SwitchMapToSubscriber = (function (_super) {
     return SwitchMapToSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],286:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],292:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30842,7 +32660,7 @@ var TakeSubscriber = (function (_super) {
     return TakeSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../observable/EmptyObservable":160,"../util/ArgumentOutOfRangeError":329}],287:[function(require,module,exports){
+},{"../Subscriber":29,"../observable/EmptyObservable":166,"../util/ArgumentOutOfRangeError":335}],293:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -30950,7 +32768,7 @@ var TakeLastSubscriber = (function (_super) {
     return TakeLastSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../observable/EmptyObservable":160,"../util/ArgumentOutOfRangeError":329}],288:[function(require,module,exports){
+},{"../Subscriber":29,"../observable/EmptyObservable":166,"../util/ArgumentOutOfRangeError":335}],294:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31026,7 +32844,7 @@ var TakeUntilSubscriber = (function (_super) {
     return TakeUntilSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],289:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],295:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31119,7 +32937,7 @@ var TakeWhileSubscriber = (function (_super) {
     return TakeWhileSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],290:[function(require,module,exports){
+},{"../Subscriber":29}],296:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31262,7 +33080,7 @@ var ThrottleSubscriber = (function (_super) {
     return ThrottleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],291:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],297:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31379,7 +33197,7 @@ function dispatchNext(arg) {
     subscriber.clearThrottle();
 }
 
-},{"../Subscriber":23,"../scheduler/async":318,"./throttle":290}],292:[function(require,module,exports){
+},{"../Subscriber":29,"../scheduler/async":324,"./throttle":296}],298:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31439,7 +33257,7 @@ var TimeIntervalSubscriber = (function (_super) {
     return TimeIntervalSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../scheduler/async":318}],293:[function(require,module,exports){
+},{"../Subscriber":29,"../scheduler/async":324}],299:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31523,7 +33341,7 @@ var TimeoutSubscriber = (function (_super) {
     return TimeoutSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../scheduler/async":318,"../util/TimeoutError":337,"../util/isDate":344}],294:[function(require,module,exports){
+},{"../Subscriber":29,"../scheduler/async":324,"../util/TimeoutError":343,"../util/isDate":350}],300:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31611,7 +33429,7 @@ var TimeoutWithSubscriber = (function (_super) {
     return TimeoutWithSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../scheduler/async":318,"../util/isDate":344,"../util/subscribeToResult":353}],295:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../scheduler/async":324,"../util/isDate":350,"../util/subscribeToResult":359}],301:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31662,7 +33480,7 @@ var TimestampSubscriber = (function (_super) {
     return TimestampSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23,"../scheduler/async":318}],296:[function(require,module,exports){
+},{"../Subscriber":29,"../scheduler/async":324}],302:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31708,7 +33526,7 @@ var ToArraySubscriber = (function (_super) {
     return ToArraySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":23}],297:[function(require,module,exports){
+},{"../Subscriber":29}],303:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 /* tslint:enable:max-line-length */
@@ -31781,7 +33599,7 @@ function toPromise(PromiseCtor) {
 }
 exports.toPromise = toPromise;
 
-},{"../util/root":352}],298:[function(require,module,exports){
+},{"../util/root":358}],304:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -31892,7 +33710,7 @@ var WindowSubscriber = (function (_super) {
     return WindowSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../Subject":21,"../util/subscribeToResult":353}],299:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../Subject":27,"../util/subscribeToResult":359}],305:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32024,7 +33842,7 @@ var WindowCountSubscriber = (function (_super) {
     return WindowCountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subject":21,"../Subscriber":23}],300:[function(require,module,exports){
+},{"../Subject":27,"../Subscriber":29}],306:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32186,7 +34004,7 @@ function dispatchWindowClose(state) {
     subscriber.closeWindow(window);
 }
 
-},{"../Subject":21,"../Subscriber":23,"../scheduler/async":318,"../util/isNumeric":346,"../util/isScheduler":349}],301:[function(require,module,exports){
+},{"../Subject":27,"../Subscriber":29,"../scheduler/async":324,"../util/isNumeric":352,"../util/isScheduler":355}],307:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32367,7 +34185,7 @@ var WindowToggleSubscriber = (function (_super) {
     return WindowToggleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../Subject":21,"../Subscription":24,"../util/errorObject":341,"../util/subscribeToResult":353,"../util/tryCatch":355}],302:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../Subject":27,"../Subscription":30,"../util/errorObject":347,"../util/subscribeToResult":359,"../util/tryCatch":361}],308:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32495,7 +34313,7 @@ var WindowSubscriber = (function (_super) {
     return WindowSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../Subject":21,"../util/errorObject":341,"../util/subscribeToResult":353,"../util/tryCatch":355}],303:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../Subject":27,"../util/errorObject":347,"../util/subscribeToResult":359,"../util/tryCatch":361}],309:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32626,7 +34444,7 @@ var WithLatestFromSubscriber = (function (_super) {
     return WithLatestFromSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../util/subscribeToResult":353}],304:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../util/subscribeToResult":359}],310:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32906,7 +34724,7 @@ var ZipBufferIterator = (function (_super) {
     return ZipBufferIterator;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":17,"../Subscriber":23,"../observable/ArrayObservable":155,"../symbol/iterator":320,"../util/isArray":342,"../util/subscribeToResult":353}],305:[function(require,module,exports){
+},{"../OuterSubscriber":23,"../Subscriber":29,"../observable/ArrayObservable":161,"../symbol/iterator":326,"../util/isArray":348,"../util/subscribeToResult":359}],311:[function(require,module,exports){
 "use strict";
 var zip_1 = require('./zip');
 /**
@@ -32920,7 +34738,7 @@ function zipAll(project) {
 }
 exports.zipAll = zipAll;
 
-},{"./zip":304}],306:[function(require,module,exports){
+},{"./zip":310}],312:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -32965,7 +34783,7 @@ var Action = (function (_super) {
 }(Subscription_1.Subscription));
 exports.Action = Action;
 
-},{"../Subscription":24}],307:[function(require,module,exports){
+},{"../Subscription":30}],313:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33021,7 +34839,7 @@ var AnimationFrameAction = (function (_super) {
 }(AsyncAction_1.AsyncAction));
 exports.AnimationFrameAction = AnimationFrameAction;
 
-},{"../util/AnimationFrame":328,"./AsyncAction":311}],308:[function(require,module,exports){
+},{"../util/AnimationFrame":334,"./AsyncAction":317}],314:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33059,7 +34877,7 @@ var AnimationFrameScheduler = (function (_super) {
 }(AsyncScheduler_1.AsyncScheduler));
 exports.AnimationFrameScheduler = AnimationFrameScheduler;
 
-},{"./AsyncScheduler":312}],309:[function(require,module,exports){
+},{"./AsyncScheduler":318}],315:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33115,7 +34933,7 @@ var AsapAction = (function (_super) {
 }(AsyncAction_1.AsyncAction));
 exports.AsapAction = AsapAction;
 
-},{"../util/Immediate":332,"./AsyncAction":311}],310:[function(require,module,exports){
+},{"../util/Immediate":338,"./AsyncAction":317}],316:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33153,7 +34971,7 @@ var AsapScheduler = (function (_super) {
 }(AsyncScheduler_1.AsyncScheduler));
 exports.AsapScheduler = AsapScheduler;
 
-},{"./AsyncScheduler":312}],311:[function(require,module,exports){
+},{"./AsyncScheduler":318}],317:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33296,7 +35114,7 @@ var AsyncAction = (function (_super) {
 }(Action_1.Action));
 exports.AsyncAction = AsyncAction;
 
-},{"../util/root":352,"./Action":306}],312:[function(require,module,exports){
+},{"../util/root":358,"./Action":312}],318:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33348,7 +35166,7 @@ var AsyncScheduler = (function (_super) {
 }(Scheduler_1.Scheduler));
 exports.AsyncScheduler = AsyncScheduler;
 
-},{"../Scheduler":20}],313:[function(require,module,exports){
+},{"../Scheduler":26}],319:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33398,7 +35216,7 @@ var QueueAction = (function (_super) {
 }(AsyncAction_1.AsyncAction));
 exports.QueueAction = QueueAction;
 
-},{"./AsyncAction":311}],314:[function(require,module,exports){
+},{"./AsyncAction":317}],320:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33415,7 +35233,7 @@ var QueueScheduler = (function (_super) {
 }(AsyncScheduler_1.AsyncScheduler));
 exports.QueueScheduler = QueueScheduler;
 
-},{"./AsyncScheduler":312}],315:[function(require,module,exports){
+},{"./AsyncScheduler":318}],321:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33529,7 +35347,7 @@ var VirtualAction = (function (_super) {
 }(AsyncAction_1.AsyncAction));
 exports.VirtualAction = VirtualAction;
 
-},{"./AsyncAction":311,"./AsyncScheduler":312}],316:[function(require,module,exports){
+},{"./AsyncAction":317,"./AsyncScheduler":318}],322:[function(require,module,exports){
 "use strict";
 var AnimationFrameAction_1 = require('./AnimationFrameAction');
 var AnimationFrameScheduler_1 = require('./AnimationFrameScheduler');
@@ -33565,7 +35383,7 @@ var AnimationFrameScheduler_1 = require('./AnimationFrameScheduler');
  */
 exports.animationFrame = new AnimationFrameScheduler_1.AnimationFrameScheduler(AnimationFrameAction_1.AnimationFrameAction);
 
-},{"./AnimationFrameAction":307,"./AnimationFrameScheduler":308}],317:[function(require,module,exports){
+},{"./AnimationFrameAction":313,"./AnimationFrameScheduler":314}],323:[function(require,module,exports){
 "use strict";
 var AsapAction_1 = require('./AsapAction');
 var AsapScheduler_1 = require('./AsapScheduler');
@@ -33605,7 +35423,7 @@ var AsapScheduler_1 = require('./AsapScheduler');
  */
 exports.asap = new AsapScheduler_1.AsapScheduler(AsapAction_1.AsapAction);
 
-},{"./AsapAction":309,"./AsapScheduler":310}],318:[function(require,module,exports){
+},{"./AsapAction":315,"./AsapScheduler":316}],324:[function(require,module,exports){
 "use strict";
 var AsyncAction_1 = require('./AsyncAction');
 var AsyncScheduler_1 = require('./AsyncScheduler');
@@ -33653,7 +35471,7 @@ var AsyncScheduler_1 = require('./AsyncScheduler');
  */
 exports.async = new AsyncScheduler_1.AsyncScheduler(AsyncAction_1.AsyncAction);
 
-},{"./AsyncAction":311,"./AsyncScheduler":312}],319:[function(require,module,exports){
+},{"./AsyncAction":317,"./AsyncScheduler":318}],325:[function(require,module,exports){
 "use strict";
 var QueueAction_1 = require('./QueueAction');
 var QueueScheduler_1 = require('./QueueScheduler');
@@ -33720,7 +35538,7 @@ var QueueScheduler_1 = require('./QueueScheduler');
  */
 exports.queue = new QueueScheduler_1.QueueScheduler(QueueAction_1.QueueAction);
 
-},{"./QueueAction":313,"./QueueScheduler":314}],320:[function(require,module,exports){
+},{"./QueueAction":319,"./QueueScheduler":320}],326:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 function symbolIteratorPonyfill(root) {
@@ -33759,7 +35577,7 @@ exports.iterator = symbolIteratorPonyfill(root_1.root);
  */
 exports.$$iterator = exports.iterator;
 
-},{"../util/root":352}],321:[function(require,module,exports){
+},{"../util/root":358}],327:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 function getSymbolObservable(context) {
@@ -33786,7 +35604,7 @@ exports.observable = getSymbolObservable(root_1.root);
  */
 exports.$$observable = exports.observable;
 
-},{"../util/root":352}],322:[function(require,module,exports){
+},{"../util/root":358}],328:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 var Symbol = root_1.root.Symbol;
@@ -33797,7 +35615,7 @@ exports.rxSubscriber = (typeof Symbol === 'function' && typeof Symbol.for === 'f
  */
 exports.$$rxSubscriber = exports.rxSubscriber;
 
-},{"../util/root":352}],323:[function(require,module,exports){
+},{"../util/root":358}],329:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33844,7 +35662,7 @@ var ColdObservable = (function (_super) {
 exports.ColdObservable = ColdObservable;
 applyMixins_1.applyMixins(ColdObservable, [SubscriptionLoggable_1.SubscriptionLoggable]);
 
-},{"../Observable":15,"../Subscription":24,"../util/applyMixins":339,"./SubscriptionLoggable":326}],324:[function(require,module,exports){
+},{"../Observable":21,"../Subscription":30,"../util/applyMixins":345,"./SubscriptionLoggable":332}],330:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -33893,7 +35711,7 @@ var HotObservable = (function (_super) {
 exports.HotObservable = HotObservable;
 applyMixins_1.applyMixins(HotObservable, [SubscriptionLoggable_1.SubscriptionLoggable]);
 
-},{"../Subject":21,"../Subscription":24,"../util/applyMixins":339,"./SubscriptionLoggable":326}],325:[function(require,module,exports){
+},{"../Subject":27,"../Subscription":30,"../util/applyMixins":345,"./SubscriptionLoggable":332}],331:[function(require,module,exports){
 "use strict";
 var SubscriptionLog = (function () {
     function SubscriptionLog(subscribedFrame, unsubscribedFrame) {
@@ -33905,7 +35723,7 @@ var SubscriptionLog = (function () {
 }());
 exports.SubscriptionLog = SubscriptionLog;
 
-},{}],326:[function(require,module,exports){
+},{}],332:[function(require,module,exports){
 "use strict";
 var SubscriptionLog_1 = require('./SubscriptionLog');
 var SubscriptionLoggable = (function () {
@@ -33925,7 +35743,7 @@ var SubscriptionLoggable = (function () {
 }());
 exports.SubscriptionLoggable = SubscriptionLoggable;
 
-},{"./SubscriptionLog":325}],327:[function(require,module,exports){
+},{"./SubscriptionLog":331}],333:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34149,7 +35967,7 @@ var TestScheduler = (function (_super) {
 }(VirtualTimeScheduler_1.VirtualTimeScheduler));
 exports.TestScheduler = TestScheduler;
 
-},{"../Notification":14,"../Observable":15,"../scheduler/VirtualTimeScheduler":315,"./ColdObservable":323,"./HotObservable":324,"./SubscriptionLog":325}],328:[function(require,module,exports){
+},{"../Notification":20,"../Observable":21,"../scheduler/VirtualTimeScheduler":321,"./ColdObservable":329,"./HotObservable":330,"./SubscriptionLog":331}],334:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 var RequestAnimationFrameDefinition = (function () {
@@ -34184,7 +36002,7 @@ var RequestAnimationFrameDefinition = (function () {
 exports.RequestAnimationFrameDefinition = RequestAnimationFrameDefinition;
 exports.AnimationFrame = new RequestAnimationFrameDefinition(root_1.root);
 
-},{"./root":352}],329:[function(require,module,exports){
+},{"./root":358}],335:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34213,7 +36031,7 @@ var ArgumentOutOfRangeError = (function (_super) {
 }(Error));
 exports.ArgumentOutOfRangeError = ArgumentOutOfRangeError;
 
-},{}],330:[function(require,module,exports){
+},{}],336:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34242,7 +36060,7 @@ var EmptyError = (function (_super) {
 }(Error));
 exports.EmptyError = EmptyError;
 
-},{}],331:[function(require,module,exports){
+},{}],337:[function(require,module,exports){
 "use strict";
 var FastMap = (function () {
     function FastMap() {
@@ -34274,7 +36092,7 @@ var FastMap = (function () {
 }());
 exports.FastMap = FastMap;
 
-},{}],332:[function(require,module,exports){
+},{}],338:[function(require,module,exports){
 /**
 Some credit for this helper goes to http://github.com/YuzuJS/setImmediate
 */
@@ -34484,13 +36302,13 @@ var ImmediateDefinition = (function () {
 exports.ImmediateDefinition = ImmediateDefinition;
 exports.Immediate = new ImmediateDefinition(root_1.root);
 
-},{"./root":352}],333:[function(require,module,exports){
+},{"./root":358}],339:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 var MapPolyfill_1 = require('./MapPolyfill');
 exports.Map = root_1.root.Map || (function () { return MapPolyfill_1.MapPolyfill; })();
 
-},{"./MapPolyfill":334,"./root":352}],334:[function(require,module,exports){
+},{"./MapPolyfill":340,"./root":358}],340:[function(require,module,exports){
 "use strict";
 var MapPolyfill = (function () {
     function MapPolyfill() {
@@ -34538,7 +36356,7 @@ var MapPolyfill = (function () {
 }());
 exports.MapPolyfill = MapPolyfill;
 
-},{}],335:[function(require,module,exports){
+},{}],341:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34566,7 +36384,7 @@ var ObjectUnsubscribedError = (function (_super) {
 }(Error));
 exports.ObjectUnsubscribedError = ObjectUnsubscribedError;
 
-},{}],336:[function(require,module,exports){
+},{}],342:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 function minimalSetImpl() {
@@ -34600,7 +36418,7 @@ function minimalSetImpl() {
 exports.minimalSetImpl = minimalSetImpl;
 exports.Set = root_1.root.Set || minimalSetImpl();
 
-},{"./root":352}],337:[function(require,module,exports){
+},{"./root":358}],343:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34626,7 +36444,7 @@ var TimeoutError = (function (_super) {
 }(Error));
 exports.TimeoutError = TimeoutError;
 
-},{}],338:[function(require,module,exports){
+},{}],344:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -34652,7 +36470,7 @@ var UnsubscriptionError = (function (_super) {
 }(Error));
 exports.UnsubscriptionError = UnsubscriptionError;
 
-},{}],339:[function(require,module,exports){
+},{}],345:[function(require,module,exports){
 "use strict";
 function applyMixins(derivedCtor, baseCtors) {
     for (var i = 0, len = baseCtors.length; i < len; i++) {
@@ -34666,7 +36484,7 @@ function applyMixins(derivedCtor, baseCtors) {
 }
 exports.applyMixins = applyMixins;
 
-},{}],340:[function(require,module,exports){
+},{}],346:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 function assignImpl(target) {
@@ -34693,34 +36511,34 @@ function getAssign(root) {
 exports.getAssign = getAssign;
 exports.assign = getAssign(root_1.root);
 
-},{"./root":352}],341:[function(require,module,exports){
+},{"./root":358}],347:[function(require,module,exports){
 "use strict";
 // typeof any so that it we don't have to cast when comparing a result to the error object
 exports.errorObject = { e: {} };
 
-},{}],342:[function(require,module,exports){
+},{}],348:[function(require,module,exports){
 "use strict";
 exports.isArray = Array.isArray || (function (x) { return x && typeof x.length === 'number'; });
 
-},{}],343:[function(require,module,exports){
+},{}],349:[function(require,module,exports){
 "use strict";
 exports.isArrayLike = (function (x) { return x && typeof x.length === 'number'; });
 
-},{}],344:[function(require,module,exports){
+},{}],350:[function(require,module,exports){
 "use strict";
 function isDate(value) {
     return value instanceof Date && !isNaN(+value);
 }
 exports.isDate = isDate;
 
-},{}],345:[function(require,module,exports){
+},{}],351:[function(require,module,exports){
 "use strict";
 function isFunction(x) {
     return typeof x === 'function';
 }
 exports.isFunction = isFunction;
 
-},{}],346:[function(require,module,exports){
+},{}],352:[function(require,module,exports){
 "use strict";
 var isArray_1 = require('../util/isArray');
 function isNumeric(val) {
@@ -34733,34 +36551,34 @@ function isNumeric(val) {
 exports.isNumeric = isNumeric;
 ;
 
-},{"../util/isArray":342}],347:[function(require,module,exports){
+},{"../util/isArray":348}],353:[function(require,module,exports){
 "use strict";
 function isObject(x) {
     return x != null && typeof x === 'object';
 }
 exports.isObject = isObject;
 
-},{}],348:[function(require,module,exports){
+},{}],354:[function(require,module,exports){
 "use strict";
 function isPromise(value) {
     return value && typeof value.subscribe !== 'function' && typeof value.then === 'function';
 }
 exports.isPromise = isPromise;
 
-},{}],349:[function(require,module,exports){
+},{}],355:[function(require,module,exports){
 "use strict";
 function isScheduler(value) {
     return value && typeof value.schedule === 'function';
 }
 exports.isScheduler = isScheduler;
 
-},{}],350:[function(require,module,exports){
+},{}],356:[function(require,module,exports){
 "use strict";
 /* tslint:disable:no-empty */
 function noop() { }
 exports.noop = noop;
 
-},{}],351:[function(require,module,exports){
+},{}],357:[function(require,module,exports){
 "use strict";
 function not(pred, thisArg) {
     function notPred() {
@@ -34772,7 +36590,7 @@ function not(pred, thisArg) {
 }
 exports.not = not;
 
-},{}],352:[function(require,module,exports){
+},{}],358:[function(require,module,exports){
 (function (global){
 "use strict";
 // CommonJS / Node have global context exposed as "global" variable.
@@ -34794,7 +36612,7 @@ exports.root = _root;
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],353:[function(require,module,exports){
+},{}],359:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 var isArrayLike_1 = require('./isArrayLike');
@@ -34873,7 +36691,7 @@ function subscribeToResult(outerSubscriber, result, outerValue, outerIndex) {
 }
 exports.subscribeToResult = subscribeToResult;
 
-},{"../InnerSubscriber":13,"../Observable":15,"../symbol/iterator":320,"../symbol/observable":321,"./isArrayLike":343,"./isObject":347,"./isPromise":348,"./root":352}],354:[function(require,module,exports){
+},{"../InnerSubscriber":19,"../Observable":21,"../symbol/iterator":326,"../symbol/observable":327,"./isArrayLike":349,"./isObject":353,"./isPromise":354,"./root":358}],360:[function(require,module,exports){
 "use strict";
 var Subscriber_1 = require('../Subscriber');
 var rxSubscriber_1 = require('../symbol/rxSubscriber');
@@ -34894,7 +36712,7 @@ function toSubscriber(nextOrObserver, error, complete) {
 }
 exports.toSubscriber = toSubscriber;
 
-},{"../Observer":16,"../Subscriber":23,"../symbol/rxSubscriber":322}],355:[function(require,module,exports){
+},{"../Observer":22,"../Subscriber":29,"../symbol/rxSubscriber":328}],361:[function(require,module,exports){
 "use strict";
 var errorObject_1 = require('./errorObject');
 var tryCatchTarget;
@@ -34914,4 +36732,4 @@ function tryCatch(fn) {
 exports.tryCatch = tryCatch;
 ;
 
-},{"./errorObject":341}]},{},[1]);
+},{"./errorObject":347}]},{},[1]);

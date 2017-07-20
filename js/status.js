@@ -4,18 +4,19 @@
 const Rx = require('rxjs/Rx');
 const Utils = require('./utils');
 const utils = Utils();
-
 // inizializzazione status
+const initFocus = {
+    "id": null,
+    "bounds": null,
+    "features": []
+};
+const initExplorer = {
+    "bounds": null,
+    "reset": true
+};
 const store = {
-    "focus": {
-        "id": null,
-        "bounds": null,
-        "features": []
-    },
-    "explorer": {
-        "bounds": null,
-        "reset": true
-    }
+    "focus": initFocus,
+    "explorer": initExplorer
 };
 
 let current = "explorer";
@@ -33,12 +34,12 @@ module.exports = (params = {}) => {
     status.observe = Rx.Observable.create(function (observer) {
         status.focus = focusHandler(observer);
         status.move = (bounds) => {
-            console.log('saving? ',current);
+            // console.log('saving? ',current);
             switch (current) {
                 case "focus":
                     break;
                 default:
-                    console.debug('saving bounds',bounds);
+                    // console.debug('saving bounds',bounds);
                     store["explorer"].bounds = bounds;
             }
         };
@@ -49,6 +50,12 @@ module.exports = (params = {}) => {
     }).share();
     // init objervable
     status.observe.subscribe();
+    // get current focus
+    status.getFocus = () => {
+        if(current === "focus")
+            return store["focus"];
+        else return null;
+    };
     // console.log('status',status);
     return status;
 };
@@ -69,9 +76,7 @@ function focusHandler(observer) {
                 if(store["focus"].features.lenght > 0 && JSON.stringify(store["focus"].features).find(entry.id)){
                     focus(entry, observer);
                 } else {
-                    current = "explorer";
-                    console.debug('restore',store["explorer"]);
-                    observer.next(store["explorer"]);
+                    //nothing to do
                 }
                 break;
             default:
@@ -108,7 +113,7 @@ function focus(entry, observer) {
                 store["focus"].features = [];
             }
             // propago il nuovo stato
-            console.debug("stato focus",store["focus"]);
+            // console.debug("stato focus",store["focus"]);
             observer.next(store["focus"]);
         },
         err => {
