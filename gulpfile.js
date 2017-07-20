@@ -16,7 +16,7 @@ function bundle (bundler) {
             gutil.log(e.message);
         })
         .pipe(source('bundle.js'))
-        .pipe(gulp.dest('./js'))
+        .pipe(gulp.dest('./build'))
         .pipe(browserSync.stream());
 }
 
