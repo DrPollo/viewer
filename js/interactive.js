@@ -9,6 +9,21 @@ const green = "#33cd5f";
 const gray = "#dcdcdc";
 
 
+// reset styles
+const resetStyle = {
+    color: 'transparent',
+    weight: 0,
+    fillColor: 'transparent'
+};
+const highlightStyle = {
+    color: orange,
+    weight: 2,
+    fill: false,
+    fillColor: orange,
+    opacity: 1,
+    fillOpacity: 0.5
+};
+
 
 const featureStyle = function (feature, zoom) {
     // console.log(feature,zoom);
@@ -154,12 +169,7 @@ const ordering = function (layers, zoom) {
  */
 
 
-// reset styles
-const resetStyle = {
-    color: 'transparent',
-    weight: 0,
-    fillColor: 'transparent'
-};
+
 L.Path.mergeOptions(resetStyle);
 L.Polyline.mergeOptions(resetStyle);
 L.Polygon.mergeOptions(resetStyle);
@@ -195,5 +205,22 @@ const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
 
 // definition of the vectorGrid layer
 module.exports = () => {
-    return L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
+    const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
+    let hightlightId = null;
+    vGrid.highlight = (id = null) => {
+        if(hightlightId){
+            vGrid.resetFeatureStyle(hightlightId);
+        }
+        if(id) {
+            hightlightId = id;
+            vGrid.setFeatureStyle(id, highlightStyle);
+        }
+    };
+    vGrid.resetStyle = () => {
+        if(hightlightId) {
+            vGrid.resetFeatureStyle(hightlightId);
+            hightlightId = null;
+        }
+    };
+    return vGrid;
 };

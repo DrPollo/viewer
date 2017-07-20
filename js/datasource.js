@@ -11,6 +11,12 @@ const colors = {
     'FL_PLACES': '#FE4336'
 };
 
+const orange = "#ff7800",
+    blue = "#82b1ff",
+    green = "#33cd5f",
+    gray = "#dcdcdc";
+
+
 
 const featureStyle = function (feature, zoom) {
     // console.log(feature,zoom);
@@ -84,6 +90,21 @@ const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainI
 
 
 module.exports = (map) => {
+    let focusId = null;
+    const dynamicStyle = (feature) => {
+        // console.debug('focus?', focus !== null);
+        // se non definito id o definito e uguale all'area id
+        if(!focusId || feature.area_id === focusId){
+            // non cambio nulla
+            return {};
+        } else {
+            return {
+                radius: 1,
+                color: gray,
+                fillColor: gray
+            }
+        }
+    };
     const markerLayers = {
         'layers': {
             'things': {
@@ -112,7 +133,7 @@ module.exports = (map) => {
     };
     const mGrid = L.geoJsonGridLayer(markerUrl, markerLayers);
 
-    mGrid.setStyle = (newStyle = {}) => {
+    mGrid.update = () => {
         let layer = mGrid.getLayers()[0];
         // console.log(layer);
         let features = layer[`_layers`];
@@ -126,13 +147,7 @@ module.exports = (map) => {
             let weight = Math.min(radius, maxWeight);
             feat.setRadius(radius);
             // creo il nuovo stile
-            let style = Object.assign({}, geojsonMarkerStyle(feat.feature), {weight: weight});
-            // se e' una funzione la risolvo passando la feature
-            if (newStyle instanceof Function) {
-                style = Object.assign(style, newStyle(feat.feature));
-            } else if (newStyle instanceof Object) {
-                style = Object.assign(style, newStyle);
-            }
+            let style = Object.assign({}, geojsonMarkerStyle(feat.feature), {weight: weight},dynamicStyle(feat.feature));
             feat.setStyle(style);
             if (style.up) {
                 feat.bringToFront();
@@ -141,5 +156,17 @@ module.exports = (map) => {
             }
         }
     };
+    // cambia il focus
+    mGrid.setStyle = (id = null) => {
+        // console.debug('setting focus on ',id);
+        focusId = id;
+        mGrid.update();
+    };
+    // reset il focus
+    mGrid.resetStyle = () => {
+        focusId = null;
+        mGrid.update();
+    };
+
     return mGrid
 }

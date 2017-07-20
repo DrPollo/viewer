@@ -74,7 +74,8 @@ layers[contrast ? 'contrast' : 'base'].addTo(map);
 /*
  * Inizializzazioni
  */
-
+// stato
+status.move(map.getBounds());
 // inizializzazione vectorGrid layer
 vGrid.addTo(map);
 // inizializzazione markerGrid layer
@@ -82,89 +83,47 @@ mGrid.addTo(map);
 // inizializzazione focusLayer
 fLayer.addTo(map);
 
+
+
 /*
- * Gestione eventi
+ * gestione del focus
  */
+// fit to bounds
+// valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
+status.observe.filter( state => 'bounds' in state ).map(state => state.bounds).subscribe( bounds => map.fitBounds(bounds) );
+// draw focus border
+status.observe.filter( state => 'id' in state ).map(state => state.id).subscribe( id => vGrid.highlight(id) );
+// set default style
+status.observe.filter( state => 'id' in state ).map(state => state.id).subscribe( id => mGrid.setStyle(id) );
+// add focus layer
+status.observe.filter( state => 'features' in state ).map(state => state.features).subscribe( features => fLayer.setLayer(features) );
+// reset del focus
+status.observe.filter( state => 'reset' in state).subscribe( () => {
+    mGrid.resetStyle();
+    vGrid.resetStyle();
+    fLayer.clearLayers();
+} );
 
 
+/*
+ * Gestione eventi mappa
+ */
 vGrid.on('click', e => {
     if (e.originalEvent.defaultPrevented)
         return;
 
     e.originalEvent.preventDefault();
-
-
-    let id = e.layer.properties.id,
-        properties = e.layer.properties,
-        bbox = JSON.parse(properties.bbox);
-    // console.log('click on ',e, properties.name, id,bbox);
-
-    // get feature details
-    // detailsPromise = getFeature(id);
-    // detailsPromise.then(
-    //     response => {
-    //         console.debug('feature details',response);
-    //     },
-    //     error => {
-    //         console.error(error);
-    //     }
-    // );
-    let bounds = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
-    // console.log('fit to bounds',bounds);
-
-    // todo set default style
-
-
-    // get selected feature by id
-    utils.getFeature(id).then(
-        res => {
-            // console.debug('id focus',id);
-            // imposta stile
-            let style = utils.hideStyle(id);
-            mGrid.setStyle(style);
-            // console.debug('getFeature',res);
-            fLayer.clearLayers();
-            // todo set style
-            // aggiungo l'area di focus
-            fLayer.addData(res);
-            // Fit the map to the polygon bounds
-            // set view
-            map.flyToBounds(bounds);
-        },
-        err => {
-            console.error('getFeature', err);
-        }
-    );
-
-    // todo multiple selection
-
-    // reset prev feature
-    // if (currentFeature !== id)
-    //     vGrid.resetFeatureStyle(currentFeature);
-    //
-    // vGrid.setFeatureStyle(id, highlightStyle);
-    // currentFeature = id;
-
-    // todo focus on feature (bbox)
-
-
-    // todo clean markers not in the area
+    // azione focus
+    status.focus(e.layer.properties);
 });
-
-
 // prima del cambio di zoom
-// map.on('zoomstart', (e) => {
-//     // elimino il livello di focus
-//     fLayer.clearLayers();
-// });
-// prima del cambio di zoom
-map.on('movestart', (e) => {
-    // elimino il livello di focus
-    fLayer.clearLayers();
+map.on('moveend', (e) => {
+    // update della posizione nello stato
+    status.move(map.getBounds());
 });
 // fine cambio di zoom
 map.on('zoomend', (e) => {
     // aggiorno stile marker
     // todo gestione focus nella scelta di stile
-    mGrid.setStyle();
+    mGrid.update();
 });

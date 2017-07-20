@@ -27,5 +27,10 @@ const focusStyle = {
 };
 
 module.exports = () => {
-    return L.geoJson([], focusStyle);
+    const fLayer = L.geoJson([], focusStyle);
+    fLayer.setLayer = (geoJson) => {
+        fLayer.clearLayers();
+        fLayer.addData(geoJson);
+    };
+    return fLayer;
 };

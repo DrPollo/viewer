@@ -72,7 +72,8 @@ layers[contrast ? 'contrast' : 'base'].addTo(map);
 /*
  * Inizializzazioni
  */
-
+// stato
+status.move(map.getBounds());
 // inizializzazione vectorGrid layer
 vGrid.addTo(map);
 // inizializzazione markerGrid layer
@@ -81,83 +82,44 @@ mGrid.addTo(map);
 fLayer.addTo(map);
 
 /*
- * Gestione eventi
+ * gestione del focus
  */
+// fit to bounds
+// valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
+status.observe.filter(state => 'bounds' in state).map(state => state.bounds).subscribe(bounds => map.fitBounds(bounds));
+// draw focus border
+status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
+// set default style
+status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => mGrid.setStyle(id));
+// add focus layer
+status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
+// reset del focus
+status.observe.filter(state => 'reset' in state).subscribe(() => {
+    mGrid.resetStyle();
+    vGrid.resetStyle();
+    fLayer.clearLayers();
+});
 
+/*
+ * Gestione eventi mappa
+ */
 vGrid.on('click', e => {
     if (e.originalEvent.defaultPrevented) return;
 
     e.originalEvent.preventDefault();
-
-    let id = e.layer.properties.id,
-        properties = e.layer.properties,
-        bbox = JSON.parse(properties.bbox);
-    // console.log('click on ',e, properties.name, id,bbox);
-
-    // get feature details
-    // detailsPromise = getFeature(id);
-    // detailsPromise.then(
-    //     response => {
-    //         console.debug('feature details',response);
-    //     },
-    //     error => {
-    //         console.error(error);
-    //     }
-    // );
-    let bounds = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
-    // console.log('fit to bounds',bounds);
-
-    // todo set default style
-
-
-    // get selected feature by id
-    utils.getFeature(id).then(res => {
-        // console.debug('id focus',id);
-        // imposta stile
-        let style = utils.hideStyle(id);
-        mGrid.setStyle(style);
-        // console.debug('getFeature',res);
-        fLayer.clearLayers();
-        // todo set style
-        // aggiungo l'area di focus
-        fLayer.addData(res);
-        // Fit the map to the polygon bounds
-        // set view
-        map.flyToBounds(bounds);
-    }, err => {
-        console.error('getFeature', err);
-    });
-
-    // todo multiple selection
-
-    // reset prev feature
-    // if (currentFeature !== id)
-    //     vGrid.resetFeatureStyle(currentFeature);
-    //
-    // vGrid.setFeatureStyle(id, highlightStyle);
-    // currentFeature = id;
-
-    // todo focus on feature (bbox)
-
-
-    // todo clean markers not in the area
+    // azione focus
+    status.focus(e.layer.properties);
 });
-
 // prima del cambio di zoom
-// map.on('zoomstart', (e) => {
-//     // elimino il livello di focus
-//     fLayer.clearLayers();
-// });
-// prima del cambio di zoom
-map.on('movestart', e => {
-    // elimino il livello di focus
-    fLayer.clearLayers();
+map.on('moveend', e => {
+    // update della posizione nello stato
+    status.move(map.getBounds());
 });
 // fine cambio di zoom
 map.on('zoomend', e => {
     // aggiorno stile marker
     // todo gestione focus nella scelta di stile
-    mGrid.setStyle();
+    mGrid.update();
 });
 
 },{"./js/datasource.js":2,"./js/focus":3,"./js/interactive.js":4,"./js/map":5,"./js/status":6,"./js/utils":7,"./libs/Leaflet.VectorGrid":8,"./libs/leaflet-geojson-gridlayer":9,"leaflet":10}],2:[function(require,module,exports){
@@ -172,6 +134,11 @@ const colors = {
     'FL_ARTICLES': '#FFB310',
     'FL_PLACES': '#FE4336'
 };
+
+const orange = "#ff7800",
+      blue = "#82b1ff",
+      green = "#33cd5f",
+      gray = "#dcdcdc";
 
 const featureStyle = function (feature, zoom) {
     // console.log(feature,zoom);
@@ -242,6 +209,21 @@ const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainI
 
 
 module.exports = map => {
+    let focusId = null;
+    const dynamicStyle = feature => {
+        // console.debug('focus?', focus !== null);
+        // se non definito id o definito e uguale all'area id
+        if (!focusId || feature.area_id === focusId) {
+            // non cambio nulla
+            return {};
+        } else {
+            return {
+                radius: 1,
+                color: gray,
+                fillColor: gray
+            };
+        }
+    };
     const markerLayers = {
         'layers': {
             'things': {
@@ -266,7 +248,7 @@ module.exports = map => {
     };
     const mGrid = L.geoJsonGridLayer(markerUrl, markerLayers);
 
-    mGrid.setStyle = (newStyle = {}) => {
+    mGrid.update = () => {
         let layer = mGrid.getLayers()[0];
         // console.log(layer);
         let features = layer[`_layers`];
@@ -280,13 +262,7 @@ module.exports = map => {
             let weight = Math.min(radius, maxWeight);
             feat.setRadius(radius);
             // creo il nuovo stile
-            let style = Object.assign({}, geojsonMarkerStyle(feat.feature), { weight: weight });
-            // se e' una funzione la risolvo passando la feature
-            if (newStyle instanceof Function) {
-                style = Object.assign(style, newStyle(feat.feature));
-            } else if (newStyle instanceof Object) {
-                style = Object.assign(style, newStyle);
-            }
+            let style = Object.assign({}, geojsonMarkerStyle(feat.feature), { weight: weight }, dynamicStyle(feat.feature));
             feat.setStyle(style);
             if (style.up) {
                 feat.bringToFront();
@@ -295,6 +271,18 @@ module.exports = map => {
             }
         }
     };
+    // cambia il focus
+    mGrid.setStyle = (id = null) => {
+        // console.debug('setting focus on ',id);
+        focusId = id;
+        mGrid.update();
+    };
+    // reset il focus
+    mGrid.resetStyle = () => {
+        focusId = null;
+        mGrid.update();
+    };
+
     return mGrid;
 };
 
@@ -328,7 +316,12 @@ const focusStyle = {
 };
 
 module.exports = () => {
-    return L.geoJson([], focusStyle);
+    const fLayer = L.geoJson([], focusStyle);
+    fLayer.setLayer = geoJson => {
+        fLayer.clearLayers();
+        fLayer.addData(geoJson);
+    };
+    return fLayer;
 };
 
 },{}],4:[function(require,module,exports){
@@ -340,6 +333,21 @@ const orange = "#ff7800";
 const blue = "#82b1ff";
 const green = "#33cd5f";
 const gray = "#dcdcdc";
+
+// reset styles
+const resetStyle = {
+    color: 'transparent',
+    weight: 0,
+    fillColor: 'transparent'
+};
+const highlightStyle = {
+    color: orange,
+    weight: 2,
+    fill: false,
+    fillColor: orange,
+    opacity: 1,
+    fillOpacity: 0.5
+};
 
 const featureStyle = function (feature, zoom) {
     // console.log(feature,zoom);
@@ -419,12 +427,6 @@ const ordering = function (layers, zoom) {
  * VectorGrid
  */
 
-// reset styles
-const resetStyle = {
-    color: 'transparent',
-    weight: 0,
-    fillColor: 'transparent'
-};
 L.Path.mergeOptions(resetStyle);
 L.Polyline.mergeOptions(resetStyle);
 L.Polygon.mergeOptions(resetStyle);
@@ -460,7 +462,24 @@ const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
 
 // definition of the vectorGrid layer
 module.exports = () => {
-    return L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
+    const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
+    let hightlightId = null;
+    vGrid.highlight = (id = null) => {
+        if (hightlightId) {
+            vGrid.resetFeatureStyle(hightlightId);
+        }
+        if (id) {
+            hightlightId = id;
+            vGrid.setFeatureStyle(id, highlightStyle);
+        }
+    };
+    vGrid.resetStyle = () => {
+        if (hightlightId) {
+            vGrid.resetFeatureStyle(hightlightId);
+            hightlightId = null;
+        }
+    };
+    return vGrid;
 };
 
 },{}],5:[function(require,module,exports){
@@ -498,14 +517,19 @@ module.exports = () => {
  * Created by drpollo on 20/07/2017.
  */
 const Rx = require('rxjs/Rx');
+const Utils = require('./utils');
+const utils = Utils();
 
 // inizializzazione status
 const store = {
     "focus": {
-        "id": null
+        "id": null,
+        "bounds": null,
+        "features": []
     },
-    "explore": {
-        "bounds": null
+    "explorer": {
+        "bounds": null,
+        "reset": true
     }
 };
 
@@ -521,25 +545,84 @@ module.exports = (params = {}) => {
     };
     // observable da restituire
     status.observe = Rx.Observable.create(function (observer) {
-        status.focus = id => {
-            current = "focus";
-            store["focus"].id = id;
-            observer.next(store["focus"]);
-        };
+        status.focus = focusHandler(observer);
         status.move = bounds => {
-            current = "explorer";
-            store["explorer"].bounds = bounds;
-            observer.next(store["explorer"]);
+            console.log('saving? ', current);
+            switch (current) {
+                case "focus":
+                    break;
+                default:
+                    console.debug('saving bounds', bounds);
+                    store["explorer"].bounds = bounds;
+            }
         };
         status.restore = () => {
             current = "explorer";
             observer.next(store["explorer"]);
         };
-    });
+    }).share();
+    // init objervable
+    status.observe.subscribe();
+    // console.log('status',status);
     return status;
 };
 
-},{"rxjs/Rx":19}],7:[function(require,module,exports){
+// gestorione del focus
+// inizializzazione funzione con l'observer
+function focusHandler(observer) {
+    // gestiore del focus
+    return entry => {
+        switch (current) {
+            case "focus":
+                // check if focus is inside the current focus
+                if (store["focus"].features.lenght > 0 && JSON.stringify(store["focus"].features).find(entry.id)) {
+                    focus(entry, observer);
+                } else {
+                    current = "explorer";
+                    console.debug('restore', store["explorer"]);
+                    observer.next(store["explorer"]);
+                }
+                break;
+            default:
+                focus(entry, observer);
+        }
+    };
+}
+
+function focus(entry, observer) {
+    // console.debug('focus on ',entry);
+    current = "focus";
+    // set id
+    store["focus"].id = entry.id;
+    // set bounds
+    let bounds = null;
+    if (entry.bbox) {
+        let bbox = JSON.parse(entry.bbox);
+        bounds = L.latLngBounds(L.latLng(bbox[1], bbox[0]), L.latLng(bbox[3], bbox[2]));
+    }
+    store["focus"].bounds = bounds;
+    // recupero il contenuto
+    utils.getFeature(entry.id).then(res => {
+        // console.debug('getFeature',id);
+        // aggiungo il contenuto dello stato
+        if (Array.isArray(res)) {
+            store["focus"].features = res;
+        } else if (res.type === "FeatureCollection") {
+            store["focus"].features = res.features;
+        } else if (res.type === "Feature") {
+            store["focus"].features = [res];
+        } else {
+            store["focus"].features = [];
+        }
+        // propago il nuovo stato
+        console.debug("stato focus", store["focus"]);
+        observer.next(store["focus"]);
+    }, err => {
+        console.error('getFeature', err);
+    });
+}
+
+},{"./utils":7,"rxjs/Rx":19}],7:[function(require,module,exports){
 /**
  * Created by drpollo on 20/07/2017.
  */
