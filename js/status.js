@@ -32,6 +32,7 @@ module.exports = (params = {}) => {
     };
     // observable da restituire
     status.observe = Rx.Observable.create(function (observer) {
+        // costruttori delle azioni di cambio di stato
         status.focus = focusHandler(observer);
         status.move = (bounds) => {
             // console.log('saving? ',current);
@@ -47,7 +48,7 @@ module.exports = (params = {}) => {
             current = "explorer";
             observer.next(store["explorer"]);
         };
-    }).share();
+    }).share(); // observable hot
     // init objervable
     status.observe.subscribe();
     // get current focus

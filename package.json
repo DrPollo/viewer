@@ -4,8 +4,10 @@
   "description": "AreaViwer: map-based viewer for FirstLife area-based aggregations of crowdsourced data.",
   "main": "index.js",
   "scripts": {
-    "test": "gulp",
-    "start": "gulp"
+    "test": "gulp test",
+    "start": "gulp test",
+    "dev": "gulp watch",
+    "build": "gulp build"
   },
   "repository": {
     "type": "git",
@@ -18,9 +20,7 @@
   "author": "Alessio Antonini",
   "license": "MIT",
   "dependencies": {
-    "@turf/combine": "^4.5.2",
     "@turf/helpers": "^4.5.2",
-    "@turf/inside": "^4.5.2",
     "@turf/within": "^4.5.2",
     "leaflet": "^1.0.3",
     "leaflet.vectorgrid": "^1.2.0",

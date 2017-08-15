@@ -49,8 +49,8 @@ const featureStyle = function (feature, zoom) {
  * cLeft & cRight = spread (between 2 - 3)
  * code diverse per lo zoom in e zoom out dalla media
  */
-const maxWeight = 2,
-    maxRadius = 10,
+const maxWeight = 1,
+    maxRadius = 6,
     cRight = 1.4,
     cLeft = 3,
     minRadius = 1;

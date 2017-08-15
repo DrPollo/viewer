@@ -8,8 +8,6 @@ require('leaflet');
 require('./libs/Leaflet.VectorGrid');
 require('./libs/leaflet-geojson-gridlayer');
 
-const inside = require('@turf/inside');
-const combine = require('@turf/combine');
 const within = require('@turf/within');
 const turf = require('@turf/helpers');
 /*
@@ -56,8 +54,53 @@ const orange = "#ff7800",
 // const baselayer = '';
 const baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
 const contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
+// default contrast
+let contrast = false;
 
-const contrast = false;
+
+
+// language
+const defaultLang = 0;
+const languages = ['en','it'];
+const userLang = navigator.language || navigator.userLanguage;
+let lang = languages[defaultLang];
+for(let i = 0; i < languages.length; i++){
+    let l = languages[i];
+    if(userLang.search(l) > -1){
+        lang = l;
+    }
+}
+
+
+// default date
+let date = new Date();
+// get search params
+// check for IE
+const ua = window.navigator.userAgent;
+const msie = ua.indexOf("MSIE ");
+
+// If Internet Explorer, return version number
+if (msie > 0) {
+    params = escape(location.search);
+}else{
+    params = (new URL(location)).searchParams;
+}
+
+if(params){
+    // override location from get params
+    // c = lat:lng:zoom > centre
+    if(params.get("c")){
+        let c = params.get("c");
+    }
+    // contrast
+    contrast = params.get('contrast') === 'true' ;
+    // lang > default agent or "en"
+    lang = params.get('lang') ? params.get('lang') : lang;
+    // date > current date
+    date = params.get("date") ? params.get("date") : date;
+}else{
+    console.error('cannot retrieve search params from URL location');
+}
 
 
 // map setup
@@ -71,8 +114,11 @@ const layers = {
         attribution: '<a href="http://openstreetmap.org" target="_blank">OpenStreetMap</a> contributors | <a href="http://mapbox.com" target="_blank">Mapbox</a>'
     })
 };
-
+// cartography
 layers[contrast ? 'contrast' : 'base'].addTo(map);
+
+
+
 
 
 /*
@@ -94,7 +140,11 @@ fLayer.addTo(map);
  */
 // fit to bounds
 // valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
-status.observe.filter( state => 'bounds' in state ).map(state => state.bounds).subscribe( bounds => map.fitBounds(bounds) );
+status.observe.filter( state => 'bounds' in state ).map(state => state.bounds).subscribe( bounds => {
+    // map.removeLayer(mGrid);
+    map.fitBounds(bounds);
+    // map.addLayer(mGrid);
+} );
 // draw focus border
 status.observe.filter( state => 'id' in state ).map(state => state.id).subscribe( id => vGrid.highlight(id) );
 // set default style

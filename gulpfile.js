@@ -34,8 +34,15 @@ gulp.task('watch', function () {
     });
 });
 
-gulp.task('js', function () {
+gulp.task('build', function () {
     return bundle(browserify('./index.js'));
+});
+
+gulp.task('test',function () {
+    browserSync.init({
+        server: './',
+        logFileChanges: false
+    });
 });
 
 gulp.task('default',['watch']);
