@@ -1,90 +1,85 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-/**
- * Created by drpollo on 20/07/2017.
- */
-
-const colors = {
-    'FL_GROUPS': '#3F7F91',
-    'FL_EVENTS': '#88BA5C',
-    'FL_NEWS': '#823256',
-    'FL_ARTICLES': '#FFB310',
-    'FL_PLACES': '#FE4336'
-};
-
-const orange = "#ff7800",
-      blue = "#82b1ff",
-      green = "#33cd5f",
-      gray = "#dcdcdc";
-
-const featureStyle = function (feature, zoom) {
-    // console.log(feature,zoom);
-    return {
-        fill: false,
-        weight: 0
-    };
-};
-
-// exponential
-// var scale = function(x,level){
-//
-//     if(x > level)
-//         return 0;
-//     // https://www.desmos.com/calculator/3fisjexbvp
-//     // return Math.log(num*10);
-//     var a = 0.05,
-//     b = 1.33,
-//     c = 0;
-//     return Math.floor(a*(Math.pow(b,x))+c);
-// }
-
-
-/*
- * Gaussian
- * https://www.desmos.com/calculator/oihvoxtriz
- * a = max radius
- * b = zoom level
- * cLeft & cRight = spread (between 2 - 3)
- * code diverse per lo zoom in e zoom out dalla media
- */
-const maxWeight = 1,
-      maxRadius = 6,
-      cRight = 1.4,
-      cLeft = 3,
-      minRadius = 1;
-const scale = (x, level) => {
-    let c = x < level ? cLeft : cRight;
-    let k = Math.pow(x - level, 2) * -1;
-    let q = 2 * Math.pow(c, 2);
-    let z = k / q;
-    let radius = Math.floor(maxRadius * Math.exp(z));
-    // console.log(radius);
-    // senza soglia
-    // return Math.max(radius, minRadius);
-    // con soglia
-    return radius;
-};
-/*
- * Markers
- */
-const geojsonMarkerStyle = feature => {
-    let type = feature.properties.entity_type;
-    let color = colors[type];
-    return {
-        opacity: 1,
-        fill: true,
-        fillOpacity: 0.8,
-        weight: 0,
-        color: color,
-        fillColor: color
-    };
-};
-
-const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-// const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
-// const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-
-
 module.exports = map => {
+    const colors = {
+        'FL_GROUPS': '#3F7F91',
+        'FL_EVENTS': '#88BA5C',
+        'FL_NEWS': '#823256',
+        'FL_ARTICLES': '#FFB310',
+        'FL_PLACES': '#FE4336'
+    };
+
+    const orange = "#ff7800",
+          blue = "#82b1ff",
+          green = "#33cd5f",
+          gray = "#dcdcdc";
+
+    const featureStyle = function (feature, zoom) {
+        // console.log(feature,zoom);
+        return {
+            fill: false,
+            weight: 0
+        };
+    };
+
+    // exponential
+    // var scale = function(x,level){
+    //
+    //     if(x > level)
+    //         return 0;
+    //     // https://www.desmos.com/calculator/3fisjexbvp
+    //     // return Math.log(num*10);
+    //     var a = 0.05,
+    //     b = 1.33,
+    //     c = 0;
+    //     return Math.floor(a*(Math.pow(b,x))+c);
+    // }
+
+
+    /*
+     * Gaussian
+     * https://www.desmos.com/calculator/oihvoxtriz
+     * a = max radius
+     * b = zoom level
+     * cLeft & cRight = spread (between 2 - 3)
+     * code diverse per lo zoom in e zoom out dalla media
+     */
+    const maxWeight = 1,
+          maxRadius = 6,
+          cRight = 1.4,
+          cLeft = 3,
+          minRadius = 1;
+    const scale = (x, level) => {
+        let c = x < level ? cLeft : cRight;
+        let k = Math.pow(x - level, 2) * -1;
+        let q = 2 * Math.pow(c, 2);
+        let z = k / q;
+        let radius = Math.floor(maxRadius * Math.exp(z));
+        // console.log(radius);
+        // senza soglia
+        // return Math.max(radius, minRadius);
+        // con soglia
+        return radius;
+    };
+    /*
+     * Markers
+     */
+    const geojsonMarkerStyle = feature => {
+        let type = feature.properties.entity_type;
+        let color = colors[type];
+        return {
+            opacity: 1,
+            fill: true,
+            fillOpacity: 0.8,
+            weight: 0,
+            color: color,
+            fillColor: color
+        };
+    };
+
+    const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
+    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
+    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
+
     let focusId = null;
     const dynamicStyle = feature => {
         // console.debug('focus?', focus !== null);
@@ -166,35 +161,32 @@ module.exports = map => {
 };
 
 },{}],2:[function(require,module,exports){
-/**
- * Created by drpollo on 20/07/2017.
- */
-// colori
-const colors = {
-    'FL_GROUPS': '#3F7F91',
-    'FL_EVENTS': '#88BA5C',
-    'FL_NEWS': '#823256',
-    'FL_ARTICLES': '#FFB310',
-    'FL_PLACES': '#FE4336'
-};
-const orange = "#ff7800",
-      blue = "#82b1ff",
-      green = "#33cd5f",
-      gray = "#dcdcdc";
-
-const focusStyle = {
-    style: {
-        color: orange,
-        weight: 2,
-        fill: false,
-        fillColor: orange,
-        opacity: 1,
-        fillOpacity: 0.5
-    },
-    pane: 'focusPane'
-};
-
 module.exports = () => {
+    // colori
+    const colors = {
+        'FL_GROUPS': '#3F7F91',
+        'FL_EVENTS': '#88BA5C',
+        'FL_NEWS': '#823256',
+        'FL_ARTICLES': '#FFB310',
+        'FL_PLACES': '#FE4336'
+    };
+    const orange = "#ff7800",
+          blue = "#82b1ff",
+          green = "#33cd5f",
+          gray = "#dcdcdc";
+
+    const focusStyle = {
+        style: {
+            color: orange,
+            weight: 2,
+            fill: false,
+            fillColor: orange,
+            opacity: 1,
+            fillOpacity: 0.5
+        },
+        pane: 'focusPane'
+    };
+
     const fLayer = L.geoJson([], focusStyle);
     fLayer.setLayer = geoJson => {
         fLayer.clearLayers();
@@ -397,143 +389,137 @@ const areaViewer = function () {
 }();
 
 },{"../libs/Leaflet.VectorGrid":8,"../libs/leaflet-geojson-gridlayer":9,"./datasource.js":1,"./focus":2,"./interactive.js":4,"./map":5,"./status":6,"./utils":7,"@turf/helpers":10,"@turf/within":13,"leaflet":14}],4:[function(require,module,exports){
-/**
- * Created by drpollo on 20/07/2017.
- */
-
-const orange = "#ff7800";
-const blue = "#82b1ff";
-const green = "#33cd5f";
-const gray = "#dcdcdc";
-
-// reset styles
-const resetStyle = {
-    color: 'transparent',
-    weight: 0,
-    fillColor: 'transparent'
-};
-const highlightStyle = {
-    color: orange,
-    weight: 2,
-    fill: false,
-    fillColor: orange,
-    opacity: 1,
-    fillOpacity: 0.5
-};
-
-const featureStyle = function (feature, zoom) {
-    // console.log(feature,zoom);
-    return {
-        fill: false,
-        weight: 0
-    };
-};
-
-const vectorMapStyling = {
-    nazioni: featureStyle,
-    regioni: featureStyle,
-    provincie: featureStyle,
-    comuni: featureStyle,
-    circoscrizioni: featureStyle,
-    quartieri: featureStyle,
-    city_block: featureStyle,
-    site: featureStyle,
-    building: featureStyle,
-    landusages: featureStyle,
-    roads: featureStyle,
-    waterareas: featureStyle,
-    waterways: featureStyle,
-    indoor: featureStyle,
-    interactive: featureStyle
-};
-
-const ordering = function (layers, zoom) {
-    // console.debug('reordering....',layers);
-    switch (zoom) {
-        case 1:
-        case 2:
-            return ["nazioni", "waterareas", "waterways"];
-            break;
-        case 3:
-        case 4:
-            return ["nazioni", "regioni", "provincie", "waterareas", "waterways"];
-            break;
-        case 5:
-        case 6:
-            return ["nazioni", "regioni", "provincie", "landusages", "roads", "waterareas", "waterways"];
-            break;
-        case 7:
-        case 8:
-            return ["nazioni", "regioni", "provincie", "landusages", "roads", "waterareas", "waterways", "comuni"];
-            break;
-        case 9:
-        case 10:
-            return ["nazioni", "regioni", "provincie", "landusages", "roads", "waterareas", "waterways", "comuni"];
-            break;
-        case 11:
-        case 12:
-            return ["provincie", "landusages", "roads", "waterareas", "waterways", "comuni"];
-            break;
-        case 13:
-        case 14:
-            return ["provincie", "quartieri", "landusages", "comuni"];
-            break;
-        case 15:
-        case 16:
-            return ["comuni", "city_block", "landusages", "waterareas", "waterways", "quartieri"];
-            break;
-        case 17:
-        case 18:
-            return ["site", "landusages", "building", "roads", "waterareas", "waterways", "quartieri", "city_block"];
-            break;
-        case 19:
-        case 20:
-            return ["site", "building", "roads", "waterareas", "waterways", "indoor"];
-            break;
-        default:
-            return Object.keys(layers);
-    }
-};
-
-/*
- * VectorGrid
- */
-
-L.Path.mergeOptions(resetStyle);
-L.Polyline.mergeOptions(resetStyle);
-L.Polygon.mergeOptions(resetStyle);
-L.Rectangle.mergeOptions(resetStyle);
-L.Circle.mergeOptions(resetStyle);
-L.CircleMarker.mergeOptions(resetStyle);
-// end reset styles
-
-
-// Monkey-patch some properties for mapzen layer names, because
-// instead of "building" the data layer is called "buildings" and so on
-vectorMapStyling.buildings = vectorMapStyling.building;
-vectorMapStyling.boundaries = vectorMapStyling.boundary;
-vectorMapStyling.places = vectorMapStyling.place;
-vectorMapStyling.pois = vectorMapStyling.poi;
-vectorMapStyling.roads = vectorMapStyling.road;
-
-// config del layer
-const vectormapConfig = {
-    rendererFactory: L.svg.tile,
-    attribution: false,
-    vectorTileLayerStyles: vectorMapStyling,
-    interactive: true,
-    pane: 'vectorGridPane',
-    getFeatureId: function (e) {
-        return e.properties.id;
-    },
-    layersOrdering: ordering
-};
-// const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
-const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
-// const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
-
-// definition of the vectorGrid layer
 module.exports = () => {
+    const orange = "#ff7800";
+    const blue = "#82b1ff";
+    const green = "#33cd5f";
+    const gray = "#dcdcdc";
+
+    // reset styles
+    const resetStyle = {
+        color: 'transparent',
+        weight: 0,
+        fillColor: 'transparent'
+    };
+    const highlightStyle = {
+        color: orange,
+        weight: 2,
+        fill: false,
+        fillColor: orange,
+        opacity: 1,
+        fillOpacity: 0.5
+    };
+
+    const featureStyle = function (feature, zoom) {
+        // console.log(feature,zoom);
+        return {
+            fill: false,
+            weight: 0
+        };
+    };
+
+    const vectorMapStyling = {
+        nazioni: featureStyle,
+        regioni: featureStyle,
+        provincie: featureStyle,
+        comuni: featureStyle,
+        circoscrizioni: featureStyle,
+        quartieri: featureStyle,
+        city_block: featureStyle,
+        site: featureStyle,
+        building: featureStyle,
+        landusages: featureStyle,
+        roads: featureStyle,
+        waterareas: featureStyle,
+        waterways: featureStyle,
+        indoor: featureStyle,
+        interactive: featureStyle
+    };
+
+    const ordering = function (layers, zoom) {
+        // console.debug('reordering....',layers);
+        switch (zoom) {
+            case 1:
+            case 2:
+                return ["nazioni", "waterareas", "waterways"];
+                break;
+            case 3:
+            case 4:
+                return ["nazioni", "regioni", "provincie", "waterareas", "waterways"];
+                break;
+            case 5:
+            case 6:
+                return ["nazioni", "regioni", "provincie", "landusages", "roads", "waterareas", "waterways"];
+                break;
+            case 7:
+            case 8:
+                return ["nazioni", "regioni", "provincie", "landusages", "roads", "waterareas", "waterways", "comuni"];
+                break;
+            case 9:
+            case 10:
+                return ["nazioni", "regioni", "provincie", "landusages", "roads", "waterareas", "waterways", "comuni"];
+                break;
+            case 11:
+            case 12:
+                return ["provincie", "landusages", "roads", "waterareas", "waterways", "comuni"];
+                break;
+            case 13:
+            case 14:
+                return ["provincie", "quartieri", "landusages", "comuni"];
+                break;
+            case 15:
+            case 16:
+                return ["comuni", "city_block", "landusages", "waterareas", "waterways", "quartieri"];
+                break;
+            case 17:
+            case 18:
+                return ["site", "landusages", "building", "roads", "waterareas", "waterways", "quartieri", "city_block"];
+                break;
+            case 19:
+            case 20:
+                return ["site", "building", "roads", "waterareas", "waterways", "indoor"];
+                break;
+            default:
+                return Object.keys(layers);
+        }
+    };
+
+    /*
+     * VectorGrid
+     */
+
+    L.Path.mergeOptions(resetStyle);
+    L.Polyline.mergeOptions(resetStyle);
+    L.Polygon.mergeOptions(resetStyle);
+    L.Rectangle.mergeOptions(resetStyle);
+    L.Circle.mergeOptions(resetStyle);
+    L.CircleMarker.mergeOptions(resetStyle);
+    // end reset styles
+
+
+    // Monkey-patch some properties for mapzen layer names, because
+    // instead of "building" the data layer is called "buildings" and so on
+    vectorMapStyling.buildings = vectorMapStyling.building;
+    vectorMapStyling.boundaries = vectorMapStyling.boundary;
+    vectorMapStyling.places = vectorMapStyling.place;
+    vectorMapStyling.pois = vectorMapStyling.poi;
+    vectorMapStyling.roads = vectorMapStyling.road;
+
+    // config del layer
+    const vectormapConfig = {
+        rendererFactory: L.svg.tile,
+        attribution: false,
+        vectorTileLayerStyles: vectorMapStyling,
+        interactive: true,
+        pane: 'vectorGridPane',
+        getFeatureId: function (e) {
+            return e.properties.id;
+        },
+        layersOrdering: ordering
+    };
+    // const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
+    const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
+    // const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
     const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
     let hightlightId = null;
     vGrid.highlight = (id = null) => {
@@ -559,17 +545,17 @@ module.exports = () => {
  * Created by drpollo on 20/07/2017.
  */
 
-// defaults
-const initZoom = 14;
-const initLat = 45.070312;
-const initLon = 7.686856;
-
 // definition of the map
 
 
 module.exports = () => {
 
-    const map = L.map('map').setView([initLat, initLon], initZoom);
+    // defaults
+    const initZoom = 14;
+    const initLat = 45.070312;
+    const initLon = 7.686856;
+
+    const map = L.map('areaViewer').setView([initLat, initLon], initZoom);
     // pane per vectorGrid
     map.createPane('vectorGridPane');
     map.createPane('focusPane');
@@ -585,30 +571,28 @@ module.exports = () => {
 };
 
 },{}],6:[function(require,module,exports){
-/**
- * Created by drpollo on 20/07/2017.
- */
-const Rx = require('rxjs/Rx');
-const Utils = require('./utils');
-const utils = Utils();
-// inizializzazione status
-const initFocus = {
-    "id": null,
-    "bounds": null,
-    "features": []
-};
-const initExplorer = {
-    "bounds": null,
-    "reset": true
-};
-const store = {
-    "focus": initFocus,
-    "explorer": initExplorer
-};
-
-let current = "explorer";
-
 module.exports = (params = {}) => {
+
+    const Rx = require('rxjs/Rx');
+    const Utils = require('./utils');
+    const utils = Utils();
+    // inizializzazione status
+    const initFocus = {
+        "id": null,
+        "bounds": null,
+        "features": []
+    };
+    const initExplorer = {
+        "bounds": null,
+        "reset": true
+    };
+    const store = {
+        "focus": initFocus,
+        "explorer": initExplorer
+    };
+
+    let current = "explorer";
+
     // azioni dello stato
     const status = {
         "focus": null,
@@ -699,60 +683,57 @@ function focus(entry, observer) {
 }
 
 },{"./utils":7,"rxjs/Rx":23}],7:[function(require,module,exports){
-/**
- * Created by drpollo on 20/07/2017.
- */
-
-// const detailsUrl = "http://localhost:3095/areas/";
-const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
-// const detailsUrl = "https://tiles.firstlife.org/areas/";
-
-
 module.exports = () => {
+
+    // const detailsUrl = "http://localhost:3095/areas/";
+    const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
+    // const detailsUrl = "https://tiles.firstlife.org/areas/";
+
+
+    // cambia stile
+    function hideStyle(id) {
+        return feature => {
+            // console.debug('new style for', (feature.area_id === id ) );
+            if (feature.area_id && feature.area_id === id) {
+                // console.debug('dentro',feature.id);
+                return {
+                    up: true
+                };
+            } else {
+                return {
+                    weight: 0,
+                    fillColor: 'gray',
+                    radius: 1,
+                    up: false
+                };
+            }
+        };
+    }
+    // get feature by id
+    function getFeature(id) {
+        // console.log('getFeature', id);
+        return new Promise((resolve, reject) => {
+            let xhr = new XMLHttpRequest();
+            let url = detailsUrl.concat(id);
+            // console.log('asking to ', url);
+            xhr.open("GET", url);
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(JSON.parse(xhr.response));
+                } else {
+                    reject(xhr.statusText);
+                }
+            };
+            xhr.onerror = () => reject(xhr.statusText);
+            xhr.send();
+        });
+    }
+
     return {
         hideStyle: hideStyle,
         getFeature: getFeature
     };
 };
-
-// cambia stile
-function hideStyle(id) {
-    return feature => {
-        // console.debug('new style for', (feature.area_id === id ) );
-        if (feature.area_id && feature.area_id === id) {
-            // console.debug('dentro',feature.id);
-            return {
-                up: true
-            };
-        } else {
-            return {
-                weight: 0,
-                fillColor: 'gray',
-                radius: 1,
-                up: false
-            };
-        }
-    };
-}
-// get feature by id
-function getFeature(id) {
-    // console.log('getFeature', id);
-    return new Promise((resolve, reject) => {
-        let xhr = new XMLHttpRequest();
-        let url = detailsUrl.concat(id);
-        // console.log('asking to ', url);
-        xhr.open("GET", url);
-        xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                resolve(JSON.parse(xhr.response));
-            } else {
-                reject(xhr.statusText);
-            }
-        };
-        xhr.onerror = () => reject(xhr.statusText);
-        xhr.send();
-    });
-}
 
 },{}],8:[function(require,module,exports){
 (function () {

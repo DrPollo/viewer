@@ -1,5 +1,4 @@
 const gulp = require('gulp');
-const sourcemaps = require('gulp-sourcemaps');
 const gutil = require('gulp-util');
 const source = require('vinyl-source-stream');
 const buffer = require('vinyl-buffer');
@@ -7,7 +6,7 @@ const browserify = require('browserify',{"debug":true});
 const watchify = require('watchify');
 const browserSync = require('browser-sync').create();
 const babel = require('babelify');
-
+const minify = require('gulp-babel-minify');
 
 function bundle (bundler) {
     return bundler
@@ -21,7 +20,7 @@ function bundle (bundler) {
 }
 
 gulp.task('watch', function () {
-    var watcher = watchify(browserify('./js/index.js', watchify.args).transform(babel));
+    let watcher = watchify(browserify('./js/index.js', watchify.args).transform(babel));
     bundle(watcher);
     watcher.on('update', function () {
         bundle(watcher);
@@ -37,6 +36,16 @@ gulp.task('watch', function () {
 gulp.task('build', function () {
     return bundle(browserify('./index.js'));
 });
+gulp.task("minify", () =>
+    gulp.src("./build/bundle.js")
+        .pipe(minify({
+            mangle: {
+                keepClassName: true
+            }
+        }))
+        .pipe(gulp.dest("./dist"))
+);
+gulp.task('compile',['build','minify']);
 
 gulp.task('test',function () {
     browserSync.init({

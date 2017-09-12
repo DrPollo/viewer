@@ -1,28 +1,25 @@
-/**
- * Created by drpollo on 20/07/2017.
- */
-const Rx = require('rxjs/Rx');
-const Utils = require('./utils');
-const utils = Utils();
-// inizializzazione status
-const initFocus = {
-    "id": null,
-    "bounds": null,
-    "features": []
-};
-const initExplorer = {
-    "bounds": null,
-    "reset": true
-};
-const store = {
-    "focus": initFocus,
-    "explorer": initExplorer
-};
-
-let current = "explorer";
-
-
 module.exports = (params = {}) => {
+
+    const Rx = require('rxjs/Rx');
+    const Utils = require('./utils');
+    const utils = Utils();
+// inizializzazione status
+    const initFocus = {
+        "id": null,
+        "bounds": null,
+        "features": []
+    };
+    const initExplorer = {
+        "bounds": null,
+        "reset": true
+    };
+    const store = {
+        "focus": initFocus,
+        "explorer": initExplorer
+    };
+
+    let current = "explorer";
+
     // azioni dello stato
     const status = {
         "focus": null,

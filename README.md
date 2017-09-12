@@ -6,6 +6,29 @@ Map-based web viewer for FirstLife area-based explorer
 
 AreaViewer is meant to be part of WeGovNow landingpage platform. It can be used as embed and as library. 
 
+### Methods
+If AreaViewer is imported as class, it exports the following methods to manipulate the map viewport and 
+ to force a switch of the current status 
+ 
+#### Map viewport manipulation
+- setView({lat, lng, zoom})
+- resetView()
+
+#### State manipulation
+- focus({id})
+- explore()
+
+
+## Events
+
+
+### Output events
+- areaViewer.focus
+- areaViewer
+
+### Input events
+- areaViewer.
+
 ### Embed
 AreaViewer can be included within an iframe html tag.
 The initial state of AreaViewer can be partially customised including the following search parameters:

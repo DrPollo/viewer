@@ -1,30 +1,26 @@
-/**
- * Created by drpollo on 20/07/2017.
- */
-
-
-const colors = {
-    'FL_GROUPS': '#3F7F91',
-    'FL_EVENTS': '#88BA5C',
-    'FL_NEWS': '#823256',
-    'FL_ARTICLES': '#FFB310',
-    'FL_PLACES': '#FE4336'
-};
-
-const orange = "#ff7800",
-    blue = "#82b1ff",
-    green = "#33cd5f",
-    gray = "#dcdcdc";
-
-
-
-const featureStyle = function (feature, zoom) {
-    // console.log(feature,zoom);
-    return {
-        fill: false,
-        weight: 0
+module.exports = (map) => {
+    const colors = {
+        'FL_GROUPS': '#3F7F91',
+        'FL_EVENTS': '#88BA5C',
+        'FL_NEWS': '#823256',
+        'FL_ARTICLES': '#FFB310',
+        'FL_PLACES': '#FE4336'
     };
-};
+
+    const orange = "#ff7800",
+        blue = "#82b1ff",
+        green = "#33cd5f",
+        gray = "#dcdcdc";
+
+
+
+    const featureStyle = function (feature, zoom) {
+        // console.log(feature,zoom);
+        return {
+            fill: false,
+            weight: 0
+        };
+    };
 
 
 // exponential
@@ -41,55 +37,52 @@ const featureStyle = function (feature, zoom) {
 // }
 
 
-/*
- * Gaussian
- * https://www.desmos.com/calculator/oihvoxtriz
- * a = max radius
- * b = zoom level
- * cLeft & cRight = spread (between 2 - 3)
- * code diverse per lo zoom in e zoom out dalla media
- */
-const maxWeight = 1,
-    maxRadius = 6,
-    cRight = 1.4,
-    cLeft = 3,
-    minRadius = 1;
-const scale = (x, level) => {
-    let c = x < level ? cLeft : cRight;
-    let k = Math.pow((x - level), 2) * -1;
-    let q = 2 * Math.pow(c, 2);
-    let z = k / q;
-    let radius = Math.floor(maxRadius * Math.exp(z));
-    // console.log(radius);
-    // senza soglia
-    // return Math.max(radius, minRadius);
-    // con soglia
-    return radius;
-};
-/*
- * Markers
- */
-const geojsonMarkerStyle = (feature) => {
-    let type = feature.properties.entity_type;
-    let color = colors[type];
-    return {
-        opacity: 1,
-        fill: true,
-        fillOpacity: 0.8,
-        weight: 0,
-        color: color,
-        fillColor: color
+    /*
+     * Gaussian
+     * https://www.desmos.com/calculator/oihvoxtriz
+     * a = max radius
+     * b = zoom level
+     * cLeft & cRight = spread (between 2 - 3)
+     * code diverse per lo zoom in e zoom out dalla media
+     */
+    const maxWeight = 1,
+        maxRadius = 6,
+        cRight = 1.4,
+        cLeft = 3,
+        minRadius = 1;
+    const scale = (x, level) => {
+        let c = x < level ? cLeft : cRight;
+        let k = Math.pow((x - level), 2) * -1;
+        let q = 2 * Math.pow(c, 2);
+        let z = k / q;
+        let radius = Math.floor(maxRadius * Math.exp(z));
+        // console.log(radius);
+        // senza soglia
+        // return Math.max(radius, minRadius);
+        // con soglia
+        return radius;
+    };
+    /*
+     * Markers
+     */
+    const geojsonMarkerStyle = (feature) => {
+        let type = feature.properties.entity_type;
+        let color = colors[type];
+        return {
+            opacity: 1,
+            fill: true,
+            fillOpacity: 0.8,
+            weight: 0,
+            color: color,
+            fillColor: color
+        };
+
     };
 
-};
-
-const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
+    const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
 // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
 // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
 
-
-
-module.exports = (map) => {
     let focusId = null;
     const dynamicStyle = (feature) => {
         // console.debug('focus?', focus !== null);
