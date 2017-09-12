@@ -21,7 +21,7 @@ function bundle (bundler) {
 }
 
 gulp.task('watch', function () {
-    var watcher = watchify(browserify('./index.js', watchify.args).transform(babel));
+    var watcher = watchify(browserify('./js/index.js', watchify.args).transform(babel));
     bundle(watcher);
     watcher.on('update', function () {
         bundle(watcher);
