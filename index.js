@@ -1,5 +1,5 @@
 export class areaViewer{
     constructor(){
-        this.areaViewer = require('./build/bundle.js');
+        this.areaViewer = require('./dist/bundle.js');
     }
 }
