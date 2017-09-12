@@ -1,8 +1,8 @@
 module.exports = () => {
 
 // const detailsUrl = "http://localhost:3095/areas/";
-    const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
-// const detailsUrl = "https://tiles.firstlife.org/areas/";
+//     const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
+const detailsUrl = "https://tiles.firstlife.org/areas/";
 
 
 // cambia stile

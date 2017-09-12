@@ -196,8 +196,8 @@ module.exports = () => {
         layersOrdering: ordering
     };
 // const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
-    const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
-// const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
+//     const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
+const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
     const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
     let hightlightId = null;
     vGrid.highlight = (id = null) => {
