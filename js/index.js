@@ -197,4 +197,4 @@ const AreaViewer = () => {
     });
 };
 
-module.exports = AreaViewer;
+module.exports.AreaViewer = AreaViewer;

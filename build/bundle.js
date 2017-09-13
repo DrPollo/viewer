@@ -388,7 +388,7 @@ const AreaViewer = () => {
     });
 };
 
-module.exports = AreaViewer;
+module.exports.AreaViewer = AreaViewer;
 
 },{"../libs/Leaflet.VectorGrid":8,"../libs/leaflet-geojson-gridlayer":9,"./datasource.js":1,"./focus":2,"./interactive.js":4,"./map":5,"./status":6,"./utils":7,"@turf/helpers":10,"@turf/within":13,"leaflet":14}],4:[function(require,module,exports){
 module.exports = () => {
