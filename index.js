@@ -1,5 +1,2 @@
-export class areaViewer{
-    constructor(){
-        this.areaViewer = require('./dist/bundle.js');
-    }
-}
+const areaViewer = require('./dist/bundle.js');
+areaViewer();

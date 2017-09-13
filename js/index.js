@@ -1,4 +1,4 @@
-const areaViewer = (function () {
+const AreaViewer = () => {
     /**
      * Created by drpollo on 21/05/2017.
      */
@@ -195,4 +195,6 @@ const areaViewer = (function () {
         // todo gestione focus nella scelta di stile
         mGrid.update();
     });
-}());
+};
+
+module.exports = AreaViewer;
