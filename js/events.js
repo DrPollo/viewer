@@ -27,6 +27,7 @@ module.exports = (status) => {
     const exploreEvent = "areaViewer.explore";
 
 
+
     // catch event listners
     window.addEventListener(setBoundsEvent,function (e) {
         console.log(setBoundsEvent,e.detail);

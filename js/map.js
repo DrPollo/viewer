@@ -17,14 +17,6 @@ module.exports = (status) => {
     const map = L.map('areaViewer').setView([initLat, initLon], initZoom);
     // control position
     map.zoomControl.setPosition(zoomControlPosition);
-    // geocoder
-    var geocoderSettings = {
-        defaultMarkGeocode: false,
-        position: 'topleft'
-    };
-    geoCoder();
-    var geocoder = L.Control.geocoder(geocoderSettings);
-    geocoder.addTo(map);
 
     // pane per vectorGrid
     map.createPane('vectorGridPane');
@@ -36,9 +28,6 @@ module.exports = (status) => {
     map.getPane('vectorGridPane').style.zIndex = 11;
     // focusPane > focus geometry
     map.getPane('focusPane').style.zIndex = 12;
-
-
-
 
     return map;
 };

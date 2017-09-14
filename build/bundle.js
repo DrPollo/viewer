@@ -452,9 +452,18 @@ module.exports = () => {
     const Utils = require('./utils');
     const utils = Utils();
 
+    // geocoder
+    const geocoderSettings = {
+        defaultMarkGeocode: false,
+        position: 'topleft'
+    };
+    geoCoder();
+    const geocoder = L.Control.geocoder(geocoderSettings);
+
     /*
      * costanti e defaults
      */
+    const locationZoom = 18;
     // colori
     const colors = {
         'FL_GROUPS': '#3F7F91',
@@ -541,6 +550,8 @@ module.exports = () => {
     mGrid.addTo(map);
     // inizializzazione focusLayer
     fLayer.addTo(map);
+    // inizializzazione geocoder
+    geocoder.addTo(map);
 
     /*
      * gestione del focus
@@ -605,6 +616,13 @@ module.exports = () => {
         // todo gestione focus nella scelta di stile
         mGrid.update();
     });
+
+    // click su risultato geocode
+    geocoder.on('markgeocode', function (e) {
+        console.log('geocode', e.geocode.properties.osm_id);
+        map.setView(e.geocode.center, locationZoom);
+        // status.focus();
+    });
 })();
 
 },{"../libs/Leaflet.VectorGrid":9,"../libs/leaflet-geojson-gridlayer":10,"./datasource.js":1,"./events":2,"./focus":3,"./interactive.js":4,"./map":6,"./status":7,"./utils":8,"@turf/helpers":11,"@turf/within":14,"leaflet":15}],6:[function(require,module,exports){
@@ -626,14 +644,6 @@ module.exports = status => {
     const map = L.map('areaViewer').setView([initLat, initLon], initZoom);
     // control position
     map.zoomControl.setPosition(zoomControlPosition);
-    // geocoder
-    var geocoderSettings = {
-        defaultMarkGeocode: false,
-        position: 'topleft'
-    };
-    geoCoder();
-    var geocoder = L.Control.geocoder(geocoderSettings);
-    geocoder.addTo(map);
 
     // pane per vectorGrid
     map.createPane('vectorGridPane');
@@ -741,16 +751,6 @@ module.exports = (params = {}) => {
             switch (current) {
                 case "focus":
                     break;
-                default:
-                    // console.debug('saving bounds',bounds);
-                    store["explorer"].bounds = bounds;
-            }
-        };
-        status.changeView = params => {
-            // console.log('saving? ',current);
-            switch (current) {
-                case "focus":
-
                 default:
                     // console.debug('saving bounds',bounds);
                     store["explorer"].bounds = bounds;

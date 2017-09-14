@@ -41,9 +41,19 @@
     const utils = Utils();
 
 
+    // geocoder
+    const geocoderSettings = {
+        defaultMarkGeocode: false,
+        position: 'topleft'
+    };
+    geoCoder();
+    const geocoder = L.Control.geocoder(geocoderSettings);
+
+
     /*
      * costanti e defaults
      */
+    const locationZoom = 18;
 // colori
     const colors = {
         'FL_GROUPS': '#3F7F91',
@@ -134,6 +144,8 @@
     mGrid.addTo(map);
 // inizializzazione focusLayer
     fLayer.addTo(map);
+// inizializzazione geocoder
+    geocoder.addTo(map);
 
 
     /*
@@ -189,15 +201,22 @@
             status.focus(e.layer.properties);
         }
     });
-// prima del cambio di zoom
+    // prima del cambio di zoom
     map.on('moveend', (e) => {
         // update della posizione nello stato
         status.move(map.getBounds());
     });
-// fine cambio di zoom
+    // fine cambio di zoom
     map.on('zoomend', (e) => {
         // aggiorno stile marker
         // todo gestione focus nella scelta di stile
         mGrid.update();
+    });
+
+    // click su risultato geocode
+    geocoder.on('markgeocode', function (e) {
+        console.log('geocode',e.geocode.properties.osm_id);
+        map.setView(e.geocode.center,locationZoom);
+        // status.focus();
     });
 }());
