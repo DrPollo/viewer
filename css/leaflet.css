@@ -1,0 +1,53 @@
+.leaflet-touch .leaflet-control-geocoder {
+    width: calc(100% - 10px);
+}
+.leaflet-control-geocoder-form {
+    display: inline-block;
+}
+.leaflet-control-geocoder-form input {
+    width: calc(100% - 30px);
+}
+.leaflet-control-geocoder-alternatives {
+    width: 100%;
+}
+.leaflet-control-geocoder .leaflet-control-geocoder-alternatives li {
+    line-height: 1em;
+}
+.leaflet-control-geocoder .leaflet-control-geocoder-alternatives a {
+    width: 100%;
+    height: auto;
+    line-height: 1.2em;
+    font-size: 1.2em;
+}
+.leaflet-control-geocoder-alternatives li a, .leaflet-control-geocoder-alternatives li a:hover {
+    line-height: 1.2em;
+}
+.leaflet-touch .leaflet-control-geocoder{
+    box-shadow: 1px 1px 5px rgba(0,0,0,0.35);
+}
+.leaflet-control-geocoder button{
+    border-radius: 2px;
+}
+.leaflet-control-zoom { background: transparent; }
+.leaflet-touch .leaflet-control-layers, .leaflet-touch .leaflet-bar {
+    border:none;
+    /*box-shadow: 1px 1px 5px rgba(0,0,0,0.35);*/
+}
+.leaflet-bar a.leaflet-control-zoom-in, .leaflet-bar a.leaflet-control-zoom-out {
+    width: 35px;
+    height: 35px;
+    line-height: 35px;
+    border-radius: 20px !important;
+    box-shadow: 1px 1px 5px rgba(0,0,0,0.35);
+    background-color: #fff;
+    opacity: 1;
+}
+.leaflet-bar a.leaflet-control-zoom-out {
+    background-position: 4px -22px;
+}
+.leaflet-bar a.leaflet-control-zoom-in {
+    background-position: 4px 4px;
+}
+.leaflet-control-zoom-in {
+    margin-bottom: 8px;
+}

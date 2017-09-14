@@ -5,9 +5,11 @@
 // librerie
     require('leaflet');
 
-// librerie ad hoc
+    // librerie ad hoc
     require('../libs/Leaflet.VectorGrid');
     require('../libs/leaflet-geojson-gridlayer');
+    // require('../libs/leaflet.control-geocoder');
+
 
     const within = require('@turf/within');
     const turf = require('@turf/helpers');
@@ -20,7 +22,10 @@
     const status = Status();
 // mappa generale
     const Map = require('./map');
-    const map = Map();
+    const map = Map(status);
+// events
+    const Events = require('./events');
+    const events = Events(status);
 
     const markerGrid = require('./datasource.js');
     const mGrid = markerGrid(map);

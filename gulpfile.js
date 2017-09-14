@@ -20,7 +20,7 @@ function bundle (bundler) {
 }
 
 gulp.task('watch', function () {
-    let watcher = watchify(browserify('./js/index.js', watchify.args).transform(babel));
+    let watcher = watchify(browserify('./js/main.js', watchify.args).transform(babel));
     bundle(watcher);
     watcher.on('update', function () {
         bundle(watcher);
@@ -34,7 +34,7 @@ gulp.task('watch', function () {
 });
 
 gulp.task('build', function () {
-    return bundle(browserify('./index.js'));
+    return bundle(browserify('./js/main.js'));
 });
 gulp.task("minify", () =>
     gulp.src("./build/bundle.js")

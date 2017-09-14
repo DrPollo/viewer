@@ -1,8 +1,7 @@
 /**
  * Created by drpollo on 13/09/2017.
  */
-module.exports = (map) => {
-
+module.exports = (status) => {
 
     /* input events: changing areaViewer state
      * 1) resetViewEvent: void
@@ -13,6 +12,7 @@ module.exports = (map) => {
     // viewport events
     const resetViewEvent = "areaViewer.resetView";
     const setViewEvent = "areaViewer.setView";
+    const setBoundsEvent = "areaViewer.setBounds";
     // state events
     const focusToEvent = "areaViewer.focusTo";
     const toExploreEvent = "areaViewer.toExplore";
@@ -27,6 +27,33 @@ module.exports = (map) => {
     const exploreEvent = "areaViewer.explore";
 
 
-
+    // catch event listners
+    window.addEventListener(setBoundsEvent,function (e) {
+        console.log(setBoundsEvent,e.detail);
+        // set bounds to
+        if(!e.detail.bounds){ return; }
+        status.move(e.bounds);
+    },false);
+    // catch event listners
+    window.addEventListener(setViewEvent,function (e) {
+        console.log(setViewEvent,e.detail);
+        // status.move(e);
+    },false);
+    window.addEventListener(resetViewEvent,function (e) {
+        console.log(resetViewEvent,e.detail);
+        // status.move();
+    },false);
+    window.addEventListener(focusToEvent,function (e) {
+        console.log(focusToEvent,e.detail);
+        // check area id
+        if(!e.detail.id){  return; }
+        // focus on id
+        status.focus(e.detail.id);
+    },false);
+    window.addEventListener(toExploreEvent,function (e) {
+        console.log(toExploreEvent,e.detail);
+        // restore the status of explorer
+        status.restore();
+    },false);
 
 };

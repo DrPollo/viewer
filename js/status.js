@@ -98,6 +98,16 @@ module.exports = (params = {}) => {
                     store["explorer"].bounds = bounds;
             }
         };
+        status.changeView = (params) => {
+            // console.log('saving? ',current);
+            switch (current) {
+                case "focus":
+
+                default:
+                    // console.debug('saving bounds',bounds);
+                    store["explorer"].bounds = bounds;
+            }
+        };
         status.restore = () => {
             current = "explorer";
             observer.next(store["explorer"]);
