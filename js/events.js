@@ -1,7 +1,7 @@
 /**
  * Created by drpollo on 13/09/2017.
  */
-module.exports = (status) => {
+module.exports = (status,map) => {
 
     /* input events: changing areaViewer state
      * 1) resetViewEvent: void
@@ -9,6 +9,8 @@ module.exports = (status) => {
      * 3) focusToEvent: {id}
      * 4) toExploreEvent: void
      */
+
+    const locationZoom = 18;
     // viewport events
     const resetViewEvent = "areaViewer.resetView";
     const setViewEvent = "areaViewer.setView";
@@ -33,12 +35,15 @@ module.exports = (status) => {
         console.log(setBoundsEvent,e.detail);
         // set bounds to
         if(!e.detail.bounds){ return; }
+        status.restore();
         status.move(e.bounds);
     },false);
     // catch event listners
     window.addEventListener(setViewEvent,function (e) {
         console.log(setViewEvent,e.detail);
-        // status.move(e);
+        if(!e.detail.center){ return; }
+        status.restore();
+        map.setView(e.detail.center,e.detail.zoom || locationZoom);
     },false);
     window.addEventListener(resetViewEvent,function (e) {
         console.log(resetViewEvent,e.detail);

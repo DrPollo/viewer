@@ -25,7 +25,7 @@
     const map = Map(status);
 // events
     const Events = require('./events');
-    const events = Events(status);
+    const events = Events(status, map);
 
     const markerGrid = require('./datasource.js');
     const mGrid = markerGrid(map);
@@ -53,8 +53,8 @@
     /*
      * costanti e defaults
      */
-    const locationZoom = 18;
-// colori
+
+    // colori
     const colors = {
         'FL_GROUPS': '#3F7F91',
         'FL_EVENTS': '#88BA5C',
@@ -67,14 +67,14 @@
         green = "#33cd5f",
         gray = "#dcdcdc";
 
-// const baselayer = '';
+    // const baselayer = '';
     const baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
     const contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
-// default contrast
+    // default contrast
     let contrast = false;
 
 
-// language
+    // language
     const defaultLang = 0;
     const languages = ['en', 'it'];
     const userLang = navigator.language || navigator.userLanguage;

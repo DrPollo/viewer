@@ -99,6 +99,9 @@ module.exports = (params = {}) => {
             }
         };
         status.restore = () => {
+            if(current === "explorer")
+                return;
+
             current = "explorer";
             observer.next(store["explorer"]);
         };

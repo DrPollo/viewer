@@ -164,7 +164,7 @@ module.exports = map => {
 /**
  * Created by drpollo on 13/09/2017.
  */
-module.exports = status => {
+module.exports = (status, map) => {
 
     /* input events: changing areaViewer state
      * 1) resetViewEvent: void
@@ -172,6 +172,8 @@ module.exports = status => {
      * 3) focusToEvent: {id}
      * 4) toExploreEvent: void
      */
+
+    const locationZoom = 18;
     // viewport events
     const resetViewEvent = "areaViewer.resetView";
     const setViewEvent = "areaViewer.setView";
@@ -195,12 +197,17 @@ module.exports = status => {
         if (!e.detail.bounds) {
             return;
         }
+        status.restore();
         status.move(e.bounds);
     }, false);
     // catch event listners
     window.addEventListener(setViewEvent, function (e) {
         console.log(setViewEvent, e.detail);
-        // status.move(e);
+        if (!e.detail.center) {
+            return;
+        }
+        status.restore();
+        map.setView(e.detail.center, e.detail.zoom || locationZoom);
     }, false);
     window.addEventListener(resetViewEvent, function (e) {
         console.log(resetViewEvent, e.detail);
@@ -437,7 +444,7 @@ module.exports = () => {
     const map = Map(status);
     // events
     const Events = require('./events');
-    const events = Events(status);
+    const events = Events(status, map);
 
     const markerGrid = require('./datasource.js');
     const mGrid = markerGrid(map);
@@ -463,7 +470,7 @@ module.exports = () => {
     /*
      * costanti e defaults
      */
-    const locationZoom = 18;
+
     // colori
     const colors = {
         'FL_GROUPS': '#3F7F91',
@@ -757,6 +764,8 @@ module.exports = (params = {}) => {
             }
         };
         status.restore = () => {
+            if (current === "explorer") return;
+
             current = "explorer";
             observer.next(store["explorer"]);
         };
