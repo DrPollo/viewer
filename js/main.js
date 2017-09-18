@@ -168,6 +168,19 @@ const AreaViewer = () => {
 
     // set default style
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => mGrid.setStyle(id));
+    // set current language
+    status.observe.filter(state => 'lang' in state).map(state => state.lang).subscribe(lang => {
+        // todo set language
+        console.log('to setup current language',lang);
+    });
+    // set current contrast
+    status.observe.filter(state => 'contrast' in state).map(state => state.contrast).subscribe(contrast => {
+        if(contrast){
+            map.setBasemap('contrast');
+        }else{
+            map.setBasemap('base');
+        }
+    });
     // add focus layer
     status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
     // reset del focus

@@ -231,17 +231,17 @@ module.exports = function (status, map) {
     document.addEventListener(setContrastEvent, function (e) {
         console.log(setContrastEvent, e.detail);
         // set current map theme
-        if (e.detail.contrast) {
-            map.setBasemap('contrast');
-        } else {
-            map.setBasemap('base');
-        }
+        status.contrast(contrast);
     }, false);
 
     // change current language accordingly
     document.addEventListener(setLanguageEvent, function (e) {
         console.log(setLanguageEvent, e.detail);
         // todo set current language
+        if (!e.detail.lang) {
+            return;
+        }
+        //
     }, false);
 
     document.addEventListener(setPriorityEvent, function (e) {
@@ -665,6 +665,27 @@ var AreaViewer = function AreaViewer() {
     }).subscribe(function (id) {
         return mGrid.setStyle(id);
     });
+    // set current language
+    status.observe.filter(function (state) {
+        return 'lang' in state;
+    }).map(function (state) {
+        return state.lang;
+    }).subscribe(function (lang) {
+        // todo set language
+        console.log('to setup current language', lang);
+    });
+    // set current contrast
+    status.observe.filter(function (state) {
+        return 'contrast' in state;
+    }).map(function (state) {
+        return state.contrast;
+    }).subscribe(function (contrast) {
+        if (contrast) {
+            map.setBasemap('contrast');
+        } else {
+            map.setBasemap('base');
+        }
+    });
     // add focus layer
     status.observe.filter(function (state) {
         return 'features' in state;
@@ -809,6 +830,7 @@ module.exports = function () {
     var Rx = require('rxjs/Rx');
     var Utils = require('./utils');
     var utils = Utils();
+
     // inizializzazione status
     var initFocus = {
         "id": null,
@@ -819,9 +841,14 @@ module.exports = function () {
         "bounds": null,
         "reset": true
     };
+    var initInterface = {
+        "lang": "en",
+        "contrast": false
+    };
     var store = {
         "focus": initFocus,
-        "explorer": initExplorer
+        "explorer": initExplorer,
+        "interface": initInterface
     };
 
     var current = "explorer";
@@ -831,7 +858,9 @@ module.exports = function () {
         "focus": null,
         "move": null,
         "restore": null,
-        "observe": null
+        "observe": null,
+        "lang": null,
+        "contrast": null
     };
 
     // gestorione del focus
@@ -891,6 +920,26 @@ module.exports = function () {
     // observable da restituire
     status.observe = Rx.Observable.create(function (observer) {
         // costruttori delle azioni di cambio di stato
+        status.lang = function (lang) {
+            if (store["interface"]["lang"] === lang) {
+                return;
+            }
+            switch (lang) {
+                case "it":
+                    store["interface"]["lang"] = "it";
+                    break;
+                default:
+                    store["interface"]["lang"] = "en";
+            }
+            observer.next(store["interface"]);
+        };
+        status.contrast = function (contrast) {
+            if (store["interface"]["contrast"] === contrast) {
+                return;
+            }
+            store["interface"]["contrast"] = contrast;
+            observer.next(store["interface"]);
+        };
         status.focus = focusHandler(observer);
         status.move = function (bounds) {
             // console.log('saving? ',current);

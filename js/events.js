@@ -59,17 +59,15 @@ module.exports = (status,map) => {
     document.addEventListener(setContrastEvent,function (e) {
         console.log(setContrastEvent,e.detail);
         // set current map theme
-        if(e.detail.contrast){
-            map.setBasemap('contrast');
-        }else{
-            map.setBasemap('base');
-        }
+        status.contrast(contrast);
     },false);
 
     // change current language accordingly
     document.addEventListener(setLanguageEvent,function (e) {
         console.log(setLanguageEvent,e.detail);
         // todo set current language
+        if(!e.detail.lang){  return; }
+        //
     },false);
 
 

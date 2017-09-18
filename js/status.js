@@ -3,7 +3,8 @@ module.exports = (params = {}) => {
     const Rx = require('rxjs/Rx');
     const Utils = require('./utils');
     const utils = Utils();
-// inizializzazione status
+
+    // inizializzazione status
     const initFocus = {
         "id": null,
         "bounds": null,
@@ -13,9 +14,14 @@ module.exports = (params = {}) => {
         "bounds": null,
         "reset": true
     };
+    const initInterface = {
+        "lang": "en",
+        "contrast": false
+    };
     const store = {
         "focus": initFocus,
-        "explorer": initExplorer
+        "explorer": initExplorer,
+        "interface": initInterface
     };
 
     let current = "explorer";
@@ -25,7 +31,9 @@ module.exports = (params = {}) => {
         "focus": null,
         "move": null,
         "restore": null,
-        "observe": null
+        "observe": null,
+        "lang": null,
+        "contrast": null
     };
 
     // gestorione del focus
@@ -89,6 +97,26 @@ module.exports = (params = {}) => {
     // observable da restituire
     status.observe = Rx.Observable.create(function (observer) {
         // costruttori delle azioni di cambio di stato
+        status.lang = (lang) => {
+            if(store["interface"]["lang"] === lang){
+                return;
+            }
+            switch (lang) {
+                case "it":
+                    store["interface"]["lang"] = "it";
+                    break;
+                default:
+                    store["interface"]["lang"] = "en";
+            }
+            observer.next(store["interface"]);
+        };
+        status.contrast = (contrast) => {
+            if(store["interface"]["contrast"] === contrast){
+                return;
+            }
+            store["interface"]["contrast"] = contrast
+            observer.next(store["interface"]);
+        };
         status.focus = focusHandler(observer);
         status.move = (bounds) => {
             // console.log('saving? ',current);
