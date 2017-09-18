@@ -81,6 +81,8 @@ module.exports = function (map) {
     var markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
+    // const markerUrl = 'https://loggerproxy.firstlife.org/tile/{x}/{y}/{z}';
+
 
     var focusId = null;
     var dynamicStyle = function dynamicStyle(feature) {
@@ -186,6 +188,7 @@ module.exports = function (status, map) {
     var setBoundsEvent = "areaViewer.setBounds";
     var setContrastEvent = "areaViewer.setContrast";
     var setLanguageEvent = "areaViewer.setLanguage";
+    var setPriorityEvent = "areaViewer.setPriority";
     // state events
     var focusToEvent = "areaViewer.focusTo";
     var toExploreEvent = "areaViewer.toExplore";
@@ -194,7 +197,6 @@ module.exports = function (status, map) {
      * 1) focusToEvent: {id}
      * 2) toExploreEvent: void
      */
-    // state events
     var focusOnEvent = "areaViewer.focusOn";
     var exploreEvent = "areaViewer.explore";
 
@@ -231,6 +233,10 @@ module.exports = function (status, map) {
     document.addEventListener(setLanguageEvent, function (e) {
         console.log(setLanguageEvent, e.detail);
         // todo set current language
+    }, false);
+    document.addEventListener(setPriorityEvent, function (e) {
+        console.log(setPriorityEvent, e.detail);
+        // todo set priority of POIs: {highlight:'', exluded:[]}
     }, false);
 
     document.addEventListener(focusToEvent, function (e) {
@@ -475,12 +481,7 @@ module.exports = function () {
 },{}],5:[function(require,module,exports){
 'use strict';
 
-// const domready = require("domready");
-
-var AreaViewer = function AreaViewer(params) {
-    /**
-     * Created by drpollo on 21/05/2017.
-     */
+var AreaViewer = function AreaViewer() {
     // librerie
     require('leaflet');
 
@@ -492,10 +493,10 @@ var AreaViewer = function AreaViewer(params) {
 
     var within = require('@turf/within');
     var turf = require('@turf/helpers');
+
     /*
      * moduli
      */
-
     // gestore di stato
     var Status = require('./status');
     var status = Status();
@@ -505,13 +506,13 @@ var AreaViewer = function AreaViewer(params) {
     // events
     var Events = require('./events');
     var events = Events(status, map);
-
+    // POIs layer
     var markerGrid = require('./datasource.js');
     var mGrid = markerGrid(map);
-
+    // Interactive layer
     var vectorGrid = require('./interactive.js');
     var vGrid = vectorGrid();
-
+    // focus layer
     var focusLayer = require('./focus');
     var fLayer = focusLayer();
 
@@ -519,18 +520,23 @@ var AreaViewer = function AreaViewer(params) {
     var Utils = require('./utils');
     var utils = Utils();
 
-    // geocoder
+    /*
+     * geocoder
+     */
+    // geocoder config
     var geocoderSettings = {
         defaultMarkGeocode: false,
         position: 'topleft'
     };
+    // geocoder load init
     geoCoder();
+    // geocoder node
     var geocoder = L.Control.geocoder(geocoderSettings);
 
     /*
      * costanti e defaults
      */
-
+    // default language
     var lang = 'en';
 
     // colori
@@ -545,10 +551,15 @@ var AreaViewer = function AreaViewer(params) {
         blue = "#82b1ff",
         green = "#33cd5f",
         gray = "#dcdcdc";
-
-    // const baselayer = '';
+    /*
+     * map baselayers
+     * 1) baselayer: normal base layer
+     * 2) contrastlayer: high contrast base layer
+     */
     var baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
+    // const baselayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj0tausco00tb2rt87i5c8pi0/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
     var contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
+    // const contrastlayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj167l5m800452rqsb9y2ijuq/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
     // default contrast
     var contrast = false;
 
@@ -724,7 +735,6 @@ var AreaViewer = function AreaViewer(params) {
         // status.focus();
     });
 };
-// domready(AreaViewer);
 // export {AreaViewer};
 module.exports.AreaViewer = AreaViewer;
 AreaViewer();

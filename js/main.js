@@ -1,11 +1,6 @@
 'use strict';
 
-// const domready = require("domready");
-
-const AreaViewer = (params) => {
-    /**
-     * Created by drpollo on 21/05/2017.
-     */
+const AreaViewer = () => {
     // librerie
     require('leaflet');
 
@@ -17,10 +12,13 @@ const AreaViewer = (params) => {
 
     const within = require('@turf/within');
     const turf = require('@turf/helpers');
+
+
+
+
     /*
      * moduli
      */
-
     // gestore di stato
     const Status = require('./status');
     const status = Status();
@@ -30,13 +28,13 @@ const AreaViewer = (params) => {
     // events
     const Events = require('./events');
     const events = Events(status, map);
-
+    // POIs layer
     const markerGrid = require('./datasource.js');
     const mGrid = markerGrid(map);
-
+    // Interactive layer
     const vectorGrid = require('./interactive.js');
     const vGrid = vectorGrid();
-
+    // focus layer
     const focusLayer = require('./focus');
     const fLayer = focusLayer();
 
@@ -45,19 +43,24 @@ const AreaViewer = (params) => {
     const utils = Utils();
 
 
-    // geocoder
+    /*
+     * geocoder
+     */
+    // geocoder config
     const geocoderSettings = {
         defaultMarkGeocode: false,
         position: 'topleft'
     };
+    // geocoder load init
     geoCoder();
+    // geocoder node
     const geocoder = L.Control.geocoder(geocoderSettings);
 
 
     /*
      * costanti e defaults
      */
-
+    // default language
     let lang = 'en';
 
     // colori
@@ -72,10 +75,15 @@ const AreaViewer = (params) => {
         blue = "#82b1ff",
         green = "#33cd5f",
         gray = "#dcdcdc";
-
-    // const baselayer = '';
+    /*
+     * map baselayers
+     * 1) baselayer: normal base layer
+     * 2) contrastlayer: high contrast base layer
+     */
     const baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
+    // const baselayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj0tausco00tb2rt87i5c8pi0/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
     const contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
+    // const contrastlayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj167l5m800452rqsb9y2ijuq/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
     // default contrast
     let contrast = false;
 
@@ -143,15 +151,15 @@ const AreaViewer = (params) => {
     /*
      * Inizializzazioni
      */
-// stato
+    // stato
     status.move(map.getBounds());
-// inizializzazione vectorGrid layer
+    // inizializzazione vectorGrid layer
     vGrid.addTo(map);
-// inizializzazione markerGrid layer
+    // inizializzazione markerGrid layer
     mGrid.addTo(map);
-// inizializzazione focusLayer
+    // inizializzazione focusLayer
     fLayer.addTo(map);
-// inizializzazione geocoder
+    // inizializzazione geocoder
     geocoder.addTo(map);
 
 
@@ -231,9 +239,7 @@ const AreaViewer = (params) => {
         // status.focus();
     });
 
-
 };
-// domready(AreaViewer);
 // export {AreaViewer};
 module.exports.AreaViewer = AreaViewer;
 AreaViewer();

@@ -17,6 +17,7 @@ module.exports = (status,map) => {
     const setBoundsEvent = "areaViewer.setBounds";
     const setContrastEvent = "areaViewer.setContrast";
     const setLanguageEvent = "areaViewer.setLanguage";
+    const setPriorityEvent = "areaViewer.setPriority";
     // state events
     const focusToEvent = "areaViewer.focusTo";
     const toExploreEvent = "areaViewer.toExplore";
@@ -26,7 +27,6 @@ module.exports = (status,map) => {
      * 1) focusToEvent: {id}
      * 2) toExploreEvent: void
      */
-    // state events
     const focusOnEvent = "areaViewer.focusOn";
     const exploreEvent = "areaViewer.explore";
 
@@ -61,6 +61,10 @@ module.exports = (status,map) => {
     document.addEventListener(setLanguageEvent,function (e) {
         console.log(setLanguageEvent,e.detail);
         // todo set current language
+    },false);
+    document.addEventListener(setPriorityEvent,function (e) {
+        console.log(setPriorityEvent,e.detail);
+        // todo set priority of POIs: {highlight:'', exluded:[]}
     },false);
 
 

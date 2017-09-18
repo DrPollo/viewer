@@ -146,8 +146,7 @@ function initStatus (){
     broadcastEvent(setViewEvent, {lat: lat, lng:lon, zoom:zoom});
     // todo set focus
     // todo set source
-
-
+    // todo set priority: {highlight:'', exluded:[]}
 }
 
 // init output message listners
@@ -182,7 +181,6 @@ function emitEvent(eventName, params) {
         console.error("domain not defined: cannot emit message",eventName);
         return;
     }
-    var obj = params || {};
     console.debug('emitting',params, 'to',domain);
-    top.postMessage(obj.extend({"event":eventName}), domain);
+    top.postMessage(Object.assign(params || {},{"event":eventName}), domain);
 }

@@ -34,7 +34,6 @@
   "dependencies": {
     "@turf/helpers": "^4.5.2",
     "@turf/within": "^4.5.2",
-    "domready": "^1.0.8",
     "gulp-babel-minify": "^0.2.0",
     "leaflet": "^1.0.3",
     "leaflet.vectorgrid": "^1.2.0",
