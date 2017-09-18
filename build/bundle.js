@@ -282,12 +282,23 @@ module.exports = function (status, map) {
     }).map(function (state) {
         return state.features;
     }).subscribe(function (features) {
+        // filter map contents by area_id
+        var content = Object.keys(map._layers).reduce(function (res, key) {
+            var feature = map._layers[key].feature;
+            if (feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id) {
+                return res.concat(feature);
+            }
+            return res;
+        }, []);
+        // returns id of focus area, feature description, pois related to the focus area
         notifyAction(focusOnEvent, {
             id: features[0].id || features[0]._id || features[0].properties.id,
-            feature: features[0]
+            feature: features[0],
+            content: content
         });
     });
 
+    // notify the user's action
     function notifyAction(eventName, params) {
         var detail = params || {};
         var event = new CustomEvent(eventName, { detail: detail, bubbles: true, cancelable: false });
@@ -655,7 +666,17 @@ var AreaViewer = function AreaViewer() {
     }).subscribe(function (id) {
         return vGrid.highlight(id);
     });
-    // todo fill label
+    // fill infobox
+    status.observe.filter(function (state) {
+        return 'features' in state;
+    }).map(function (state) {
+        return state.features[0].properties;
+    }).subscribe(function (feature) {
+        //todo update infobox
+        console.log('to update infobox', feature);
+        // feature.name
+        // feature.type
+    });
 
     // set default style
     status.observe.filter(function (state) {

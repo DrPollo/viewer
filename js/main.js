@@ -164,7 +164,14 @@ const AreaViewer = () => {
 
     // draw focus border
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
-    // todo fill label
+    // fill infobox
+    status.observe.filter(state => 'features' in state).map(state => state.features[0].properties).subscribe(feature => {
+        //todo update infobox
+        console.log('to update infobox',feature);
+        // feature.name
+        // feature.type
+    });
+
 
     // set default style
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => mGrid.setStyle(id));

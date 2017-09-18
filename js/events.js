@@ -103,13 +103,23 @@ module.exports = (status,map) => {
     });
     // notify focus action
     status.observe.filter(state => 'id' in state).map(state => state.features).subscribe((features) => {
+        // filter map contents by area_id
+        let content = Object.keys(map._layers).reduce((res,key) => {
+            let feature = map._layers[key].feature;
+            if(feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id){
+                return res.concat(feature);
+            }
+            return res;
+        },[]);
+        // returns id of focus area, feature description, pois related to the focus area
         notifyAction(focusOnEvent,{
             id: features[0].id || features[0]._id || features[0].properties.id,
-            feature:features[0]
+            feature:features[0],
+            content: content
         });
     });
 
-
+    // notify the user's action
     function notifyAction(eventName, params) {
         let detail = params || {};
         let event = new CustomEvent(eventName, { detail: detail, bubbles: true,cancelable: false });
