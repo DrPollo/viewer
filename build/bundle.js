@@ -256,15 +256,19 @@ module.exports = function (status, map) {
     status.observe.filter(function (state) {
         return 'reset' in state;
     }).subscribe(function () {
+        // todo send current viewport
         notifyAction(exploreEvent);
     });
     // notify focus action
     status.observe.filter(function (state) {
         return 'id' in state;
     }).map(function (state) {
-        return state.id;
-    }).subscribe(function (id) {
-        notifyAction(focusOnEvent, { id: id });
+        return state.features;
+    }).subscribe(function (features) {
+        notifyAction(focusOnEvent, {
+            id: features[0].id || features[0]._id || features[0].properties.id,
+            feature: features[0]
+        });
     });
 
     function notifyAction(eventName, params) {

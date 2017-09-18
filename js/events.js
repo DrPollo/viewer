@@ -84,9 +84,17 @@ module.exports = (status,map) => {
      * Manager output messages
      */
     // notify reset action
-    status.observe.filter(state => 'reset' in state).subscribe(() => { notifyAction(exploreEvent); });
+    status.observe.filter(state => 'reset' in state).subscribe(() => {
+        // todo send current viewport
+        notifyAction(exploreEvent);
+    });
     // notify focus action
-    status.observe.filter(state => 'id' in state).map(state => state.id).subscribe((id) => { notifyAction(focusOnEvent,{id:id}); });
+    status.observe.filter(state => 'id' in state).map(state => state.features).subscribe((features) => {
+        notifyAction(focusOnEvent,{
+            id: features[0].id || features[0]._id || features[0].properties.id,
+            feature:features[0]
+        });
+    });
 
 
     function notifyAction(eventName, params) {
