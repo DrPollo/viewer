@@ -1,5 +1,5 @@
 module.exports = (params = {}) => {
-
+    const BBox = require('@turf/bbox');
     const Rx = require('rxjs/Rx');
     const Utils = require('./utils');
     const utils = Utils();
@@ -50,7 +50,7 @@ module.exports = (params = {}) => {
 
 
     function focus(entry, observer) {
-        // console.debug('focus on ',entry);
+        console.debug('focus on ',entry);
         current = "focus";
         // set id
         store["focus"].id = entry.id;
@@ -59,8 +59,8 @@ module.exports = (params = {}) => {
         if (entry.bbox) {
             let bbox = JSON.parse(entry.bbox);
             bounds = L.latLngBounds(L.latLng(bbox[1], bbox[0]), L.latLng(bbox[3], bbox[2]));
+            store["focus"].bounds = bounds;
         }
-        store["focus"].bounds = bounds;
         // recupero il contenuto
         utils.getFeature(entry.id).then(
             res => {
@@ -75,6 +75,8 @@ module.exports = (params = {}) => {
                 } else {
                     store["focus"].features = [];
                 }
+                let bb = BBox(store["focus"].features[0]);
+                store["focus"].bounds = L.latLngBounds(L.latLng(bb[1], bb[0]), L.latLng(bb[3], bb[2]));
                 // propago il nuovo stato
                 // console.debug("stato focus",store["focus"]);
                 observer.next(store["focus"]);

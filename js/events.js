@@ -54,26 +54,37 @@ module.exports = (status,map) => {
         // status.move();
     },false);
 
+
+    // change current baselayer according to contrast setup
     document.addEventListener(setContrastEvent,function (e) {
         console.log(setContrastEvent,e.detail);
-        // todo set current map theme
+        // set current map theme
+        if(e.detail.contrast){
+            map.setBasemap('contrast');
+        }else{
+            map.setBasemap('base');
+        }
     },false);
+
+    // change current language accordingly
     document.addEventListener(setLanguageEvent,function (e) {
         console.log(setLanguageEvent,e.detail);
         // todo set current language
     },false);
+
+
     document.addEventListener(setPriorityEvent,function (e) {
         console.log(setPriorityEvent,e.detail);
         // todo set priority of POIs: {highlight:'', exluded:[]}
     },false);
 
-
+    // request focus on id
     document.addEventListener(focusToEvent,function (e) {
         console.log(focusToEvent,e.detail);
         // check area id
         if(!e.detail.id){  return; }
         // focus on id
-        status.focus(e.detail.id);
+        status.focus({id:e.detail.id});
     },false);
 
     document.addEventListener(toExploreEvent,function (e) {

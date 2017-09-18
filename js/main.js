@@ -80,28 +80,15 @@ const AreaViewer = () => {
      * 1) baselayer: normal base layer
      * 2) contrastlayer: high contrast base layer
      */
-    const baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
-    // const baselayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj0tausco00tb2rt87i5c8pi0/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
-    const contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
-    // const contrastlayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj167l5m800452rqsb9y2ijuq/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
     // default contrast
     let contrast = false;
+    // init baselayer
+    if(contrast){
+        map.setBasemap('contrast');
+    }
 
 
-// map setup
-    const layers = {
-        base: L.tileLayer(baselayer, {
-            maxZoom: 20,
-            attribution: '<a href="http://openstreetmap.org" target="_blank">OpenStreetMap</a> contributors | <a href="http://mapbox.com" target="_blank">Mapbox</a>'
-        }),
-        contrast: L.tileLayer(contrastlayer, {
-            maxZoom: 20,
-            attribution: '<a href="http://openstreetmap.org" target="_blank">OpenStreetMap</a> contributors | <a href="http://mapbox.com" target="_blank">Mapbox</a>'
-        })
-    };
 
-// cartography
-    layers[contrast ? 'contrast' : 'base'].addTo(map);
 
 
     /*
@@ -169,6 +156,7 @@ const AreaViewer = () => {
     // fit to bounds
     // valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
     status.observe.filter(state => 'bounds' in state).map(state => state.bounds).subscribe(bounds => {
+        console.log('fitting to bounds',bounds);
         // map.removeLayer(mGrid);
         map.fitBounds(bounds);
         // map.addLayer(mGrid);

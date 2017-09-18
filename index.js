@@ -122,6 +122,19 @@ var toExploreEvent = "areaViewer.toExplore";
 // todo set focus
 // todo set lang
 // todo set source
+window.addEventListener( "message",
+    function (e) {
+        if (e.defaultPrevented)
+            return
+        e.preventDefault();
+
+        // if (e.origin !== iframeDomain) {
+        //     return;
+        // }
+        if(e.data.type == 'setContrast'){
+            console.log('got setContrast',e);
+        }
+    });
 
 
 
@@ -133,6 +146,10 @@ function initAreaViewer(){
     console.debug("init AreaViewer");
     initListners();
     initStatus ();
+
+    // test listners
+    // setTimeout(function(){broadcastEvent(focusToEvent,{id:"dc1346b2-8d8f-11e7-94d0-6558e55bfac7"});},2000);
+    // setTimeout(function(){broadcastEvent(setContrastEvent,{contrast:true});},2000);
 }
 
 // init status

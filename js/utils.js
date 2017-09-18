@@ -26,7 +26,7 @@ const detailsUrl = "https://tiles.firstlife.org/areas/";
     }
 // get feature by id
     function getFeature(id) {
-        // console.log('getFeature', id);
+        console.log('getFeature', id);
         return new Promise((resolve, reject) => {
             let xhr = new XMLHttpRequest();
             let url = detailsUrl.concat(id);
