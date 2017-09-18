@@ -90,6 +90,7 @@ module.exports = (map) => {
     let focusId = null;
     const dynamicStyle = (feature) => {
         // console.debug('focus?', focus !== null);
+        // todo priority of source
         // se non definito id o definito e uguale all'area id
         if(!focusId || feature.area_id === focusId){
             // non cambio nulla

@@ -88,6 +88,7 @@ module.exports = function (map) {
     var focusId = null;
     var dynamicStyle = function dynamicStyle(feature) {
         // console.debug('focus?', focus !== null);
+        // todo priority of source
         // se non definito id o definito e uguale all'area id
         if (!focusId || feature.area_id === focusId) {
             // non cambio nulla
@@ -244,9 +245,10 @@ module.exports = function (status, map) {
         //
     }, false);
 
+    // todo definition of priority of sources for visualisation purpose
     document.addEventListener(setPriorityEvent, function (e) {
         console.log(setPriorityEvent, e.detail);
-        // todo set priority of POIs: {highlight:'', exluded:[]}
+        // todo set priority of POIs: {highlight:[], exluded:[]}
     }, false);
 
     // request focus on id
@@ -297,7 +299,6 @@ module.exports = function (status, map) {
             content: content
         });
     });
-
     // notify the user's action
     function notifyAction(eventName, params) {
         var detail = params || {};
@@ -864,7 +865,12 @@ module.exports = function () {
     };
     var initInterface = {
         "lang": "en",
-        "contrast": false
+        "contrast": false,
+        "priority": {
+            "highlight": [],
+            "background": [],
+            "excluded": []
+        }
     };
     var store = {
         "focus": initFocus,
@@ -879,9 +885,10 @@ module.exports = function () {
         "focus": null,
         "move": null,
         "restore": null,
-        "observe": null,
         "lang": null,
-        "contrast": null
+        "contrast": null,
+        "priority": null,
+        "observe": null
     };
 
     // gestorione del focus
@@ -959,6 +966,10 @@ module.exports = function () {
                 return;
             }
             store["interface"]["contrast"] = contrast;
+            observer.next(store["interface"]);
+        };
+        status.priority = function (priority) {
+            store["interface"]["priority"] = priority;
             observer.next(store["interface"]);
         };
         status.focus = focusHandler(observer);

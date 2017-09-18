@@ -16,7 +16,12 @@ module.exports = (params = {}) => {
     };
     const initInterface = {
         "lang": "en",
-        "contrast": false
+        "contrast": false,
+        "priority": {
+            "highlight":[],
+            "background":[],
+            "excluded":[]
+        }
     };
     const store = {
         "focus": initFocus,
@@ -31,9 +36,10 @@ module.exports = (params = {}) => {
         "focus": null,
         "move": null,
         "restore": null,
-        "observe": null,
         "lang": null,
-        "contrast": null
+        "contrast": null,
+        "priority": null,
+        "observe": null
     };
 
     // gestorione del focus
@@ -114,7 +120,11 @@ module.exports = (params = {}) => {
             if(store["interface"]["contrast"] === contrast){
                 return;
             }
-            store["interface"]["contrast"] = contrast
+            store["interface"]["contrast"] = contrast;
+            observer.next(store["interface"]);
+        };
+        status.priority = (priority) => {
+            store["interface"]["priority"] = priority;
             observer.next(store["interface"]);
         };
         status.focus = focusHandler(observer);

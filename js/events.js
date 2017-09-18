@@ -70,10 +70,10 @@ module.exports = (status,map) => {
         //
     },false);
 
-
+    // todo definition of priority of sources for visualisation purpose
     document.addEventListener(setPriorityEvent,function (e) {
         console.log(setPriorityEvent,e.detail);
-        // todo set priority of POIs: {highlight:'', exluded:[]}
+        // todo set priority of POIs: {highlight:[], exluded:[]}
     },false);
 
     // request focus on id
@@ -118,7 +118,6 @@ module.exports = (status,map) => {
             content: content
         });
     });
-
     // notify the user's action
     function notifyAction(eventName, params) {
         let detail = params || {};
