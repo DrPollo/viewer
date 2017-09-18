@@ -1,6 +1,8 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-module.exports = map => {
-    const colors = {
+'use strict';
+
+module.exports = function (map) {
+    var colors = {
         'FL_GROUPS': '#3F7F91',
         'FL_EVENTS': '#88BA5C',
         'FL_NEWS': '#823256',
@@ -8,12 +10,12 @@ module.exports = map => {
         'FL_PLACES': '#FE4336'
     };
 
-    const orange = "#ff7800",
-          blue = "#82b1ff",
-          green = "#33cd5f",
-          gray = "#dcdcdc";
+    var orange = "#ff7800",
+        blue = "#82b1ff",
+        green = "#33cd5f",
+        gray = "#dcdcdc";
 
-    const featureStyle = function (feature, zoom) {
+    var featureStyle = function featureStyle(feature, zoom) {
         // console.log(feature,zoom);
         return {
             fill: false,
@@ -43,17 +45,17 @@ module.exports = map => {
      * cLeft & cRight = spread (between 2 - 3)
      * code diverse per lo zoom in e zoom out dalla media
      */
-    const maxWeight = 1,
-          maxRadius = 6,
-          cRight = 1.4,
-          cLeft = 3,
-          minRadius = 1;
-    const scale = (x, level) => {
-        let c = x < level ? cLeft : cRight;
-        let k = Math.pow(x - level, 2) * -1;
-        let q = 2 * Math.pow(c, 2);
-        let z = k / q;
-        let radius = Math.floor(maxRadius * Math.exp(z));
+    var maxWeight = 1,
+        maxRadius = 6,
+        cRight = 1.4,
+        cLeft = 3,
+        minRadius = 1;
+    var scale = function scale(x, level) {
+        var c = x < level ? cLeft : cRight;
+        var k = Math.pow(x - level, 2) * -1;
+        var q = 2 * Math.pow(c, 2);
+        var z = k / q;
+        var radius = Math.floor(maxRadius * Math.exp(z));
         // console.log(radius);
         // senza soglia
         // return Math.max(radius, minRadius);
@@ -63,9 +65,9 @@ module.exports = map => {
     /*
      * Markers
      */
-    const geojsonMarkerStyle = feature => {
-        let type = feature.properties.entity_type;
-        let color = colors[type];
+    var geojsonMarkerStyle = function geojsonMarkerStyle(feature) {
+        var type = feature.properties.entity_type;
+        var color = colors[type];
         return {
             opacity: 1,
             fill: true,
@@ -76,12 +78,12 @@ module.exports = map => {
         };
     };
 
-    const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
+    var markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
 
-    let focusId = null;
-    const dynamicStyle = feature => {
+    var focusId = null;
+    var dynamicStyle = function dynamicStyle(feature) {
         // console.debug('focus?', focus !== null);
         // se non definito id o definito e uguale all'area id
         if (!focusId || feature.area_id === focusId) {
@@ -98,17 +100,17 @@ module.exports = map => {
             };
         }
     };
-    const markerLayers = {
+    var markerLayers = {
         'layers': {
             'things': {
-                pointToLayer: function (feature, latlng) {
-                    let currentZoom = map.getZoom();
+                pointToLayer: function pointToLayer(feature, latlng) {
+                    var currentZoom = map.getZoom();
                     // if(feature.area_id)
                     // console.log(feature);
 
-                    let radius = scale(currentZoom, feature.properties.zoom_level);
-                    let weight = Math.min(radius, maxWeight);
-                    let style = Object.assign({
+                    var radius = scale(currentZoom, feature.properties.zoom_level);
+                    var weight = Math.min(radius, maxWeight);
+                    var style = Object.assign({
                         interactive: false
                     }, geojsonMarkerStyle(feature), {
                         weight: weight,
@@ -120,23 +122,23 @@ module.exports = map => {
             }
         }
     };
-    const mGrid = L.geoJsonGridLayer(markerUrl, markerLayers);
+    var mGrid = L.geoJsonGridLayer(markerUrl, markerLayers);
 
-    mGrid.update = () => {
-        let layer = mGrid.getLayers()[0];
+    mGrid.update = function () {
+        var layer = mGrid.getLayers()[0];
         // console.log(layer);
-        let features = layer[`_layers`];
-        let zoom = map.getZoom();
+        var features = layer['_layers'];
+        var zoom = map.getZoom();
         // console.log('nuovo raggio: ',scale(zoom));
-        for (let i in features) {
-            let feat = features[i];
+        for (var i in features) {
+            var feat = features[i];
             // console.log(features[i].feature.properties.zoom_level);
-            let level = feat.feature.properties.zoom_level;
-            let radius = scale(zoom, level);
-            let weight = Math.min(radius, maxWeight);
+            var level = feat.feature.properties.zoom_level;
+            var radius = scale(zoom, level);
+            var weight = Math.min(radius, maxWeight);
             feat.setRadius(radius);
             // creo il nuovo stile
-            let style = Object.assign({}, geojsonMarkerStyle(feat.feature), { weight: weight }, dynamicStyle(feat.feature));
+            var style = Object.assign({}, geojsonMarkerStyle(feat.feature), { weight: weight }, dynamicStyle(feat.feature));
             feat.setStyle(style);
             if (style.up) {
                 feat.bringToFront();
@@ -146,13 +148,15 @@ module.exports = map => {
         }
     };
     // cambia il focus
-    mGrid.setStyle = (id = null) => {
+    mGrid.setStyle = function () {
+        var id = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
+
         // console.debug('setting focus on ',id);
         focusId = id;
         mGrid.update();
     };
     // reset il focus
-    mGrid.resetStyle = () => {
+    mGrid.resetStyle = function () {
         focusId = null;
         mGrid.update();
     };
@@ -161,10 +165,12 @@ module.exports = map => {
 };
 
 },{}],2:[function(require,module,exports){
+"use strict";
+
 /**
  * Created by drpollo on 13/09/2017.
  */
-module.exports = (status, map) => {
+module.exports = function (status, map) {
 
     /* input events: changing areaViewer state
      * 1) resetViewEvent: void
@@ -173,25 +179,27 @@ module.exports = (status, map) => {
      * 4) toExploreEvent: void
      */
 
-    const locationZoom = 18;
+    var locationZoom = 18;
     // viewport events
-    const resetViewEvent = "areaViewer.resetView";
-    const setViewEvent = "areaViewer.setView";
-    const setBoundsEvent = "areaViewer.setBounds";
+    var resetViewEvent = "areaViewer.resetView";
+    var setViewEvent = "areaViewer.setView";
+    var setBoundsEvent = "areaViewer.setBounds";
+    var setContrastEvent = "areaViewer.setContrast";
+    var setLanguageEvent = "areaViewer.setLanguage";
     // state events
-    const focusToEvent = "areaViewer.focusTo";
-    const toExploreEvent = "areaViewer.toExplore";
+    var focusToEvent = "areaViewer.focusTo";
+    var toExploreEvent = "areaViewer.toExplore";
 
     /* output events: notify areaViewer change of state
      * 1) focusToEvent: {id}
      * 2) toExploreEvent: void
      */
     // state events
-    const focusOnEvent = "areaViewer.focusOn";
-    const exploreEvent = "areaViewer.explore";
+    var focusOnEvent = "areaViewer.focusOn";
+    var exploreEvent = "areaViewer.explore";
 
     // catch event listners
-    window.addEventListener(setBoundsEvent, function (e) {
+    document.addEventListener(setBoundsEvent, function (e) {
         console.log(setBoundsEvent, e.detail);
         // set bounds to
         if (!e.detail.bounds) {
@@ -200,8 +208,9 @@ module.exports = (status, map) => {
         status.restore();
         status.move(e.bounds);
     }, false);
+
     // catch event listners
-    window.addEventListener(setViewEvent, function (e) {
+    document.addEventListener(setViewEvent, function (e) {
         console.log(setViewEvent, e.detail);
         if (!e.detail.center) {
             return;
@@ -209,11 +218,22 @@ module.exports = (status, map) => {
         status.restore();
         map.setView(e.detail.center, e.detail.zoom || locationZoom);
     }, false);
-    window.addEventListener(resetViewEvent, function (e) {
+
+    document.addEventListener(resetViewEvent, function (e) {
         console.log(resetViewEvent, e.detail);
         // status.move();
     }, false);
-    window.addEventListener(focusToEvent, function (e) {
+
+    document.addEventListener(setContrastEvent, function (e) {
+        console.log(setContrastEvent, e.detail);
+        // todo set current map theme
+    }, false);
+    document.addEventListener(setLanguageEvent, function (e) {
+        console.log(setLanguageEvent, e.detail);
+        // todo set current language
+    }, false);
+
+    document.addEventListener(focusToEvent, function (e) {
         console.log(focusToEvent, e.detail);
         // check area id
         if (!e.detail.id) {
@@ -222,29 +242,57 @@ module.exports = (status, map) => {
         // focus on id
         status.focus(e.detail.id);
     }, false);
-    window.addEventListener(toExploreEvent, function (e) {
+
+    document.addEventListener(toExploreEvent, function (e) {
         console.log(toExploreEvent, e.detail);
         // restore the status of explorer
         status.restore();
     }, false);
+
+    /*
+     * Manager output messages
+     */
+    // notify reset action
+    status.observe.filter(function (state) {
+        return 'reset' in state;
+    }).subscribe(function () {
+        notifyAction(exploreEvent);
+    });
+    // notify focus action
+    status.observe.filter(function (state) {
+        return 'id' in state;
+    }).map(function (state) {
+        return state.id;
+    }).subscribe(function (id) {
+        notifyAction(focusOnEvent, { id: id });
+    });
+
+    function notifyAction(eventName, params) {
+        var detail = params || {};
+        var event = new CustomEvent(eventName, { detail: detail, bubbles: true, cancelable: false });
+        console.debug('notifying action', eventName, event.detail);
+        document.dispatchEvent(event);
+    }
 };
 
 },{}],3:[function(require,module,exports){
-module.exports = () => {
+'use strict';
+
+module.exports = function () {
     // colori
-    const colors = {
+    var colors = {
         'FL_GROUPS': '#3F7F91',
         'FL_EVENTS': '#88BA5C',
         'FL_NEWS': '#823256',
         'FL_ARTICLES': '#FFB310',
         'FL_PLACES': '#FE4336'
     };
-    const orange = "#ff7800",
-          blue = "#82b1ff",
-          green = "#33cd5f",
-          gray = "#dcdcdc";
+    var orange = "#ff7800",
+        blue = "#82b1ff",
+        green = "#33cd5f",
+        gray = "#dcdcdc";
 
-    const focusStyle = {
+    var focusStyle = {
         style: {
             color: orange,
             weight: 2,
@@ -256,8 +304,8 @@ module.exports = () => {
         pane: 'focusPane'
     };
 
-    const fLayer = L.geoJson([], focusStyle);
-    fLayer.setLayer = geoJson => {
+    var fLayer = L.geoJson([], focusStyle);
+    fLayer.setLayer = function (geoJson) {
         fLayer.clearLayers();
         fLayer.addData(geoJson);
     };
@@ -265,19 +313,21 @@ module.exports = () => {
 };
 
 },{}],4:[function(require,module,exports){
-module.exports = () => {
-    const orange = "#ff7800";
-    const blue = "#82b1ff";
-    const green = "#33cd5f";
-    const gray = "#dcdcdc";
+"use strict";
+
+module.exports = function () {
+    var orange = "#ff7800";
+    var blue = "#82b1ff";
+    var green = "#33cd5f";
+    var gray = "#dcdcdc";
 
     // reset styles
-    const resetStyle = {
+    var resetStyle = {
         color: 'transparent',
         weight: 0,
         fillColor: 'transparent'
     };
-    const highlightStyle = {
+    var highlightStyle = {
         color: orange,
         weight: 2,
         fill: false,
@@ -286,7 +336,7 @@ module.exports = () => {
         fillOpacity: 0.5
     };
 
-    const featureStyle = function (feature, zoom) {
+    var featureStyle = function featureStyle(feature, zoom) {
         // console.log(feature,zoom);
         return {
             fill: false,
@@ -294,7 +344,7 @@ module.exports = () => {
         };
     };
 
-    const vectorMapStyling = {
+    var vectorMapStyling = {
         nazioni: featureStyle,
         regioni: featureStyle,
         provincie: featureStyle,
@@ -312,7 +362,7 @@ module.exports = () => {
         interactive: featureStyle
     };
 
-    const ordering = function (layers, zoom) {
+    var ordering = function ordering(layers, zoom) {
         // console.debug('reordering....',layers);
         switch (zoom) {
             case 1:
@@ -382,23 +432,25 @@ module.exports = () => {
     vectorMapStyling.roads = vectorMapStyling.road;
 
     // config del layer
-    const vectormapConfig = {
+    var vectormapConfig = {
         rendererFactory: L.svg.tile,
         attribution: false,
         vectorTileLayerStyles: vectorMapStyling,
         interactive: true,
         pane: 'vectorGridPane',
-        getFeatureId: function (e) {
+        getFeatureId: function getFeatureId(e) {
             return e.properties.id;
         },
         layersOrdering: ordering
     };
     // const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
     //     const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
-    const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
-    const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
-    let hightlightId = null;
-    vGrid.highlight = (id = null) => {
+    var vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
+    var vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
+    var hightlightId = null;
+    vGrid.highlight = function () {
+        var id = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
+
         if (hightlightId) {
             vGrid.resetFeatureStyle(hightlightId);
         }
@@ -407,7 +459,7 @@ module.exports = () => {
             vGrid.setFeatureStyle(id, highlightStyle);
         }
     };
-    vGrid.resetStyle = () => {
+    vGrid.resetStyle = function () {
         if (hightlightId) {
             vGrid.resetFeatureStyle(hightlightId);
             hightlightId = null;
@@ -417,7 +469,11 @@ module.exports = () => {
 };
 
 },{}],5:[function(require,module,exports){
-(function () {
+'use strict';
+
+// const domready = require("domready");
+
+var AreaViewer = function AreaViewer(params) {
     /**
      * Created by drpollo on 21/05/2017.
      */
@@ -430,110 +486,70 @@ module.exports = () => {
     // require('../libs/leaflet.control-geocoder');
 
 
-    const within = require('@turf/within');
-    const turf = require('@turf/helpers');
+    var within = require('@turf/within');
+    var turf = require('@turf/helpers');
     /*
      * moduli
      */
 
     // gestore di stato
-    const Status = require('./status');
-    const status = Status();
+    var Status = require('./status');
+    var status = Status();
     // mappa generale
-    const Map = require('./map');
-    const map = Map(status);
+    var Map = require('./map');
+    var map = Map(status);
     // events
-    const Events = require('./events');
-    const events = Events(status, map);
+    var Events = require('./events');
+    var events = Events(status, map);
 
-    const markerGrid = require('./datasource.js');
-    const mGrid = markerGrid(map);
+    var markerGrid = require('./datasource.js');
+    var mGrid = markerGrid(map);
 
-    const vectorGrid = require('./interactive.js');
-    const vGrid = vectorGrid();
+    var vectorGrid = require('./interactive.js');
+    var vGrid = vectorGrid();
 
-    const focusLayer = require('./focus');
-    const fLayer = focusLayer();
+    var focusLayer = require('./focus');
+    var fLayer = focusLayer();
 
     // utilities
-    const Utils = require('./utils');
-    const utils = Utils();
+    var Utils = require('./utils');
+    var utils = Utils();
 
     // geocoder
-    const geocoderSettings = {
+    var geocoderSettings = {
         defaultMarkGeocode: false,
         position: 'topleft'
     };
     geoCoder();
-    const geocoder = L.Control.geocoder(geocoderSettings);
+    var geocoder = L.Control.geocoder(geocoderSettings);
 
     /*
      * costanti e defaults
      */
 
+    var lang = 'en';
+
     // colori
-    const colors = {
+    var colors = {
         'FL_GROUPS': '#3F7F91',
         'FL_EVENTS': '#88BA5C',
         'FL_NEWS': '#823256',
         'FL_ARTICLES': '#FFB310',
         'FL_PLACES': '#FE4336'
     };
-    const orange = "#ff7800",
-          blue = "#82b1ff",
-          green = "#33cd5f",
-          gray = "#dcdcdc";
+    var orange = "#ff7800",
+        blue = "#82b1ff",
+        green = "#33cd5f",
+        gray = "#dcdcdc";
 
     // const baselayer = '';
-    const baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
-    const contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
+    var baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
+    var contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
     // default contrast
-    let contrast = false;
-
-    // language
-    const defaultLang = 0;
-    const languages = ['en', 'it'];
-    const userLang = navigator.language || navigator.userLanguage;
-    let lang = languages[defaultLang];
-    for (let i = 0; i < languages.length; i++) {
-        let l = languages[i];
-        if (userLang.search(l) > -1) {
-            lang = l;
-        }
-    }
-
-    // default date
-    let date = new Date();
-    // get search params
-    // check for IE
-    const ua = window.navigator.userAgent;
-    const msie = ua.indexOf("MSIE ");
-
-    // If Internet Explorer, return version number
-    if (msie > 0) {
-        params = escape(location.search);
-    } else {
-        params = new URL(location).searchParams;
-    }
-
-    if (params) {
-        // override location from get params
-        // c = lat:lng:zoom > centre
-        if (params.get("c")) {
-            let c = params.get("c");
-        }
-        // contrast
-        contrast = params.get('contrast') === 'true';
-        // lang > default agent or "en"
-        lang = params.get('lang') ? params.get('lang') : lang;
-        // date > current date
-        date = params.get("date") ? params.get("date") : date;
-    } else {
-        console.error('cannot retrieve search params from URL location');
-    }
+    var contrast = false;
 
     // map setup
-    const layers = {
+    var layers = {
         base: L.tileLayer(baselayer, {
             maxZoom: 20,
             attribution: '<a href="http://openstreetmap.org" target="_blank">OpenStreetMap</a> contributors | <a href="http://mapbox.com" target="_blank">Mapbox</a>'
@@ -543,8 +559,52 @@ module.exports = () => {
             attribution: '<a href="http://openstreetmap.org" target="_blank">OpenStreetMap</a> contributors | <a href="http://mapbox.com" target="_blank">Mapbox</a>'
         })
     };
+
     // cartography
     layers[contrast ? 'contrast' : 'base'].addTo(map);
+
+    /*
+     * Infobox management
+     * tag id = "label"
+     *
+     */
+    var tooltipLabel = {
+        it: 'Click sulla mappa per esplorare',
+        en: 'Click the map to explore'
+    };
+    var tooltipCancel = {
+        it: "Indietro",
+        en: 'Back'
+    };
+    var label = document.getElementById('label');
+    // set labels
+    var defIcon = '<button " title="' + tooltipLabel[lang] + '">&#x02713;</button>';
+    var defaultLabel = defIcon + tooltipLabel[lang];
+    label.innerHTML = defaultLabel;
+    var cancelButton = '<button onclick="cancel()" title="' + tooltipCancel[lang] + '">&#x2715;</button>';
+    // set label current focus
+    var setLabel = function setLabel(params) {
+        // set default content
+        var content = 'lat: ' + params.lat + ', lon:' + params.lng + ', zoom: ' + params.zoom_level;
+        if (params.name && params.name !== params.type) {
+            // set displa_name
+            content = params.name;
+        } else if (params.display_name) {
+            // set display_name
+            content = params.display_name;
+        } else if (params.type) {
+            // set type
+            content = params.type;
+        }
+        label.innerHTML = cancelButton + content;
+    };
+    // reset focus
+    var cancel = function cancel() {
+        // reset label
+        label.innerHTML = defaultLabel;
+        // exit focus
+        status.restore();
+    };
 
     /*
      * Inizializzazioni
@@ -565,28 +625,57 @@ module.exports = () => {
      */
     // fit to bounds
     // valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
-    status.observe.filter(state => 'bounds' in state).map(state => state.bounds).subscribe(bounds => {
+    status.observe.filter(function (state) {
+        return 'bounds' in state;
+    }).map(function (state) {
+        return state.bounds;
+    }).subscribe(function (bounds) {
         // map.removeLayer(mGrid);
         map.fitBounds(bounds);
         // map.addLayer(mGrid);
     });
+
     // draw focus border
-    status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
+    status.observe.filter(function (state) {
+        return 'id' in state;
+    }).map(function (state) {
+        return state.id;
+    }).subscribe(function (id) {
+        return vGrid.highlight(id);
+    });
+    // todo fill label
+
     // set default style
-    status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => mGrid.setStyle(id));
+    status.observe.filter(function (state) {
+        return 'id' in state;
+    }).map(function (state) {
+        return state.id;
+    }).subscribe(function (id) {
+        return mGrid.setStyle(id);
+    });
     // add focus layer
-    status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
+    status.observe.filter(function (state) {
+        return 'features' in state;
+    }).map(function (state) {
+        return state.features;
+    }).subscribe(function (features) {
+        return fLayer.setLayer(features);
+    });
     // reset del focus
-    status.observe.filter(state => 'reset' in state).subscribe(() => {
+    status.observe.filter(function (state) {
+        return 'reset' in state;
+    }).subscribe(function () {
         mGrid.resetStyle();
         vGrid.resetStyle();
         fLayer.clearLayers();
     });
+    //
+
 
     /*
      * Gestione eventi mappa
      */
-    vGrid.on('click', e => {
+    vGrid.on('click', function (e) {
         if (e.originalEvent.defaultPrevented) {
             return;
         }
@@ -594,13 +683,13 @@ module.exports = () => {
 
         console.debug('click event at', e.latlng);
         // recupero focus se attuale
-        let focus = status.getFocus();
+        var focus = status.getFocus();
         if (focus) {
             // console.debug('click inside focus area',focus);
-            let pt = turf.point([e.latlng.lng, e.latlng.lat]);
-            let geoJSON = { type: "FeatureCollection", features: focus.features };
+            var pt = turf.point([e.latlng.lng, e.latlng.lat]);
+            var geoJSON = { type: "FeatureCollection", features: focus.features };
             console.debug('within?', pt, geoJSON);
-            let result = within(turf.featureCollection([pt]), geoJSON);
+            var result = within(turf.featureCollection([pt]), geoJSON);
             console.debug('within?', result);
             if (result.features.length < 1) {
                 status.restore();
@@ -613,12 +702,12 @@ module.exports = () => {
         }
     });
     // prima del cambio di zoom
-    map.on('moveend', e => {
+    map.on('moveend', function (e) {
         // update della posizione nello stato
         status.move(map.getBounds());
     });
     // fine cambio di zoom
-    map.on('zoomend', e => {
+    map.on('zoomend', function (e) {
         // aggiorno stile marker
         // todo gestione focus nella scelta di stile
         mGrid.update();
@@ -630,25 +719,29 @@ module.exports = () => {
         map.setView(e.geocode.center, locationZoom);
         // status.focus();
     });
-})();
+};
+// domready(AreaViewer);
+// export {AreaViewer};
+module.exports.AreaViewer = AreaViewer;
+AreaViewer();
 
 },{"../libs/Leaflet.VectorGrid":9,"../libs/leaflet-geojson-gridlayer":10,"./datasource.js":1,"./events":2,"./focus":3,"./interactive.js":4,"./map":6,"./status":7,"./utils":8,"@turf/helpers":11,"@turf/within":14,"leaflet":15}],6:[function(require,module,exports){
+'use strict';
+
 /**
  * Created by drpollo on 20/07/2017.
  */
-
 // definition of the map
 
-
-module.exports = status => {
+module.exports = function (status) {
 
     // defaults
-    const initZoom = 14;
-    const initLat = 45.070312;
-    const initLon = 7.686856;
-    let zoomControlPosition = 'bottomright';
+    var initZoom = 14;
+    var initLat = 45.070312;
+    var initLon = 7.686856;
+    var zoomControlPosition = 'bottomright';
 
-    const map = L.map('areaViewer').setView([initLat, initLon], initZoom);
+    var map = L.map('areaViewer').setView([initLat, initLon], initZoom);
     // control position
     map.zoomControl.setPosition(zoomControlPosition);
 
@@ -667,30 +760,34 @@ module.exports = status => {
 };
 
 },{}],7:[function(require,module,exports){
-module.exports = (params = {}) => {
+'use strict';
 
-    const Rx = require('rxjs/Rx');
-    const Utils = require('./utils');
-    const utils = Utils();
+module.exports = function () {
+    var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+
+
+    var Rx = require('rxjs/Rx');
+    var Utils = require('./utils');
+    var utils = Utils();
     // inizializzazione status
-    const initFocus = {
+    var initFocus = {
         "id": null,
         "bounds": null,
         "features": []
     };
-    const initExplorer = {
+    var initExplorer = {
         "bounds": null,
         "reset": true
     };
-    const store = {
+    var store = {
         "focus": initFocus,
         "explorer": initExplorer
     };
 
-    let current = "explorer";
+    var current = "explorer";
 
     // azioni dello stato
-    const status = {
+    var status = {
         "focus": null,
         "move": null,
         "restore": null,
@@ -701,7 +798,7 @@ module.exports = (params = {}) => {
     // inizializzazione funzione con l'observer
     function focusHandler(observer) {
         // gestiore del focus
-        return entry => {
+        return function (entry) {
             switch (current) {
                 case "focus":
                     // check if focus is inside the current focus
@@ -723,14 +820,14 @@ module.exports = (params = {}) => {
         // set id
         store["focus"].id = entry.id;
         // set bounds
-        let bounds = null;
+        var bounds = null;
         if (entry.bbox) {
-            let bbox = JSON.parse(entry.bbox);
+            var bbox = JSON.parse(entry.bbox);
             bounds = L.latLngBounds(L.latLng(bbox[1], bbox[0]), L.latLng(bbox[3], bbox[2]));
         }
         store["focus"].bounds = bounds;
         // recupero il contenuto
-        utils.getFeature(entry.id).then(res => {
+        utils.getFeature(entry.id).then(function (res) {
             // console.debug('getFeature',id);
             // aggiungo il contenuto dello stato
             if (Array.isArray(res)) {
@@ -745,7 +842,7 @@ module.exports = (params = {}) => {
             // propago il nuovo stato
             // console.debug("stato focus",store["focus"]);
             observer.next(store["focus"]);
-        }, err => {
+        }, function (err) {
             console.error('getFeature', err);
         });
     }
@@ -753,7 +850,7 @@ module.exports = (params = {}) => {
     status.observe = Rx.Observable.create(function (observer) {
         // costruttori delle azioni di cambio di stato
         status.focus = focusHandler(observer);
-        status.move = bounds => {
+        status.move = function (bounds) {
             // console.log('saving? ',current);
             switch (current) {
                 case "focus":
@@ -763,7 +860,7 @@ module.exports = (params = {}) => {
                     store["explorer"].bounds = bounds;
             }
         };
-        status.restore = () => {
+        status.restore = function () {
             if (current === "explorer") return;
 
             current = "explorer";
@@ -773,7 +870,7 @@ module.exports = (params = {}) => {
     // init objervable
     status.observe.subscribe();
     // get current focus
-    status.getFocus = () => {
+    status.getFocus = function () {
         if (current === "focus") return store["focus"];else return null;
     };
     // console.log('status',status);
@@ -781,15 +878,17 @@ module.exports = (params = {}) => {
 };
 
 },{"./utils":8,"rxjs/Rx":24}],8:[function(require,module,exports){
-module.exports = () => {
+"use strict";
+
+module.exports = function () {
 
     // const detailsUrl = "http://localhost:3095/areas/";
     //     const detailsUrl = "https://tiles.fldev.di.unito.it/areas/";
-    const detailsUrl = "https://tiles.firstlife.org/areas/";
+    var detailsUrl = "https://tiles.firstlife.org/areas/";
 
     // cambia stile
     function hideStyle(id) {
-        return feature => {
+        return function (feature) {
             // console.debug('new style for', (feature.area_id === id ) );
             if (feature.area_id && feature.area_id === id) {
                 // console.debug('dentro',feature.id);
@@ -809,19 +908,21 @@ module.exports = () => {
     // get feature by id
     function getFeature(id) {
         // console.log('getFeature', id);
-        return new Promise((resolve, reject) => {
-            let xhr = new XMLHttpRequest();
-            let url = detailsUrl.concat(id);
+        return new Promise(function (resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            var url = detailsUrl.concat(id);
             // console.log('asking to ', url);
             xhr.open("GET", url);
-            xhr.onload = () => {
+            xhr.onload = function () {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     resolve(JSON.parse(xhr.response));
                 } else {
                     reject(xhr.statusText);
                 }
             };
-            xhr.onerror = () => reject(xhr.statusText);
+            xhr.onerror = function () {
+                return reject(xhr.statusText);
+            };
             xhr.send();
         });
     }

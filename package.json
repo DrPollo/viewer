@@ -3,6 +3,18 @@
   "version": "1.0.0",
   "description": "AreaViwer: map-based viewer for FirstLife area-based aggregations of crowdsourced data.",
   "main": "index.js",
+  "browserify": {
+    "transform": [
+      [
+        "babelify",
+        {
+          "presets": [
+            "es2015"
+          ]
+        }
+      ]
+    ]
+  },
   "scripts": {
     "test": "gulp test",
     "start": "gulp test",
@@ -22,6 +34,7 @@
   "dependencies": {
     "@turf/helpers": "^4.5.2",
     "@turf/within": "^4.5.2",
+    "domready": "^1.0.8",
     "gulp-babel-minify": "^0.2.0",
     "leaflet": "^1.0.3",
     "leaflet.vectorgrid": "^1.2.0",

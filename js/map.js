@@ -1,10 +1,7 @@
 /**
  * Created by drpollo on 20/07/2017.
  */
-
-
 // definition of the map
-
 
 module.exports = (status) => {
 

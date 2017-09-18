@@ -1,8 +1,12 @@
-(function () {
+'use strict';
+
+// const domready = require("domready");
+
+const AreaViewer = (params) => {
     /**
      * Created by drpollo on 21/05/2017.
      */
-// librerie
+    // librerie
     require('leaflet');
 
     // librerie ad hoc
@@ -17,13 +21,13 @@
      * moduli
      */
 
-// gestore di stato
+    // gestore di stato
     const Status = require('./status');
     const status = Status();
-// mappa generale
+    // mappa generale
     const Map = require('./map');
     const map = Map(status);
-// events
+    // events
     const Events = require('./events');
     const events = Events(status, map);
 
@@ -36,7 +40,7 @@
     const focusLayer = require('./focus');
     const fLayer = focusLayer();
 
-// utilities
+    // utilities
     const Utils = require('./utils');
     const utils = Utils();
 
@@ -53,6 +57,8 @@
     /*
      * costanti e defaults
      */
+
+    let lang = 'en';
 
     // colori
     const colors = {
@@ -74,50 +80,6 @@
     let contrast = false;
 
 
-    // language
-    const defaultLang = 0;
-    const languages = ['en', 'it'];
-    const userLang = navigator.language || navigator.userLanguage;
-    let lang = languages[defaultLang];
-    for (let i = 0; i < languages.length; i++) {
-        let l = languages[i];
-        if (userLang.search(l) > -1) {
-            lang = l;
-        }
-    }
-
-
-// default date
-    let date = new Date();
-// get search params
-// check for IE
-    const ua = window.navigator.userAgent;
-    const msie = ua.indexOf("MSIE ");
-
-// If Internet Explorer, return version number
-    if (msie > 0) {
-        params = escape(location.search);
-    } else {
-        params = (new URL(location)).searchParams;
-    }
-
-    if (params) {
-        // override location from get params
-        // c = lat:lng:zoom > centre
-        if (params.get("c")) {
-            let c = params.get("c");
-        }
-        // contrast
-        contrast = params.get('contrast') === 'true';
-        // lang > default agent or "en"
-        lang = params.get('lang') ? params.get('lang') : lang;
-        // date > current date
-        date = params.get("date") ? params.get("date") : date;
-    } else {
-        console.error('cannot retrieve search params from URL location');
-    }
-
-
 // map setup
     const layers = {
         base: L.tileLayer(baselayer, {
@@ -129,8 +91,53 @@
             attribution: '<a href="http://openstreetmap.org" target="_blank">OpenStreetMap</a> contributors | <a href="http://mapbox.com" target="_blank">Mapbox</a>'
         })
     };
+
 // cartography
     layers[contrast ? 'contrast' : 'base'].addTo(map);
+
+
+    /*
+     * Infobox management
+     * tag id = "label"
+     *
+     */
+    const tooltipLabel = {
+        it : 'Click sulla mappa per esplorare',
+        en : 'Click the map to explore'
+    };
+    const tooltipCancel = {
+        it : "Indietro",
+        en : 'Back'
+    };
+    const label = document.getElementById('label');
+    // set labels
+    const defIcon = '<button " title="'+tooltipLabel[lang]+'">&#x02713;</button>';
+    const defaultLabel = defIcon+tooltipLabel[lang];
+    label.innerHTML = defaultLabel;
+    const cancelButton = '<button onclick="cancel()" title="'+tooltipCancel[lang]+'">&#x2715;</button>';
+    // set label current focus
+    const setLabel = (params) => {
+        // set default content
+        let content = 'lat: '+params.lat+', lon:'+params.lng+', zoom: '+params.zoom_level;
+        if(params.name && params.name !== params.type){
+            // set displa_name
+            content = params.name;
+        } else if(params.display_name){
+            // set display_name
+            content = params.display_name;
+        } else if(params.type){
+            // set type
+            content = params.type;
+        }
+        label.innerHTML = cancelButton+content;
+    };
+    // reset focus
+    const cancel = () => {
+        // reset label
+        label.innerHTML = defaultLabel;
+        // exit focus
+        status.restore();
+    };
 
 
     /*
@@ -151,32 +158,36 @@
     /*
      * gestione del focus
      */
-// fit to bounds
-// valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
+    // fit to bounds
+    // valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
     status.observe.filter(state => 'bounds' in state).map(state => state.bounds).subscribe(bounds => {
         // map.removeLayer(mGrid);
         map.fitBounds(bounds);
         // map.addLayer(mGrid);
     });
-// draw focus border
+
+    // draw focus border
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
-// set default style
+    // todo fill label
+
+    // set default style
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => mGrid.setStyle(id));
-// add focus layer
+    // add focus layer
     status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
-// reset del focus
+    // reset del focus
     status.observe.filter(state => 'reset' in state).subscribe(() => {
         mGrid.resetStyle();
         vGrid.resetStyle();
         fLayer.clearLayers();
     });
+    //
 
 
     /*
      * Gestione eventi mappa
      */
     vGrid.on('click', e => {
-        if (e.originalEvent.defaultPrevented){
+        if (e.originalEvent.defaultPrevented) {
             return;
         }
         e.originalEvent.preventDefault();
@@ -215,8 +226,14 @@
 
     // click su risultato geocode
     geocoder.on('markgeocode', function (e) {
-        console.log('geocode',e.geocode.properties.osm_id);
-        map.setView(e.geocode.center,locationZoom);
+        console.log('geocode', e.geocode.properties.osm_id);
+        map.setView(e.geocode.center, locationZoom);
         // status.focus();
     });
-}());
+
+
+};
+// domready(AreaViewer);
+// export {AreaViewer};
+module.exports.AreaViewer = AreaViewer;
+AreaViewer();

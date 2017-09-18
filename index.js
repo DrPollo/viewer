@@ -1,5 +1,8 @@
-'use strict';
+//'use strict';
 
+// import {AreaViewer} from './build/bundle.js'
+// setTimeout(function(){new AreaViewer();},5000);
+// console.log(this);
 
 
 
@@ -19,9 +22,6 @@ var zoomControlPosition = 'bottomright';
 var baselayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj0tausco00tb2rt87i5c8pi0/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
 var contrastlayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj167l5m800452rqsb9y2ijuq/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
 
-// marker icon
-var htmlIcon = '<div class="pin"></div><div class="pulse"></div>';
-var pinIcon = L.divIcon({className: 'pointer',html:htmlIcon, iconSize:[30,30],iconAnchor:[15,15]});
 
 // vectorGrid
 // var vectormapUrl = "//localhost:3095/tile/{z}/{x}/{y}";
@@ -40,15 +40,6 @@ var label = document.getElementById('label');
 // language
 var defaultLang = 0;
 var languages = ['en','it'];
-// tooltips
-var tooltipLabel = {
-    it : 'Click per localizzare',
-    en : 'Click to geolocate'
-};
-var tooltipCancel = {
-    it : 'Click per cancellare la selezione',
-    en : 'Click to reset location'
-};
 var userLang = navigator.language || navigator.userLanguage;
 var lang = languages[defaultLang];
 for(var i = 0; i < languages.length; i++){
@@ -57,6 +48,8 @@ for(var i = 0; i < languages.length; i++){
         lang = l;
     }
 }
+
+
 
 // recover search params
 
@@ -92,16 +85,104 @@ if(params){
 
 
 
-// dispatch events
-function broadcastEvent(eventName, params) {
-    var event = new CustomEvent(eventName, params);
-    window.dispatchEvent(event);
-}
-function emitEvent(params) {
-    if(!domain){
-        return;
-    }
-    top.postMessage(params, domain);
+
+/*
+ * Message names
+ */
+// input events
+var focusOnEvent = "areaViewer.focusOn";
+var exploreEvent = "areaViewer.explore";
+
+// output events
+var resetViewEvent = "areaViewer.resetView";
+var setViewEvent = "areaViewer.setView";
+var setBoundsEvent = "areaViewer.setBounds";
+var setContrastEvent = "areaViewer.setContrast";
+var setLanguageEvent = "areaViewer.setLanguage";
+var focusToEvent = "areaViewer.focusTo";
+var toExploreEvent = "areaViewer.toExplore";
+
+
+/*
+ * Message broker
+ * Output messages: receives messages from AreaViewer and emit them to top
+ * Input messages: receives messages from top and broadcast them to AreaViewer
+ */
+// Output messages
+// todo send focus message
+// todo send reset message
+// todo send set source message
+// top.postMessage({src:'AreaViewer',reset:true},domain);
+// emitEvent('areaViewer.resetView',{detail:{}});
+
+
+// input messages
+// todo set contrast
+// todo set viewport
+// todo set focus
+// todo set lang
+// todo set source
+
+
+
+
+/*
+ * Init AreaViewer status
+ */
+function initAreaViewer(){
+    console.debug("init AreaViewer");
+    initListners();
+    initStatus ();
 }
 
-broadcastEvent('areaViewer.resetView',{detail:{}});
+// init status
+function initStatus (){
+    console.debug('init status');
+    // set default lang
+    broadcastEvent(setLanguageEvent,{lang: lang});
+    // set default contrast
+    broadcastEvent(setContrastEvent,{contrast: contrast});
+    // set default viewport
+    broadcastEvent(setViewEvent, {lat: lat, lng:lon, zoom:zoom});
+    // todo set focus
+    // todo set source
+
+
+}
+
+// init output message listners
+function initListners() {
+    console.debug("init output listners");
+    document.addEventListener(focusOnEvent,function (e) {
+        console.debug(focusOnEvent,e.detail);
+        emitEvent(focusOnEvent,e.detail);
+    },true);
+    document.addEventListener(exploreEvent,function (e) {
+        console.debug(exploreEvent,e.detail);
+        emitEvent(exploreEvent,e.detail);
+    },true);
+}
+
+
+
+/*
+ * dispatch events
+ * broadcast > to areaViewer
+ * emit > to top
+ */
+
+function broadcastEvent(eventName, params) {
+    var detail = params || {};
+    var event = new CustomEvent(eventName, {detail: detail });
+    console.debug('broadcasting',eventName,event.detail);
+    document.dispatchEvent(event);
+}
+function emitEvent(eventName, params) {
+    if(!domain){
+        console.error("domain not defined: cannot emit message",eventName);
+        return;
+    }
+    var obj = params || {};
+    console.debug('emitting',params, 'to',domain);
+    top.postMessage(obj.extend({"event":eventName}), domain);
+}

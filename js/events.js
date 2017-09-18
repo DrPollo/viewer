@@ -15,6 +15,8 @@ module.exports = (status,map) => {
     const resetViewEvent = "areaViewer.resetView";
     const setViewEvent = "areaViewer.setView";
     const setBoundsEvent = "areaViewer.setBounds";
+    const setContrastEvent = "areaViewer.setContrast";
+    const setLanguageEvent = "areaViewer.setLanguage";
     // state events
     const focusToEvent = "areaViewer.focusTo";
     const toExploreEvent = "areaViewer.toExplore";
@@ -31,35 +33,66 @@ module.exports = (status,map) => {
 
 
     // catch event listners
-    window.addEventListener(setBoundsEvent,function (e) {
+    document.addEventListener(setBoundsEvent,function (e) {
         console.log(setBoundsEvent,e.detail);
         // set bounds to
         if(!e.detail.bounds){ return; }
         status.restore();
         status.move(e.bounds);
     },false);
+
     // catch event listners
-    window.addEventListener(setViewEvent,function (e) {
+    document.addEventListener(setViewEvent,function (e) {
         console.log(setViewEvent,e.detail);
         if(!e.detail.center){ return; }
         status.restore();
         map.setView(e.detail.center,e.detail.zoom || locationZoom);
     },false);
-    window.addEventListener(resetViewEvent,function (e) {
+
+    document.addEventListener(resetViewEvent,function (e) {
         console.log(resetViewEvent,e.detail);
         // status.move();
     },false);
-    window.addEventListener(focusToEvent,function (e) {
+
+    document.addEventListener(setContrastEvent,function (e) {
+        console.log(setContrastEvent,e.detail);
+        // todo set current map theme
+    },false);
+    document.addEventListener(setLanguageEvent,function (e) {
+        console.log(setLanguageEvent,e.detail);
+        // todo set current language
+    },false);
+
+
+    document.addEventListener(focusToEvent,function (e) {
         console.log(focusToEvent,e.detail);
         // check area id
         if(!e.detail.id){  return; }
         // focus on id
         status.focus(e.detail.id);
     },false);
-    window.addEventListener(toExploreEvent,function (e) {
+
+    document.addEventListener(toExploreEvent,function (e) {
         console.log(toExploreEvent,e.detail);
         // restore the status of explorer
         status.restore();
     },false);
 
+
+
+    /*
+     * Manager output messages
+     */
+    // notify reset action
+    status.observe.filter(state => 'reset' in state).subscribe(() => { notifyAction(exploreEvent); });
+    // notify focus action
+    status.observe.filter(state => 'id' in state).map(state => state.id).subscribe((id) => { notifyAction(focusOnEvent,{id:id}); });
+
+
+    function notifyAction(eventName, params) {
+        let detail = params || {};
+        let event = new CustomEvent(eventName, { detail: detail, bubbles: true,cancelable: false });
+        console.debug('notifying action',eventName,event.detail);
+        document.dispatchEvent(event);
+    }
 };
