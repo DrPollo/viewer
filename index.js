@@ -33,6 +33,7 @@ var contrast = false;
 var domain = null;
 var mode = false;
 var params = null;
+var focus = false;
 
 var label = document.getElementById('label');
 
@@ -73,6 +74,7 @@ if(params){
     zoom = params.get('zoom') ? params.get('zoom') : zoom;
     contrast = params.get('contrast') === 'true' ;
     lang = params.get('lang') ? params.get('lang') : lang;
+    focus = params.get('focus') ? params.get('focus') : false;
     // recover domain param (used for security reasons)
     domain = params.get('domain');
     // if domain does not exist trows a console error
@@ -161,7 +163,12 @@ function initStatus (){
     broadcastEvent(setContrastEvent,{contrast: contrast});
     // set default viewport
     broadcastEvent(setViewEvent, {lat: lat, lng:lon, zoom:zoom});
-    // todo set focus
+    // set focus
+    if(focus) {
+        setTimeout(function(){
+            broadcastEvent(focusToEvent,{id:focus});
+        },1500);
+    }
     // todo set source
     // todo set priority: {highlight:'', exluded:[]}
 }
