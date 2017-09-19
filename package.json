@@ -36,9 +36,11 @@
     "@turf/helpers": "^4.5.2",
     "@turf/within": "^4.5.2",
     "gulp-babel-minify": "^0.2.0",
+    "jquery": "^3.2.1",
     "leaflet": "^1.0.3",
     "leaflet.vectorgrid": "^1.2.0",
     "mapbox.js": "^3.1.0",
+    "moment": "^2.18.1",
     "rxjs": "^5.4.2"
   },
   "devDependencies": {

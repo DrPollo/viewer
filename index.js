@@ -34,6 +34,11 @@ var domain = null;
 var mode = false;
 var params = null;
 var focus = false;
+var priority = {
+    highlight: [],
+    background: false,
+    exclude: false
+};
 
 var label = document.getElementById('label');
 
@@ -50,8 +55,6 @@ for(var i = 0; i < languages.length; i++){
     }
 }
 
-
-
 // recover search params
 
 // check for IE
@@ -65,21 +68,41 @@ if (msie > 0) {
     params = (new URL(location)).searchParams;
 }
 
-
+var currentParams = {};
 
 if(params){
 // override location from get params
     lat = params.get('lat') ? params.get('lat') : lat;
     lon = params.get('lon') ? params.get('lon') : lon;
     zoom = params.get('zoom') ? params.get('zoom') : zoom;
-    contrast = params.get('contrast') === 'true' ;
+    currentParams.c = lat+':'+lon+':'+zoom;
+    contrast = params.get('contrast') === 'true';
+    currentParams.contast = contrast;
     lang = params.get('lang') ? params.get('lang') : lang;
+    currentParams.lang = lang;
     focus = params.get('focus') ? params.get('focus') : false;
-    // recover domain param (used for security reasons)
-    domain = params.get('domain');
+    currentParams.focus = focus;
+
     // if domain does not exist trows a console error
-    if(!domain){
+    if(params.get('domain')){
+        // recover domain param (used for security reasons)
+        domain = params.get('domain');
+        currentParams.domain = domain;
+    }else{
         console.error('missing mandatory param: "domain"');
+    }
+    // handling priority params
+    if(params.get('highlight')){
+        priority.highlight = params.get('highlight').split(",") || [];
+        currentParams.highlight = priority.highlight;
+    }
+    if(params.get('background')){
+        priority.background = params.get('background').split(",") || false;
+        currentParams.background = priority.background;
+    }
+    if(params.get('exclude')){
+        priority.exclude = params.get('exclude').split(",") || false;
+        currentParams.exclude = priority.exclude;
     }
 }else{
     console.error('cannot retrieve search params from URL location');
@@ -94,6 +117,7 @@ if(params){
 // input events
 var focusOnEvent = "areaViewer.focusOn";
 var exploreEvent = "areaViewer.explore";
+var changePositionEvent = "areaViewer.position";
 
 // output events
 var resetViewEvent = "areaViewer.resetView";
@@ -101,6 +125,7 @@ var setViewEvent = "areaViewer.setView";
 var setBoundsEvent = "areaViewer.setBounds";
 var setContrastEvent = "areaViewer.setContrast";
 var setLanguageEvent = "areaViewer.setLanguage";
+var setPriorityEvent = "areaViewer.setPriority";
 var focusToEvent = "areaViewer.focusTo";
 var toExploreEvent = "areaViewer.toExplore";
 
@@ -170,21 +195,40 @@ function initStatus (){
             broadcastEvent(focusToEvent,{id:focus});
         },1500);
     }
-    // todo set source
-    // todo set priority: {highlight:'', exluded:[]}
+    // set priority: {highlight:[], background:[], exclude:[]}
+    if(priority.highlight.length > 0 || priority.highlight.length > 0 || priority.highlight.length > 0){
+        setTimeout(function(){
+            broadcastEvent(setPriorityEvent,{priority:priority});
+        },1500);
+    }
 }
 
 // init output message listners
 function initListners() {
-    console.debug("init output listners");
+    // console.debug("init output listners")
+    // enter in focus mode
     document.addEventListener(focusOnEvent,function (e) {
         console.debug(focusOnEvent,e.detail);
+        //change search param > add focus=id
+        if(!e.detail.id){return;}
+        updateQueryParams('focus',e.detail.id);
         emitEvent(focusOnEvent,e.detail);
     },true);
+    // back to explore mode
     document.addEventListener(exploreEvent,function (e) {
         console.debug(exploreEvent,e.detail);
+        //change search param > remove focus=id
+        updateQueryParams('focus',null);
         emitEvent(exploreEvent,e.detail);
     },true);
+    // update position
+    document.addEventListener(changePositionEvent,function (e) {
+        console.debug(changePositionEvent,e.detail);
+        // update c param
+        if(!e.detail.c){return;}
+        updateQueryParams('c',e.detail.c);
+        emitEvent(changePositionEvent,e.detail);
+    });
 }
 
 
@@ -198,7 +242,7 @@ function initListners() {
 function broadcastEvent(eventName, params) {
     var detail = params || {};
     var event = new CustomEvent(eventName, {detail: detail });
-    console.debug('broadcasting',eventName,event.detail);
+    // console.debug('broadcasting',eventName,event.detail);
     document.dispatchEvent(event);
 }
 function emitEvent(eventName, params) {
@@ -206,6 +250,40 @@ function emitEvent(eventName, params) {
         console.error("domain not defined: cannot emit message",eventName);
         return;
     }
-    console.debug('emitting',params, 'to',domain);
+    // console.debug('emitting',params, 'to',domain);
     top.postMessage(Object.assign(params || {},{"event":eventName}), domain);
+}
+
+
+// update location.search params
+function updateQueryParams(key, value) {
+    if (!currentParams) {return;}
+    if(!location.search){ return;}
+    if(!window.history){ return;}
+
+    // console.debug('updating location.search params', key,value);
+
+    var stateParams = Object.assign({},currentParams);
+    if(value !== null){
+        // aggiungo chiave e valore
+        stateParams[key] = value;
+    }else if(stateParams[key]){
+        // rimuovo chiave
+        delete stateParams[key];
+    }
+
+    // console.debug('check new params', stateParams);
+    // history.replaceState(stateParams,'AreaViewer');
+    var q = Object.keys(stateParams).reduce(function (res, key) {
+        var val = '';
+        if(res !== '?'){ val = val.concat('&'); }
+        val = val.concat(key,'=',stateParams[key]);
+        return res.concat(val);
+    },'?');
+    // console.debug('check new params',q);
+    // console.debug('new location.search value? ',(location.search !== q),' ',location.search,' !== ',q);
+    if(location.search !== q){
+        // location.search = q;
+        window.history.replaceState(null, null, q);
+    }
 }

@@ -1,19 +1,49 @@
 'use strict';
 
 const AreaViewer = () => {
-    // librerie
+    // map render library
     require('leaflet');
-
     // librerie ad hoc
     require('../libs/Leaflet.VectorGrid');
     require('../libs/leaflet-geojson-gridlayer');
-    // require('../libs/leaflet.control-geocoder');
-
-
+    // spatial utils
     const within = require('@turf/within');
     const turf = require('@turf/helpers');
+    // temporal utils
+    const moment = require('moment');
+    // dom library
+    const $ = require('jquery');
 
 
+
+
+    /*
+     * costanti e defaults
+     */
+    // id infobox tag
+    const idNode = "label";
+    // default language
+    let lang = 'en';
+
+    // colori
+    const colors = {
+        'FL_GROUPS': '#3F7F91',
+        'FL_EVENTS': '#88BA5C',
+        'FL_NEWS': '#823256',
+        'FL_ARTICLES': '#FFB310',
+        'FL_PLACES': '#FE4336'
+    };
+    const orange = "#ff7800",
+        blue = "#82b1ff",
+        green = "#33cd5f",
+        gray = "#dcdcdc";
+    /*
+     * map baselayers
+     * 1) baselayer: normal base layer
+     * 2) contrastlayer: high contrast base layer
+     */
+    // default contrast
+    let contrast = false;
 
 
     /*
@@ -37,7 +67,9 @@ const AreaViewer = () => {
     // focus layer
     const focusLayer = require('./focus');
     const fLayer = focusLayer();
-
+    // infobox
+    const InfoBox = require('./infobox');
+    const infoBox = InfoBox(status, idNode);
     // utilities
     const Utils = require('./utils');
     const utils = Utils();
@@ -57,82 +89,12 @@ const AreaViewer = () => {
     const geocoder = L.Control.geocoder(geocoderSettings);
 
 
-    /*
-     * costanti e defaults
-     */
-    // default language
-    let lang = 'en';
 
-    // colori
-    const colors = {
-        'FL_GROUPS': '#3F7F91',
-        'FL_EVENTS': '#88BA5C',
-        'FL_NEWS': '#823256',
-        'FL_ARTICLES': '#FFB310',
-        'FL_PLACES': '#FE4336'
-    };
-    const orange = "#ff7800",
-        blue = "#82b1ff",
-        green = "#33cd5f",
-        gray = "#dcdcdc";
-    /*
-     * map baselayers
-     * 1) baselayer: normal base layer
-     * 2) contrastlayer: high contrast base layer
-     */
-    // default contrast
-    let contrast = false;
     // init baselayer
     if(contrast){
         map.setBasemap('contrast');
     }
 
-
-
-
-
-    /*
-     * Infobox management
-     * tag id = "label"
-     *
-     */
-    const tooltipLabel = {
-        it : 'Click sulla mappa per esplorare',
-        en : 'Click the map to explore'
-    };
-    const tooltipCancel = {
-        it : "Indietro",
-        en : 'Back'
-    };
-    const label = document.getElementById('label');
-    // set labels
-    const defIcon = '<button " title="'+tooltipLabel[lang]+'">&#x02713;</button>';
-    const defaultLabel = defIcon+tooltipLabel[lang];
-    label.innerHTML = defaultLabel;
-    const cancelButton = '<button onclick="cancel()" title="'+tooltipCancel[lang]+'">&#x2715;</button>';
-    // set label current focus
-    const setLabel = (params) => {
-        // set default content
-        let content = 'lat: '+params.lat+', lon:'+params.lng+', zoom: '+params.zoom_level;
-        if(params.name && params.name !== params.type){
-            // set displa_name
-            content = params.name;
-        } else if(params.display_name){
-            // set display_name
-            content = params.display_name;
-        } else if(params.type){
-            // set type
-            content = params.type;
-        }
-        label.innerHTML = cancelButton+content;
-    };
-    // reset focus
-    const cancel = () => {
-        // reset label
-        label.innerHTML = defaultLabel;
-        // exit focus
-        status.restore();
-    };
 
 
     /*
@@ -164,13 +126,6 @@ const AreaViewer = () => {
 
     // draw focus border
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
-    // fill infobox
-    status.observe.filter(state => 'features' in state).map(state => state.features[0].properties).subscribe(feature => {
-        //todo update infobox
-        console.log('to update infobox',feature);
-        // feature.name
-        // feature.type
-    });
 
 
     // set default style
@@ -239,7 +194,6 @@ const AreaViewer = () => {
         // todo gestione focus nella scelta di stile
         mGrid.update();
     });
-
     // click su risultato geocode
     geocoder.on('markgeocode', function (e) {
         console.log('geocode', e.geocode.properties.osm_id);
@@ -248,6 +202,8 @@ const AreaViewer = () => {
     });
 
 };
-// export {AreaViewer};
+// export
 module.exports.AreaViewer = AreaViewer;
+
+// main init
 AreaViewer();

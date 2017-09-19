@@ -18,9 +18,9 @@ module.exports = (params = {}) => {
         "lang": "en",
         "contrast": false,
         "priority": {
-            "highlight":[],
-            "background":[],
-            "excluded":[]
+            "highlight": [],
+            "background": [],
+            "exclude": []
         }
     };
     const store = {
@@ -124,6 +124,8 @@ module.exports = (params = {}) => {
             observer.next(store["interface"]);
         };
         status.priority = (priority) => {
+            // todo management of flags
+            // all, none, true, false
             store["interface"]["priority"] = priority;
             observer.next(store["interface"]);
         };

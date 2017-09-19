@@ -67,13 +67,15 @@ module.exports = (status,map) => {
         console.log(setLanguageEvent,e.detail);
         // todo set current language
         if(!e.detail.lang){  return; }
-        //
+        status.lang(lang);
     },false);
 
     // todo definition of priority of sources for visualisation purpose
     document.addEventListener(setPriorityEvent,function (e) {
         console.log(setPriorityEvent,e.detail);
-        // todo set priority of POIs: {highlight:[], exluded:[]}
+        if(!e.detail.priority){  return; }
+        // todo set priority of POIs: {highlight:[], background:[], exluded:[]}
+        status.priority(e.detail.priority);
     },false);
 
     // request focus on id
