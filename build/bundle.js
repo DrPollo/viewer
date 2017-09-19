@@ -191,6 +191,7 @@ module.exports = function (status, map) {
     var setContrastEvent = "areaViewer.setContrast";
     var setLanguageEvent = "areaViewer.setLanguage";
     var setPriorityEvent = "areaViewer.setPriority";
+    var setDateEvent = "areaViewer.setDate";
     // state events
     var focusToEvent = "areaViewer.focusTo";
     var toExploreEvent = "areaViewer.toExplore";
@@ -233,17 +234,26 @@ module.exports = function (status, map) {
     document.addEventListener(setContrastEvent, function (e) {
         console.log(setContrastEvent, e.detail);
         // set current map theme
-        status.contrast(contrast);
+        status.contrast(e.detail.contrast);
     }, false);
 
     // change current language accordingly
     document.addEventListener(setLanguageEvent, function (e) {
         console.log(setLanguageEvent, e.detail);
-        // todo set current language
+        // set current language
         if (!e.detail.lang) {
             return;
         }
         status.lang(lang);
+    }, false);
+    // change current date_from and date_to accordingly
+    document.addEventListener(setDateEvent, function (e) {
+        console.log(setDateEvent, e.detail);
+        // set current dates
+        if (!e.detail.date_from || !e.detail.date_to) {
+            return;
+        }
+        status.date({ from: e.detail.date_from, to: e.detail.date_to });
     }, false);
 
     // todo definition of priority of sources for visualisation purpose
@@ -955,6 +965,10 @@ module.exports = function () {
             "highlight": [],
             "background": [],
             "exclude": []
+        },
+        "date": {
+            "from": null,
+            "to": null
         }
     };
     var store = {
@@ -974,6 +988,7 @@ module.exports = function () {
         "lang": null,
         "contrast": null,
         "priority": null,
+        "date": null,
         "observe": null
     };
 
@@ -1059,6 +1074,12 @@ module.exports = function () {
             // all, none, true, false
             store["view"]["priority"] = priority;
             observer.next(store["view"]);
+        };
+        status.date = function (date) {
+            // todo check time validity
+            store["view"]["date"]["from"] = date.from;
+            store["view"]["date"]["to"] = date.to;
+            observer.next(store["view"]["date"]);
         };
         status.focus = focusHandler(observer);
         status.move = function (params) {

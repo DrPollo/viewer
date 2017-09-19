@@ -24,6 +24,10 @@ module.exports = (params = {}) => {
             "highlight": [],
             "background": [],
             "exclude": []
+        },
+        "date":{
+            "from" :null,
+            "to": null
         }
     };
     const store = {
@@ -43,6 +47,7 @@ module.exports = (params = {}) => {
         "lang": null,
         "contrast": null,
         "priority": null,
+        "date": null,
         "observe": null
     };
 
@@ -132,6 +137,12 @@ module.exports = (params = {}) => {
             // all, none, true, false
             store["view"]["priority"] = priority;
             observer.next(store["view"]);
+        };
+        status.date = (date) => {
+            // todo check time validity
+            store["view"]["date"]["from"] = date.from;
+            store["view"]["date"]["to"] = date.to;
+            observer.next(store["view"]["date"]);
         };
         status.focus = focusHandler(observer);
         status.move = (params) => {

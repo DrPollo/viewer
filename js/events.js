@@ -18,6 +18,7 @@ module.exports = (status,map) => {
     const setContrastEvent = "areaViewer.setContrast";
     const setLanguageEvent = "areaViewer.setLanguage";
     const setPriorityEvent = "areaViewer.setPriority";
+    const setDateEvent = "areaViewer.setDate";
     // state events
     const focusToEvent = "areaViewer.focusTo";
     const toExploreEvent = "areaViewer.toExplore";
@@ -59,15 +60,22 @@ module.exports = (status,map) => {
     document.addEventListener(setContrastEvent,function (e) {
         console.log(setContrastEvent,e.detail);
         // set current map theme
-        status.contrast(contrast);
+        status.contrast(e.detail.contrast);
     },false);
 
     // change current language accordingly
     document.addEventListener(setLanguageEvent,function (e) {
         console.log(setLanguageEvent,e.detail);
-        // todo set current language
+        // set current language
         if(!e.detail.lang){  return; }
         status.lang(lang);
+    },false);
+    // change current date_from and date_to accordingly
+    document.addEventListener(setDateEvent,function (e) {
+        console.log(setDateEvent,e.detail);
+        // set current dates
+        if(!e.detail.date_from || !e.detail.date_to){  return; }
+        status.date({from: e.detail.date_from, to: e.detail.date_to});
     },false);
 
     // todo definition of priority of sources for visualisation purpose
