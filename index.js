@@ -34,6 +34,10 @@ var domain = null;
 var mode = false;
 var params = null;
 var focus = null;
+var date = {
+    from:null,
+    to:null
+};
 var priority = {
     highlight: [],
     background: false,
@@ -91,6 +95,18 @@ if(params){
     }else{
         console.error('missing mandatory param: "domain"');
     }
+    // handling date_from param
+    if(params.get('date_from') && Date.parse(params.get('date_from'))){
+        date.from = params.get('date_from');
+        currentParams.date_from = date.to;
+    }
+    // handling date_to param
+    if(params.get('date_to') && Date.parse(params.get('date_to'))){
+        date.to = params.get('date_to');
+        currentParams.date_to = date.to;
+    }
+    // fix time validity
+    checkTime();
     // handling priority params
     if(params.get('highlight')){
         priority.highlight = params.get('highlight').split(",") || [];
@@ -125,6 +141,7 @@ var setViewEvent = "areaViewer.setView";
 var setBoundsEvent = "areaViewer.setBounds";
 var setContrastEvent = "areaViewer.setContrast";
 var setLanguageEvent = "areaViewer.setLanguage";
+var setDateEvent = "areaViewer.setDate";
 var setPriorityEvent = "areaViewer.setPriority";
 var focusToEvent = "areaViewer.focusTo";
 var toExploreEvent = "areaViewer.toExplore";
@@ -190,10 +207,14 @@ function initStatus (){
     // set default viewport
     broadcastEvent(setViewEvent, {lat: lat, lng:lon, zoom:zoom});
     // set focus
-    if(focus) {
+    if(focus && focus !== 'null') {
         setTimeout(function(){
             broadcastEvent(focusToEvent,{id:focus});
         },1500);
+    }
+    // set date
+    if(date.form !== 'null' && date.to !== 'null') {
+        broadcastEvent(setDateEvent,{date_from:date.from,date_to:date.to});
     }
     // set priority: {highlight:[], background:[], exclude:[]}
     if(priority.highlight.length > 0 || priority.highlight.length > 0 || priority.highlight.length > 0){
@@ -270,7 +291,7 @@ function updateQueryParams(key, value) {
         delete currentParams[key];
     }
 
-    console.debug('check new params', currentParams);
+    // console.debug('check new params', currentParams);
     // history.replaceState(stateParams,'AreaViewer');
     var q = Object.keys(currentParams).reduce(function (res, key) {
         // null value
@@ -286,5 +307,34 @@ function updateQueryParams(key, value) {
     if(location.search !== q){
         // location.search = q;
         window.history.replaceState(null, null, q);
+    }
+}
+
+
+
+function checkTime(){
+    console.log('checkTime',date);
+    // case valid_from and valid_to defined
+    // check intersection date.from after date.to
+    if(date.from && date.to && Date.parse(date.from) > Date.parse(date.to) ){
+        // forcing date.from = date.to
+        date.from = date.to;
+        currentParams.date_from = date.from;
+        updateQueryParams('date_from',date.from);
+    }
+    // check valid_from not defined valid_to defined
+    if(!date.from && date.to){
+        console.log('adding date_from')
+        // forcing date.from = date.to
+        date.from = date.to;
+        currentParams.date_from = date.from;
+        updateQueryParams('date_from',date.from);
+    }
+    // check valid_to not defined and valid_from defined
+    if(!date.to && date.from){
+        // forcing date.to = date.from
+        date.to = date.from;
+        currentParams.date_to = date.to;
+        updateQueryParams('date_to',date.to);
     }
 }
