@@ -20,6 +20,7 @@ module.exports = (status, idNode) => {
     // current label
     let label = null;
 
+
     /*
      * Listner cambio di stato
      */
@@ -38,6 +39,7 @@ module.exports = (status, idNode) => {
     });
     // set current language
     status.observe.filter(state => 'lang' in state).map(state => state.lang).subscribe(lang => {
+        if(currentLang === lang){ return; }
         // set new labels
         console.debug('to setup current language',lang);
         currentLang = lang;
@@ -99,4 +101,12 @@ module.exports = (status, idNode) => {
         if(!document.getElementById('exitFocus')){ return; }
         document.getElementById('exitFocus').removeEventListener('click',exitHandler);
     };
+
+
+
+
+
+    // inits
+    // init tooltip
+    initFocusLabel();
 };

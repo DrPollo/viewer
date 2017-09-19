@@ -194,6 +194,7 @@ module.exports = function (status, map) {
     // state events
     var focusToEvent = "areaViewer.focusTo";
     var toExploreEvent = "areaViewer.toExplore";
+    var changePositionEvent = "areaViewer.position";
 
     /* output events: notify areaViewer change of state
      * 1) focusToEvent: {id}
@@ -279,8 +280,15 @@ module.exports = function (status, map) {
     status.observe.filter(function (state) {
         return 'reset' in state;
     }).subscribe(function () {
-        // todo send current viewport
         notifyAction(exploreEvent);
+    });
+    status.observe.filter(function (state) {
+        return 'c' in state;
+    }).filter(function (state) {
+        return state.c;
+    }).subscribe(function (c) {
+        // send current mpa center
+        notifyAction(changePositionEvent, c);
     });
     // notify focus action
     status.observe.filter(function (state) {
@@ -402,6 +410,9 @@ module.exports = function (status, idNode) {
     }).map(function (state) {
         return state.lang;
     }).subscribe(function (lang) {
+        if (currentLang === lang) {
+            return;
+        }
         // set new labels
         console.debug('to setup current language', lang);
         currentLang = lang;
@@ -465,6 +476,10 @@ module.exports = function (status, idNode) {
         }
         document.getElementById('exitFocus').removeEventListener('click', exitHandler);
     };
+
+    // inits
+    // init tooltip
+    initFocusLabel();
 };
 
 },{"jquery":18}],5:[function(require,module,exports){
@@ -718,7 +733,7 @@ var AreaViewer = function AreaViewer() {
      * Inizializzazioni
      */
     // stato
-    status.move(map.getBounds());
+    status.move({ bounds: map.getBounds(), center: map.getCenter(), zoom: map.getZoom() });
     // inizializzazione vectorGrid layer
     vGrid.addTo(map);
     // inizializzazione markerGrid layer
@@ -738,7 +753,7 @@ var AreaViewer = function AreaViewer() {
     }).map(function (state) {
         return state.bounds;
     }).subscribe(function (bounds) {
-        console.log('fitting to bounds', bounds);
+        console.debug('fitting to bounds', bounds);
         // map.removeLayer(mGrid);
         map.fitBounds(bounds);
         // map.addLayer(mGrid);
@@ -761,15 +776,7 @@ var AreaViewer = function AreaViewer() {
     }).subscribe(function (id) {
         return mGrid.setStyle(id);
     });
-    // set current language
-    status.observe.filter(function (state) {
-        return 'lang' in state;
-    }).map(function (state) {
-        return state.lang;
-    }).subscribe(function (lang) {
-        // todo set language
-        console.log('to setup current language', lang);
-    });
+
     // set current contrast
     status.observe.filter(function (state) {
         return 'contrast' in state;
@@ -833,7 +840,7 @@ var AreaViewer = function AreaViewer() {
     // prima del cambio di zoom
     map.on('moveend', function (e) {
         // update della posizione nello stato
-        status.move(map.getBounds());
+        status.move({ bounds: map.getBounds(), center: map.getCenter(), zoom: map.getZoom() });
     });
     // fine cambio di zoom
     map.on('zoomend', function (e) {
@@ -940,7 +947,10 @@ module.exports = function () {
     };
     var initInterface = {
         "lang": "en",
-        "contrast": false,
+        "contrast": false
+    };
+    var initView = {
+        "c": null,
         "priority": {
             "highlight": [],
             "background": [],
@@ -950,7 +960,8 @@ module.exports = function () {
     var store = {
         "focus": initFocus,
         "explorer": initExplorer,
-        "interface": initInterface
+        "interface": initInterface,
+        "view": initView
     };
 
     var current = "explorer";
@@ -1046,16 +1057,23 @@ module.exports = function () {
         status.priority = function (priority) {
             // todo management of flags
             // all, none, true, false
-            store["interface"]["priority"] = priority;
-            observer.next(store["interface"]);
+            store["view"]["priority"] = priority;
+            observer.next(store["view"]);
         };
         status.focus = focusHandler(observer);
-        status.move = function (bounds) {
+        status.move = function (params) {
+
+            // update current map center
+            store["view"]["c"] = params.center.lat + ":" + params.center.lng + ":" + params.zoom;
+            observer.next(store["view"]);
+
+            var bounds = params.bounds;
             // console.log('saving? ',current);
             switch (current) {
                 case "focus":
                     break;
                 default:
+                    // update current bounds of explorer state
                     // console.debug('saving bounds',bounds);
                     store["explorer"].bounds = bounds;
             }

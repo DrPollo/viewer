@@ -21,7 +21,7 @@ module.exports = (status,map) => {
     // state events
     const focusToEvent = "areaViewer.focusTo";
     const toExploreEvent = "areaViewer.toExplore";
-
+    const changePositionEvent = "areaViewer.position";
 
     /* output events: notify areaViewer change of state
      * 1) focusToEvent: {id}
@@ -100,8 +100,11 @@ module.exports = (status,map) => {
      */
     // notify reset action
     status.observe.filter(state => 'reset' in state).subscribe(() => {
-        // todo send current viewport
         notifyAction(exploreEvent);
+    });
+    status.observe.filter(state => 'c' in state).filter(state => state.c).subscribe((c) => {
+        // send current mpa center
+        notifyAction(changePositionEvent,c);
     });
     // notify focus action
     status.observe.filter(state => 'id' in state).map(state => state.features).subscribe((features) => {

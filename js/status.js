@@ -16,7 +16,10 @@ module.exports = (params = {}) => {
     };
     const initInterface = {
         "lang": "en",
-        "contrast": false,
+        "contrast": false
+    };
+    const initView = {
+        "c": null,
         "priority": {
             "highlight": [],
             "background": [],
@@ -26,7 +29,8 @@ module.exports = (params = {}) => {
     const store = {
         "focus": initFocus,
         "explorer": initExplorer,
-        "interface": initInterface
+        "interface": initInterface,
+        "view": initView
     };
 
     let current = "explorer";
@@ -126,16 +130,23 @@ module.exports = (params = {}) => {
         status.priority = (priority) => {
             // todo management of flags
             // all, none, true, false
-            store["interface"]["priority"] = priority;
-            observer.next(store["interface"]);
+            store["view"]["priority"] = priority;
+            observer.next(store["view"]);
         };
         status.focus = focusHandler(observer);
-        status.move = (bounds) => {
+        status.move = (params) => {
+
+            // update current map center
+            store["view"]["c"] = params.center.lat+":"+params.center.lng+":"+params.zoom;
+            observer.next(store["view"]);
+
+            let bounds = params.bounds;
             // console.log('saving? ',current);
             switch (current) {
                 case "focus":
                     break;
                 default:
+                    // update current bounds of explorer state
                     // console.debug('saving bounds',bounds);
                     store["explorer"].bounds = bounds;
             }

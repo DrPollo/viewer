@@ -101,7 +101,7 @@ const AreaViewer = () => {
      * Inizializzazioni
      */
     // stato
-    status.move(map.getBounds());
+    status.move({bounds:map.getBounds(),center:map.getCenter(),zoom:map.getZoom()});
     // inizializzazione vectorGrid layer
     vGrid.addTo(map);
     // inizializzazione markerGrid layer
@@ -118,7 +118,7 @@ const AreaViewer = () => {
     // fit to bounds
     // valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
     status.observe.filter(state => 'bounds' in state).map(state => state.bounds).subscribe(bounds => {
-        console.log('fitting to bounds',bounds);
+        console.debug('fitting to bounds',bounds);
         // map.removeLayer(mGrid);
         map.fitBounds(bounds);
         // map.addLayer(mGrid);
@@ -127,14 +127,9 @@ const AreaViewer = () => {
     // draw focus border
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
 
-
     // set default style
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => mGrid.setStyle(id));
-    // set current language
-    status.observe.filter(state => 'lang' in state).map(state => state.lang).subscribe(lang => {
-        // todo set language
-        console.log('to setup current language',lang);
-    });
+
     // set current contrast
     status.observe.filter(state => 'contrast' in state).map(state => state.contrast).subscribe(contrast => {
         if(contrast){
@@ -186,7 +181,7 @@ const AreaViewer = () => {
     // prima del cambio di zoom
     map.on('moveend', (e) => {
         // update della posizione nello stato
-        status.move(map.getBounds());
+        status.move({bounds:map.getBounds(),center:map.getCenter(),zoom:map.getZoom()});
     });
     // fine cambio di zoom
     map.on('zoomend', (e) => {
