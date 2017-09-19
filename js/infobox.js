@@ -76,7 +76,7 @@ module.exports = (status, idNode) => {
         // bottone per uscire dal focus
         let cancelButton = '<button id="exitFocus" title="'+tooltipCancel[currentLang]+'">&#x2715;</button>';
         // creo nodo con bottone e label
-        let defaultLabel = $(cancelButton.concat('<span>',label,'</span>'));
+        let defaultLabel = $(cancelButton.concat('<span class="placeName">',label,'</span>'));
         // svuoto
         infoBox.empty();
         // aggiungo la label

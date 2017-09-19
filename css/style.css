@@ -22,7 +22,7 @@ html, body, #areaViewer {
     border-radius: 2px;
     color: #333;
     min-height: 22px;
-    padding: 5px 8px 3px 30px;
+    padding: 5px 8px 3px;
     font-size: 0.9em;
 }
 #label button {
@@ -35,4 +35,7 @@ html, body, #areaViewer {
     left: 0px;
     width: 30px;
     height: 30px;
+}
+#label .placeName {
+    padding-left: 22px;
 }
