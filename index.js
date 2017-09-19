@@ -33,7 +33,7 @@ var contrast = false;
 var domain = null;
 var mode = false;
 var params = null;
-var focus = false;
+var focus = null;
 var priority = {
     highlight: [],
     background: false,
@@ -262,22 +262,23 @@ function updateQueryParams(key, value) {
     if(!window.history){ return;}
 
     // console.debug('updating location.search params', key,value);
-
-    var stateParams = Object.assign({},currentParams);
-    if(value !== null){
+    if(value !== null && value !== "null"){
         // aggiungo chiave e valore
-        stateParams[key] = value;
-    }else if(stateParams[key]){
+        currentParams[key] = value;
+    }else if(currentParams[key]){
         // rimuovo chiave
-        delete stateParams[key];
+        delete currentParams[key];
     }
 
-    // console.debug('check new params', stateParams);
+    console.debug('check new params', currentParams);
     // history.replaceState(stateParams,'AreaViewer');
-    var q = Object.keys(stateParams).reduce(function (res, key) {
+    var q = Object.keys(currentParams).reduce(function (res, key) {
+        // null value
+        if(currentParams[key] === null || currentParams[key] === "null") { return res;}
+
         var val = '';
         if(res !== '?'){ val = val.concat('&'); }
-        val = val.concat(key,'=',stateParams[key]);
+        val = val.concat(key,'=',currentParams[key]);
         return res.concat(val);
     },'?');
     // console.debug('check new params',q);
