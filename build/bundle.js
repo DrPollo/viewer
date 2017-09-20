@@ -945,7 +945,7 @@ module.exports = function () {
     var Utils = require('./utils');
     var utils = Utils();
 
-    // inizializzazione status
+    // init of state params
     var initFocus = {
         "id": null,
         "bounds": null,
@@ -971,6 +971,7 @@ module.exports = function () {
             "to": null
         }
     };
+    // state param storage
     var store = {
         "focus": initFocus,
         "explorer": initExplorer,
@@ -980,7 +981,7 @@ module.exports = function () {
 
     var current = "explorer";
 
-    // azioni dello stato
+    // state actions
     var status = {
         "focus": null,
         "move": null,
@@ -992,8 +993,8 @@ module.exports = function () {
         "observe": null
     };
 
-    // gestorione del focus
-    // inizializzazione funzione con l'observer
+    // focus handler
+    // init of focus handler requires the observer
     function focusHandler(observer) {
         // gestiore del focus
         return function (entry) {
@@ -1046,6 +1047,30 @@ module.exports = function () {
             console.error('getFeature', err);
         });
     }
+    // time validity check
+    function checkTime(date) {
+        var newDate = Object.assign(date);
+        // console.debug('checkTime',date);
+        // case valid_from and valid_to defined
+        // check intersection date.from after date.to
+        if (date.from && date.to && Date.parse(date.from) > Date.parse(date.to)) {
+            // forcing date.from = date.to
+            newDate.from = date.to;
+        }
+        // check valid_from not defined valid_to defined
+        if (!date.from && date.to) {
+            console.log('adding date_from');
+            // forcing date.from = date.to
+            newDate.from = date.to;
+        }
+        // check valid_to not defined and valid_from defined
+        if (!date.to && date.from) {
+            // forcing date.to = date.from
+            newDate.to = date.from;
+        }
+        // console.debug('new data',newDate);
+        return newDate;
+    }
     // observable da restituire
     status.observe = Rx.Observable.create(function (observer) {
         // costruttori delle azioni di cambio di stato
@@ -1076,9 +1101,10 @@ module.exports = function () {
             observer.next(store["view"]);
         };
         status.date = function (date) {
-            // todo check time validity
-            store["view"]["date"]["from"] = date.from;
-            store["view"]["date"]["to"] = date.to;
+            // check time validity and fix
+            var newDate = checkTime(date);
+            store["view"]["date"]["from"] = newDate.from;
+            store["view"]["date"]["to"] = newDate.to;
             observer.next(store["view"]["date"]);
         };
         status.focus = focusHandler(observer);
