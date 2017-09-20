@@ -377,6 +377,7 @@ module.exports = function (status, idNode) {
     var $ = require('jquery');
     // dom node id "label"
     var infoBox = $("#" + idNode);
+    infoBox.empty();
 
     var tooltipLabel = {
         it: 'Click sulla mappa per esplorare',
@@ -436,14 +437,14 @@ module.exports = function (status, idNode) {
 
     // init tooltip text
     var initFocusLabel = function initFocusLabel(feature) {
-        // default: nessuna feature
+        // default: no feature > empty infobox
         if (!feature && !label) {
             // rimuovo il listner del pulsante exit
             removeExitListner();
             // rimozione del label
             infoBox.empty();
             // aggiungo il tooltip
-            infoBox.append($('<span>' + tooltipLabel[currentLang] + '</span>'));
+            // infoBox.append($('<span>'+tooltipLabel[currentLang]+'</span>'));
             return;
         }
 
@@ -458,7 +459,7 @@ module.exports = function (status, idNode) {
         // bottone per uscire dal focus
         var cancelButton = '<button id="exitFocus" title="' + tooltipCancel[currentLang] + '">&#x2715;</button>';
         // creo nodo con bottone e label
-        var defaultLabel = $(cancelButton.concat('<span class="placeName">', label, '</span>'));
+        var defaultLabel = $('<div id="label">' + cancelButton.concat('<span class="placeName">', label, '</span></div>'));
         // svuoto
         infoBox.empty();
         // aggiungo la label
@@ -669,7 +670,7 @@ var AreaViewer = function AreaViewer() {
      * costanti e defaults
      */
     // id infobox tag
-    var idNode = "label";
+    var idNode = "infobox";
     // default language
     var lang = 'en';
 
@@ -815,8 +816,22 @@ var AreaViewer = function AreaViewer() {
         vGrid.resetStyle();
         fLayer.clearLayers();
     });
-    //
 
+    /*
+     * Switch geocoder
+     */
+    // enable geocoder at explore
+    status.observe.filter(function (state) {
+        return 'reset' in state;
+    }).subscribe(function () {
+        geocoder.addTo(map);
+    });
+    // disable geocoder at focus
+    status.observe.filter(function (state) {
+        return 'id' in state;
+    }).subscribe(function () {
+        geocoder.remove();
+    });
 
     /*
      * Gestione eventi mappa
@@ -860,7 +875,7 @@ var AreaViewer = function AreaViewer() {
     });
     // click su risultato geocode
     geocoder.on('markgeocode', function (e) {
-        console.log('geocode', e.geocode.properties.osm_id);
+        // console.debug('geocode', e.geocode.properties.osm_id);
         map.setView(e.geocode.center, locationZoom);
         // status.focus();
     });

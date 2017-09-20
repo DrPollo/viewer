@@ -21,7 +21,7 @@ const AreaViewer = () => {
      * costanti e defaults
      */
     // id infobox tag
-    const idNode = "label";
+    const idNode = "infobox";
     // default language
     let lang = 'en';
 
@@ -146,7 +146,20 @@ const AreaViewer = () => {
         vGrid.resetStyle();
         fLayer.clearLayers();
     });
-    //
+
+
+    /*
+     * Switch geocoder
+     */
+    // enable geocoder at explore
+    status.observe.filter(state => 'reset' in state).subscribe(() => {
+        geocoder.addTo(map);
+    });
+    // disable geocoder at focus
+    status.observe.filter(state => 'id' in state).subscribe(() => {
+        geocoder.remove();
+    });
+
 
 
     /*
@@ -191,7 +204,7 @@ const AreaViewer = () => {
     });
     // click su risultato geocode
     geocoder.on('markgeocode', function (e) {
-        console.log('geocode', e.geocode.properties.osm_id);
+        // console.debug('geocode', e.geocode.properties.osm_id);
         map.setView(e.geocode.center, locationZoom);
         // status.focus();
     });

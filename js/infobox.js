@@ -5,6 +5,8 @@ module.exports = (status, idNode) => {
     const $ = require('jquery');
     // dom node id "label"
     const infoBox = $("#"+idNode);
+    infoBox.empty();
+
 
     const tooltipLabel = {
         it : 'Click sulla mappa per esplorare',
@@ -54,14 +56,14 @@ module.exports = (status, idNode) => {
 
     // init tooltip text
     const initFocusLabel = (feature) => {
-        // default: nessuna feature
+        // default: no feature > empty infobox
         if(!feature && !label){
             // rimuovo il listner del pulsante exit
             removeExitListner();
             // rimozione del label
             infoBox.empty();
             // aggiungo il tooltip
-            infoBox.append($('<span>'+tooltipLabel[currentLang]+'</span>'));
+            // infoBox.append($('<span>'+tooltipLabel[currentLang]+'</span>'));
             return;
         }
 
@@ -76,7 +78,7 @@ module.exports = (status, idNode) => {
         // bottone per uscire dal focus
         let cancelButton = '<button id="exitFocus" title="'+tooltipCancel[currentLang]+'">&#x2715;</button>';
         // creo nodo con bottone e label
-        let defaultLabel = $(cancelButton.concat('<span class="placeName">',label,'</span>'));
+        let defaultLabel = $('<div id="label">'+cancelButton.concat('<span class="placeName">',label,'</span></div>'));
         // svuoto
         infoBox.empty();
         // aggiungo la label
@@ -84,6 +86,9 @@ module.exports = (status, idNode) => {
         // init listner
         initExitListner();
     };
+
+
+
 
 
     /*
