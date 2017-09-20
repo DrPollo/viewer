@@ -81,14 +81,19 @@ const AreaViewer = () => {
      * geocoder
      */
     // geocoder config
-    const geocoderSettings = {
+    const searchPlaceholder = {
+        "en": "Search...",
+        "it": "Cerca..."
+    };
+    let geocoderSettings = {
         defaultMarkGeocode: false,
-        position: 'topleft'
+        position: 'topleft',
+        placeholder: searchPlaceholder[lang]
     };
     // geocoder load init
     geoCoder();
     // geocoder node
-    const geocoder = L.Control.geocoder(geocoderSettings);
+    let geocoder = L.Control.geocoder(geocoderSettings);
 
 
 
@@ -151,7 +156,7 @@ const AreaViewer = () => {
 
 
     /*
-     * Switch geocoder
+     * Geocoder management
      */
     // enable geocoder at explore
     status.observe.filter(state => 'reset' in state).subscribe(() => {
@@ -160,6 +165,17 @@ const AreaViewer = () => {
     // disable geocoder at focus
     status.observe.filter(state => 'id' in state).subscribe(() => {
         geocoder.remove();
+    });
+    // switch geocoder lang
+    status.observe.filter(state => 'lang' in state).map(state => state.lang).subscribe((lang) => {
+        // remove geocoder
+        geocoder.remove();
+        // change geocoder placeholder accordingly to the new language
+        geocoderSettings.placeholder = searchPlaceholder[lang];
+        // create a new instance of geocoder
+        geocoder = L.Control.geocoder(geocoderSettings);
+        // add new geocoder to map
+        geocoder.addTo(map);
     });
 
 

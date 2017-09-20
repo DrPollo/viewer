@@ -728,9 +728,14 @@ var AreaViewer = function AreaViewer() {
      * geocoder
      */
     // geocoder config
+    var searchPlaceholder = {
+        "en": "Search...",
+        "it": "Cerca..."
+    };
     var geocoderSettings = {
         defaultMarkGeocode: false,
-        position: 'topleft'
+        position: 'topleft',
+        placeholder: searchPlaceholder[lang]
     };
     // geocoder load init
     geoCoder();
@@ -820,7 +825,7 @@ var AreaViewer = function AreaViewer() {
     });
 
     /*
-     * Switch geocoder
+     * Geocoder management
      */
     // enable geocoder at explore
     status.observe.filter(function (state) {
@@ -833,6 +838,21 @@ var AreaViewer = function AreaViewer() {
         return 'id' in state;
     }).subscribe(function () {
         geocoder.remove();
+    });
+    // switch geocoder lang
+    status.observe.filter(function (state) {
+        return 'lang' in state;
+    }).map(function (state) {
+        return state.lang;
+    }).subscribe(function (lang) {
+        // remove geocoder
+        geocoder.remove();
+        // change geocoder placeholder accordingly to the new language
+        geocoderSettings.placeholder = searchPlaceholder[lang];
+        // create a new instance of geocoder
+        geocoder = L.Control.geocoder(geocoderSettings);
+        // add new geocoder to map
+        geocoder.addTo(map);
     });
 
     /*
