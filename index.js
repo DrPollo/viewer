@@ -81,7 +81,7 @@ if(params){
     zoom = params.get('zoom') ? params.get('zoom') : zoom;
     currentParams.c = lat+':'+lon+':'+zoom;
     contrast = params.get('contrast') === 'true';
-    currentParams.contast = contrast;
+    currentParams.contrast = contrast;
     lang = params.get('lang') ? params.get('lang') : lang;
     currentParams.lang = lang;
     focus = params.get('focus') ? params.get('focus') : false;

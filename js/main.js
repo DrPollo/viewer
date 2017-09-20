@@ -21,7 +21,9 @@ const AreaViewer = () => {
      * costanti e defaults
      */
     // id infobox tag
-    const idNode = "infobox";
+    const idInfoBox = "infobox";
+    const idFeatureBox = "featurebox";
+    const idMapBox = "areaViewer";
     // default language
     let lang = 'en';
 
@@ -54,7 +56,7 @@ const AreaViewer = () => {
     const status = Status();
     // mappa generale
     const Map = require('./map');
-    const map = Map(status);
+    const map = Map(status,idMapBox, idFeatureBox);
     // events
     const Events = require('./events');
     const events = Events(status, map);
@@ -69,7 +71,7 @@ const AreaViewer = () => {
     const fLayer = focusLayer();
     // infobox
     const InfoBox = require('./infobox');
-    const infoBox = InfoBox(status, idNode);
+    const infoBox = InfoBox(status, idInfoBox);
     // utilities
     const Utils = require('./utils');
     const utils = Utils();

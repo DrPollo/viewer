@@ -42,4 +42,21 @@ html, body, #areaViewer {
 }
 #label .placeName {
     padding-left: 22px;
+    display: inline-block;
+}
+
+
+
+@media only screen and (max-width: 500px) {
+    #infobox {
+        top: 0;
+        left: 0;
+        width: 100%;
+        max-width: 100%;
+    }
+    #label {
+        width: 100%;
+        overflow-x: hidden;
+        overflow-wrap: break-word;
+    }
 }

@@ -72,7 +72,7 @@ module.exports = (status, idNode) => {
         if(feature && feature.name) {
             // feature.name
             // feature.type
-            label = (feature.type ? feature.type+": " : "").concat(feature.name);
+            label = (feature.type && feature.type !== feature.name ? feature.type+": " : "").concat(feature.name);
             console.debug('init infobox label',label);
         }
         // bottone per uscire dal focus

@@ -453,7 +453,7 @@ module.exports = function (status, idNode) {
         if (feature && feature.name) {
             // feature.name
             // feature.type
-            label = (feature.type ? feature.type + ": " : "").concat(feature.name);
+            label = (feature.type && feature.type !== feature.name ? feature.type + ": " : "").concat(feature.name);
             console.debug('init infobox label', label);
         }
         // bottone per uscire dal focus
@@ -670,7 +670,9 @@ var AreaViewer = function AreaViewer() {
      * costanti e defaults
      */
     // id infobox tag
-    var idNode = "infobox";
+    var idInfoBox = "infobox";
+    var idFeatureBox = "featurebox";
+    var idMapBox = "areaViewer";
     // default language
     var lang = 'en';
 
@@ -702,7 +704,7 @@ var AreaViewer = function AreaViewer() {
     var status = Status();
     // mappa generale
     var Map = require('./map');
-    var map = Map(status);
+    var map = Map(status, idMapBox, idFeatureBox);
     // events
     var Events = require('./events');
     var events = Events(status, map);
@@ -717,7 +719,7 @@ var AreaViewer = function AreaViewer() {
     var fLayer = focusLayer();
     // infobox
     var InfoBox = require('./infobox');
-    var infoBox = InfoBox(status, idNode);
+    var infoBox = InfoBox(status, idInfoBox);
     // utilities
     var Utils = require('./utils');
     var utils = Utils();
@@ -894,7 +896,11 @@ AreaViewer();
  */
 // definition of the map
 
-module.exports = function (status) {
+module.exports = function (status, idMapBox, idFeatureBox) {
+    var $ = require('jquery');
+    var featureBox = $('#' + idFeatureBox);
+    var mapBox = $('#' + idMapBox);
+
     var baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
     // const baselayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj0tausco00tb2rt87i5c8pi0/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
     var contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
@@ -918,9 +924,10 @@ module.exports = function (status) {
     var initLon = 7.686856;
     var zoomControlPosition = 'bottomright';
 
-    var map = L.map('areaViewer').setView([initLat, initLon], initZoom);
+    var map = L.map(idMapBox).setView([initLat, initLon], initZoom);
     // control position
-    map.zoomControl.setPosition(zoomControlPosition);
+    var zoomControl = map.zoomControl;
+    zoomControl.setPosition(zoomControlPosition);
 
     // pane per vectorGrid
     map.createPane('vectorGridPane');
@@ -946,10 +953,31 @@ module.exports = function (status) {
         map.addLayer(baseLayer);
     };
 
+    /*
+     * Management of state change
+     */
+    // at focus
+    status.observe.filter(function (state) {
+        return 'features' in state;
+    }).subscribe(function () {
+        // todo hide zoom controls
+        zoomControl.remove();
+        // todo add features box
+        // todo resize map
+        // trigger map re-rendering
+        // setTimeout(function(){ map.invalidateSize()}, 400);
+    });
+    // reset map
+    status.observe.filter(function (state) {
+        return 'reset' in state;
+    }).subscribe(function () {
+        zoomControl.addTo(map);
+    });
+
     return map;
 };
 
-},{}],8:[function(require,module,exports){
+},{"jquery":18}],8:[function(require,module,exports){
 'use strict';
 
 module.exports = function () {

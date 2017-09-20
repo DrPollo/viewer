@@ -3,7 +3,11 @@
  */
 // definition of the map
 
-module.exports = (status) => {
+module.exports = (status,idMapBox, idFeatureBox) => {
+    const $ = require('jquery');
+    const featureBox = $('#'+idFeatureBox);
+    const mapBox = $('#'+idMapBox);
+
     const baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
     // const baselayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj0tausco00tb2rt87i5c8pi0/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
     const contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
@@ -27,9 +31,10 @@ module.exports = (status) => {
     const initLon = 7.686856;
     let zoomControlPosition = 'bottomright';
 
-    const map = L.map('areaViewer').setView([initLat, initLon], initZoom);
+    const map = L.map(idMapBox).setView([initLat, initLon], initZoom);
     // control position
-    map.zoomControl.setPosition(zoomControlPosition);
+    const zoomControl = map.zoomControl;
+    zoomControl.setPosition(zoomControlPosition);
 
     // pane per vectorGrid
     map.createPane('vectorGridPane');
@@ -55,6 +60,28 @@ module.exports = (status) => {
 
         map.addLayer(baseLayer);
     };
+
+
+
+
+    /*
+     * Management of state change
+     */
+    // at focus
+    status.observe.filter(state => 'features' in state).subscribe(() => {
+        // todo hide zoom controls
+        zoomControl.remove();
+        // todo add features box
+        // todo resize map
+        // trigger map re-rendering
+        // setTimeout(function(){ map.invalidateSize()}, 400);
+    });
+    // reset map
+    status.observe.filter(state => 'reset' in state).subscribe(() => {
+        zoomControl.addTo(map);
+    });
+
+
 
     return map;
 };
