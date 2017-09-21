@@ -115,20 +115,14 @@ module.exports = (status,map) => {
         notifyAction(changePositionEvent,c);
     });
     // notify focus action
-    status.observe.filter(state => 'id' in state).map(state => state.features).subscribe((features) => {
-        // filter map contents by area_id
-        let content = Object.keys(map._layers).reduce((res,key) => {
-            let feature = map._layers[key].feature;
-            if(feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id){
-                return res.concat(feature);
-            }
-            return res;
-        },[]);
+    status.observe.filter(state => 'id' in state).map(state => {
+        return {features:state.features, content:state.content};
+    }).subscribe((focus) => {
         // returns id of focus area, feature description, pois related to the focus area
         notifyAction(focusOnEvent,{
-            id: features[0].id || features[0]._id || features[0].properties.id,
-            feature:features[0],
-            content: content
+            id: focus.features[0].id || focus.features[0]._id || focus.features[0].properties.id,
+            feature:focus.features[0],
+            content: focus.content
         });
     });
     // notify the user's action

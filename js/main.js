@@ -16,7 +16,6 @@ const AreaViewer = () => {
 
 
 
-
     /*
      * costanti e defaults
      */
@@ -46,17 +45,26 @@ const AreaViewer = () => {
      */
     // default contrast
     let contrast = false;
+    // mobile breakpoints
+    const minHeight = 500;
+    const minWidth = 500;
+
+
+    // const focusClass = (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|ipad|iris|kindle|Android|Silk|lge |maemo|midp|mmp|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent)
+    const focusClass = 'focus';
 
 
     /*
      * moduli
      */
-    // gestore di stato
-    const Status = require('./status');
-    const status = Status();
     // mappa generale
     const Map = require('./map');
-    const map = Map(status,idMapBox, idFeatureBox);
+    const map = Map(idMapBox);
+    const zoomControl = map.zoomControl;
+    const mapBox = $('#'+idMapBox);
+    // gestore di stato
+    const Status = require('./status');
+    const status = Status(map);
     // events
     const Events = require('./events');
     const events = Events(status, map);
@@ -68,10 +76,10 @@ const AreaViewer = () => {
     const vGrid = vectorGrid();
     // focus layer
     const focusLayer = require('./focus');
-    const fLayer = focusLayer();
+    const fLayer = focusLayer(status);
     // infobox
     const InfoBox = require('./infobox');
-    const infoBox = InfoBox(status, idInfoBox);
+    const infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox);
     // utilities
     const Utils = require('./utils');
     const utils = Utils();
@@ -95,14 +103,10 @@ const AreaViewer = () => {
     // geocoder node
     let geocoder = L.Control.geocoder(geocoderSettings);
 
-
-
     // init baselayer
     if(contrast){
         map.setBasemap('contrast');
     }
-
-
 
     /*
      * Inizializzazioni
@@ -124,11 +128,15 @@ const AreaViewer = () => {
      */
     // fit to bounds
     // valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
-    status.observe.filter(state => 'bounds' in state).map(state => state.bounds).subscribe(bounds => {
-        console.debug('fitting to bounds',bounds);
+    status.observe.filter(state => 'features' in state).subscribe(focus => {
+        console.log('focus management',focus);
+        let feature = fLayer.setLayer(focus.features);
+        console.debug('fitting to bounds',feature);
         // map.removeLayer(mGrid);
-        map.fitBounds(bounds);
-        // map.addLayer(mGrid);
+        $('body').toggleClass(focusClass);
+        // console.debug('check body class',$('body').hasClass(focusClass));
+        map.invalidateSize();
+        map.fitBounds(feature.getBounds());
     });
 
     // draw focus border
@@ -146,9 +154,11 @@ const AreaViewer = () => {
         }
     });
     // add focus layer
-    status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
+    // status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
     // reset del focus
     status.observe.filter(state => 'reset' in state).subscribe(() => {
+        $('body').toggleClass(focusClass);
+        map.invalidateSize();
         mGrid.resetStyle();
         vGrid.resetStyle();
         fLayer.clearLayers();
@@ -197,13 +207,20 @@ const AreaViewer = () => {
             let pt = turf.point([e.latlng.lng, e.latlng.lat]);
             let geoJSON = {type: "FeatureCollection", features: focus.features};
             console.debug('within?', pt, geoJSON);
-            let result = within(turf.featureCollection([pt]), geoJSON);
-            console.debug('within?', result);
-            if (result.features.length < 1) {
+            try{
+                let result = within(turf.featureCollection([pt]), geoJSON);
+                console.debug('within?', result);
+                if (result.features.length < 1) {
+                    status.restore();
+                } else {
+                    status.focus(e.layer.properties);
+                }
+            } catch (e){
+                console.error('turf.within error',e);
                 status.restore();
-            } else {
-                status.focus(e.layer.properties);
+                return;
             }
+
         } else {
             // azione focus
             status.focus(e.layer.properties);
@@ -225,6 +242,15 @@ const AreaViewer = () => {
         // console.debug('geocode', e.geocode.properties.osm_id);
         map.setView(e.geocode.center, locationZoom);
         // status.focus();
+    });
+    // at focus
+    status.observe.filter(state => 'id' in state).subscribe(() => {
+        // hide zoom controls
+        zoomControl.remove();
+    });
+    // reset map
+    status.observe.filter(state => 'reset' in state).subscribe(() => {
+        zoomControl.addTo(map);
     });
 
 };

@@ -83,6 +83,7 @@ module.exports = (map) => {
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://loggerproxy.firstlife.org/tile/{x}/{y}/{z}';
+    // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
     // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
 
 

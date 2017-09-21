@@ -1,10 +1,15 @@
 /**
  * Created by drpollo on 19/09/2017.
  */
-module.exports = (status, idNode) => {
+module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
     const $ = require('jquery');
     // dom node id "label"
-    const infoBox = $("#"+idNode);
+    const infoBox = $("#"+idInfoBox);
+    const featureBox = $('#'+idFeatureBox);
+    const mapBox = $('#'+idMapBox);
+    // mapBox.on('map-container-resize', function () {
+    //     setTimeout(map.invalidateSize,400); // doesn't seem to do anything
+    // });
     infoBox.empty();
 
 
@@ -107,9 +112,20 @@ module.exports = (status, idNode) => {
         document.getElementById('exitFocus').removeEventListener('click',exitHandler);
     };
 
+    // todo reset size map in explorer
 
 
-
+    status.observe.filter(state => 'content' in state).map(state => state.content).subscribe((content) => {
+        console.debug('add content to featurebox',content);
+        // append features to featurebox
+        content.forEach((entry) => {
+            if(!entry.properties.name) {return;}
+            featureBox.append('<span>'+entry.properties.name+'</span>');
+        });
+        // todo resize map
+        console.debug('resizing map');
+        // mapBox.css('height','300px');
+    });
 
     // inits
     // init tooltip

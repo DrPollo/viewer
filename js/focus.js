@@ -1,4 +1,4 @@
-module.exports = () => {
+module.exports = (status) => {
     // colori
     const colors = {
         'FL_GROUPS': '#3F7F91',
@@ -27,7 +27,8 @@ module.exports = () => {
     const fLayer = L.geoJson([], focusStyle);
     fLayer.setLayer = (geoJson) => {
         fLayer.clearLayers();
-        fLayer.addData(geoJson);
+        let feature = fLayer.addData(geoJson);
+        return feature;
     };
     return fLayer;
 };

@@ -3,10 +3,8 @@
  */
 // definition of the map
 
-module.exports = (status,idMapBox, idFeatureBox) => {
+module.exports = (idMapBox) => {
     const $ = require('jquery');
-    const featureBox = $('#'+idFeatureBox);
-    const mapBox = $('#'+idMapBox);
 
     const baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
     // const baselayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj0tausco00tb2rt87i5c8pi0/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
@@ -64,22 +62,7 @@ module.exports = (status,idMapBox, idFeatureBox) => {
 
 
 
-    /*
-     * Management of state change
-     */
-    // at focus
-    status.observe.filter(state => 'features' in state).subscribe(() => {
-        // todo hide zoom controls
-        zoomControl.remove();
-        // todo add features box
-        // todo resize map
-        // trigger map re-rendering
-        // setTimeout(function(){ map.invalidateSize()}, 400);
-    });
-    // reset map
-    status.observe.filter(state => 'reset' in state).subscribe(() => {
-        zoomControl.addTo(map);
-    });
+
 
 
 

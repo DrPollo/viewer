@@ -82,6 +82,7 @@ module.exports = function (map) {
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://loggerproxy.firstlife.org/tile/{x}/{y}/{z}';
+    // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
     // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
 
 
@@ -304,21 +305,13 @@ module.exports = function (status, map) {
     status.observe.filter(function (state) {
         return 'id' in state;
     }).map(function (state) {
-        return state.features;
-    }).subscribe(function (features) {
-        // filter map contents by area_id
-        var content = Object.keys(map._layers).reduce(function (res, key) {
-            var feature = map._layers[key].feature;
-            if (feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id) {
-                return res.concat(feature);
-            }
-            return res;
-        }, []);
+        return { features: state.features, content: state.content };
+    }).subscribe(function (focus) {
         // returns id of focus area, feature description, pois related to the focus area
         notifyAction(focusOnEvent, {
-            id: features[0].id || features[0]._id || features[0].properties.id,
-            feature: features[0],
-            content: content
+            id: focus.features[0].id || focus.features[0]._id || focus.features[0].properties.id,
+            feature: focus.features[0],
+            content: focus.content
         });
     });
     // notify the user's action
@@ -333,7 +326,7 @@ module.exports = function (status, map) {
 },{}],3:[function(require,module,exports){
 'use strict';
 
-module.exports = function () {
+module.exports = function (status) {
     // colori
     var colors = {
         'FL_GROUPS': '#3F7F91',
@@ -362,7 +355,8 @@ module.exports = function () {
     var fLayer = L.geoJson([], focusStyle);
     fLayer.setLayer = function (geoJson) {
         fLayer.clearLayers();
-        fLayer.addData(geoJson);
+        var feature = fLayer.addData(geoJson);
+        return feature;
     };
     return fLayer;
 };
@@ -373,10 +367,15 @@ module.exports = function () {
 /**
  * Created by drpollo on 19/09/2017.
  */
-module.exports = function (status, idNode) {
+module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
     var $ = require('jquery');
     // dom node id "label"
-    var infoBox = $("#" + idNode);
+    var infoBox = $("#" + idInfoBox);
+    var featureBox = $('#' + idFeatureBox);
+    var mapBox = $('#' + idMapBox);
+    // mapBox.on('map-container-resize', function () {
+    //     setTimeout(map.invalidateSize,400); // doesn't seem to do anything
+    // });
     infoBox.empty();
 
     var tooltipLabel = {
@@ -487,6 +486,27 @@ module.exports = function (status, idNode) {
         }
         document.getElementById('exitFocus').removeEventListener('click', exitHandler);
     };
+
+    // todo reset size map in explorer
+
+
+    status.observe.filter(function (state) {
+        return 'content' in state;
+    }).map(function (state) {
+        return state.content;
+    }).subscribe(function (content) {
+        console.debug('add content to featurebox', content);
+        // append features to featurebox
+        content.forEach(function (entry) {
+            if (!entry.properties.name) {
+                return;
+            }
+            featureBox.append('<span>' + entry.properties.name + '</span>');
+        });
+        // todo resize map
+        console.debug('resizing map');
+        // mapBox.css('height','300px');
+    });
 
     // inits
     // init tooltip
@@ -695,16 +715,24 @@ var AreaViewer = function AreaViewer() {
      */
     // default contrast
     var contrast = false;
+    // mobile breakpoints
+    var minHeight = 500;
+    var minWidth = 500;
+
+    // const focusClass = (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|ipad|iris|kindle|Android|Silk|lge |maemo|midp|mmp|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent)
+    var focusClass = 'focus';
 
     /*
      * moduli
      */
-    // gestore di stato
-    var Status = require('./status');
-    var status = Status();
     // mappa generale
     var Map = require('./map');
-    var map = Map(status, idMapBox, idFeatureBox);
+    var map = Map(idMapBox);
+    var zoomControl = map.zoomControl;
+    var mapBox = $('#' + idMapBox);
+    // gestore di stato
+    var Status = require('./status');
+    var status = Status(map);
     // events
     var Events = require('./events');
     var events = Events(status, map);
@@ -716,10 +744,10 @@ var AreaViewer = function AreaViewer() {
     var vGrid = vectorGrid();
     // focus layer
     var focusLayer = require('./focus');
-    var fLayer = focusLayer();
+    var fLayer = focusLayer(status);
     // infobox
     var InfoBox = require('./infobox');
-    var infoBox = InfoBox(status, idInfoBox);
+    var infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox);
     // utilities
     var Utils = require('./utils');
     var utils = Utils();
@@ -767,14 +795,16 @@ var AreaViewer = function AreaViewer() {
     // fit to bounds
     // valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
     status.observe.filter(function (state) {
-        return 'bounds' in state;
-    }).map(function (state) {
-        return state.bounds;
-    }).subscribe(function (bounds) {
-        console.debug('fitting to bounds', bounds);
+        return 'features' in state;
+    }).subscribe(function (focus) {
+        console.log('focus management', focus);
+        var feature = fLayer.setLayer(focus.features);
+        console.debug('fitting to bounds', feature);
         // map.removeLayer(mGrid);
-        map.fitBounds(bounds);
-        // map.addLayer(mGrid);
+        $('body').toggleClass(focusClass);
+        // console.debug('check body class',$('body').hasClass(focusClass));
+        map.invalidateSize();
+        map.fitBounds(feature.getBounds());
     });
 
     // draw focus border
@@ -808,17 +838,13 @@ var AreaViewer = function AreaViewer() {
         }
     });
     // add focus layer
-    status.observe.filter(function (state) {
-        return 'features' in state;
-    }).map(function (state) {
-        return state.features;
-    }).subscribe(function (features) {
-        return fLayer.setLayer(features);
-    });
+    // status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
     // reset del focus
     status.observe.filter(function (state) {
         return 'reset' in state;
     }).subscribe(function () {
+        $('body').toggleClass(focusClass);
+        map.invalidateSize();
         mGrid.resetStyle();
         vGrid.resetStyle();
         fLayer.clearLayers();
@@ -872,12 +898,18 @@ var AreaViewer = function AreaViewer() {
             var pt = turf.point([e.latlng.lng, e.latlng.lat]);
             var geoJSON = { type: "FeatureCollection", features: focus.features };
             console.debug('within?', pt, geoJSON);
-            var result = within(turf.featureCollection([pt]), geoJSON);
-            console.debug('within?', result);
-            if (result.features.length < 1) {
+            try {
+                var result = within(turf.featureCollection([pt]), geoJSON);
+                console.debug('within?', result);
+                if (result.features.length < 1) {
+                    status.restore();
+                } else {
+                    status.focus(e.layer.properties);
+                }
+            } catch (e) {
+                console.error('turf.within error', e);
                 status.restore();
-            } else {
-                status.focus(e.layer.properties);
+                return;
             }
         } else {
             // azione focus
@@ -901,6 +933,19 @@ var AreaViewer = function AreaViewer() {
         map.setView(e.geocode.center, locationZoom);
         // status.focus();
     });
+    // at focus
+    status.observe.filter(function (state) {
+        return 'id' in state;
+    }).subscribe(function () {
+        // hide zoom controls
+        zoomControl.remove();
+    });
+    // reset map
+    status.observe.filter(function (state) {
+        return 'reset' in state;
+    }).subscribe(function () {
+        zoomControl.addTo(map);
+    });
 };
 // export
 module.exports.AreaViewer = AreaViewer;
@@ -916,10 +961,8 @@ AreaViewer();
  */
 // definition of the map
 
-module.exports = function (status, idMapBox, idFeatureBox) {
+module.exports = function (idMapBox) {
     var $ = require('jquery');
-    var featureBox = $('#' + idFeatureBox);
-    var mapBox = $('#' + idMapBox);
 
     var baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
     // const baselayer = 'https://api.mapbox.com/styles/v1/drp0ll0/cj0tausco00tb2rt87i5c8pi0/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiZHJwMGxsMCIsImEiOiI4bUpPVm9JIn0.NCRmAUzSfQ_fT3A86d9RvQ';
@@ -973,36 +1016,13 @@ module.exports = function (status, idMapBox, idFeatureBox) {
         map.addLayer(baseLayer);
     };
 
-    /*
-     * Management of state change
-     */
-    // at focus
-    status.observe.filter(function (state) {
-        return 'features' in state;
-    }).subscribe(function () {
-        // todo hide zoom controls
-        zoomControl.remove();
-        // todo add features box
-        // todo resize map
-        // trigger map re-rendering
-        // setTimeout(function(){ map.invalidateSize()}, 400);
-    });
-    // reset map
-    status.observe.filter(function (state) {
-        return 'reset' in state;
-    }).subscribe(function () {
-        zoomControl.addTo(map);
-    });
-
     return map;
 };
 
 },{"jquery":18}],8:[function(require,module,exports){
 'use strict';
 
-module.exports = function () {
-    var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
-
+module.exports = function (map) {
     var BBox = require('@turf/bbox');
     var Rx = require('rxjs/Rx');
     var Utils = require('./utils');
@@ -1075,7 +1095,17 @@ module.exports = function () {
             }
         };
     }
-
+    // extract relevant features from map
+    function extractContent() {
+        return Object.keys(map._layers).reduce(function (res, key) {
+            var feature = map._layers[key].feature;
+            if (feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id) {
+                return res.concat(feature);
+            }
+            return res;
+        }, []);
+    }
+    // focus handler
     function focus(entry, observer) {
         console.debug('focus on ', entry);
         current = "focus";
@@ -1102,7 +1132,9 @@ module.exports = function () {
                 store["focus"].features = [];
             }
             var bb = BBox(store["focus"].features[0]);
-            store["focus"].bounds = L.latLngBounds(L.latLng(bb[1], bb[0]), L.latLng(bb[3], bb[2]));
+            store["focus"].bounds = bb;
+            // store["focus"].bounds = L.latLngBounds(L.latLng(bb[1], bb[0]), L.latLng(bb[3], bb[2]));
+            store["focus"]["content"] = extractContent();
             // propago il nuovo stato
             // console.debug("stato focus",store["focus"]);
             observer.next(store["focus"]);
@@ -1134,6 +1166,7 @@ module.exports = function () {
         // console.debug('new data',newDate);
         return newDate;
     }
+
     // observable da restituire
     status.observe = Rx.Observable.create(function (observer) {
         // costruttori delle azioni di cambio di stato

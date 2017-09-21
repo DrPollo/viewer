@@ -1,4 +1,4 @@
-module.exports = (params = {}) => {
+module.exports = (map) => {
     const BBox = require('@turf/bbox');
     const Rx = require('rxjs/Rx');
     const Utils = require('./utils');
@@ -71,7 +71,17 @@ module.exports = (params = {}) => {
             }
         };
     }
-
+    // extract relevant features from map
+    function extractContent(){
+        return Object.keys(map._layers).reduce((res,key) => {
+            let feature = map._layers[key].feature;
+            if(feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id){
+                return res.concat(feature);
+            }
+            return res;
+        },[]);
+    }
+    // focus handler
     function focus(entry, observer) {
         console.debug('focus on ',entry);
         current = "focus";
@@ -99,7 +109,9 @@ module.exports = (params = {}) => {
                     store["focus"].features = [];
                 }
                 let bb = BBox(store["focus"].features[0]);
-                store["focus"].bounds = L.latLngBounds(L.latLng(bb[1], bb[0]), L.latLng(bb[3], bb[2]));
+                store["focus"].bounds = bb;
+                // store["focus"].bounds = L.latLngBounds(L.latLng(bb[1], bb[0]), L.latLng(bb[3], bb[2]));
+                store["focus"]["content"] = extractContent();
                 // propago il nuovo stato
                 // console.debug("stato focus",store["focus"]);
                 observer.next(store["focus"]);
@@ -133,6 +145,7 @@ module.exports = (params = {}) => {
         // console.debug('new data',newDate);
         return newDate;
     }
+
     // observable da restituire
     status.observe = Rx.Observable.create(function (observer) {
         // costruttori delle azioni di cambio di stato
