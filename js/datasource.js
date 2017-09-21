@@ -1,4 +1,15 @@
 module.exports = (map) => {
+    // temporal utils
+    const moment = require('moment');
+
+
+    //default date
+    // current day from 00:00:00:000 to 23:59:59:999
+    let date = {
+        from: moment().hour(0).minute(0).second(0).millisecond(0),
+        to: moment().hour(23).minute(59).second(59).millisecond(999)
+    };
+
     const colors = {
         'FL_GROUPS': '#3F7F91',
         'FL_EVENTS': '#88BA5C',
@@ -21,6 +32,11 @@ module.exports = (map) => {
             weight: 0
         };
     };
+
+    // query params
+    // start_time and end_time > UTC
+    let qParams = ("?start_time=").concat(date.from.utc().format('x')).concat("&end_time=",date.to.utc().format('x'));
+
 
 
 // exponential
@@ -79,10 +95,10 @@ module.exports = (map) => {
 
     };
 
-    const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
+    // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://loggerproxy.firstlife.org/tile/{x}/{y}/{z}';
+    const markerUrl = 'https://loggerproxy.firstlife.org/tile/{x}/{y}/{z}';
     // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
     // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
 
@@ -133,7 +149,7 @@ module.exports = (map) => {
             }
         }
     };
-    const mGrid = L.geoJsonGridLayer(markerUrl, markerLayers);
+    let mGrid = L.geoJsonGridLayer(markerUrl+qParams, markerLayers);
 
     mGrid.update = () => {
         let layer = mGrid.getLayers()[0];

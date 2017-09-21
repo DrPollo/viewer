@@ -25,8 +25,8 @@ module.exports = (idMapBox) => {
 
     // defaults
     const initZoom = 14;
-    const initLat = 45.070312;
-    const initLon = 7.686856;
+    const initLat = 45.630373;
+    const initLon = 12.566082;
     let zoomControlPosition = 'bottomright';
 
     const map = L.map(idMapBox).setView([initLat, initLon], initZoom);

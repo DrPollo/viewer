@@ -9,8 +9,7 @@ const AreaViewer = () => {
     // spatial utils
     const within = require('@turf/within');
     const turf = require('@turf/helpers');
-    // temporal utils
-    const moment = require('moment');
+
     // dom library
     const $ = require('jquery');
 

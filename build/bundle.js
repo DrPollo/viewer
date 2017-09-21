@@ -2,6 +2,16 @@
 'use strict';
 
 module.exports = function (map) {
+    // temporal utils
+    var moment = require('moment');
+
+    //default date
+    // current day from 00:00:00:000 to 23:59:59:999
+    var date = {
+        from: moment().hour(0).minute(0).second(0).millisecond(0),
+        to: moment().hour(23).minute(59).second(59).millisecond(999)
+    };
+
     var colors = {
         'FL_GROUPS': '#3F7F91',
         'FL_EVENTS': '#88BA5C',
@@ -22,6 +32,10 @@ module.exports = function (map) {
             weight: 0
         };
     };
+
+    // query params
+    // start_time and end_time > UTC
+    var qParams = "?start_time=".concat(date.from.utc().format('x')).concat("&end_time=", date.to.utc().format('x'));
 
     // exponential
     // var scale = function(x,level){
@@ -78,10 +92,10 @@ module.exports = function (map) {
         };
     };
 
-    var markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
+    // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://loggerproxy.firstlife.org/tile/{x}/{y}/{z}';
+    var markerUrl = 'https://loggerproxy.firstlife.org/tile/{x}/{y}/{z}';
     // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
     // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
 
@@ -127,7 +141,7 @@ module.exports = function (map) {
             }
         }
     };
-    var mGrid = L.geoJsonGridLayer(markerUrl, markerLayers);
+    var mGrid = L.geoJsonGridLayer(markerUrl + qParams, markerLayers);
 
     mGrid.update = function () {
         var layer = mGrid.getLayers()[0];
@@ -169,7 +183,7 @@ module.exports = function (map) {
     return mGrid;
 };
 
-},{}],2:[function(require,module,exports){
+},{"moment":20}],2:[function(require,module,exports){
 "use strict";
 
 /**
@@ -681,8 +695,7 @@ var AreaViewer = function AreaViewer() {
     // spatial utils
     var within = require('@turf/within');
     var turf = require('@turf/helpers');
-    // temporal utils
-    var moment = require('moment');
+
     // dom library
     var $ = require('jquery');
 
@@ -953,7 +966,7 @@ module.exports.AreaViewer = AreaViewer;
 // main init
 AreaViewer();
 
-},{"../libs/Leaflet.VectorGrid":10,"../libs/leaflet-geojson-gridlayer":11,"./datasource.js":1,"./events":2,"./focus":3,"./infobox":4,"./interactive.js":5,"./map":7,"./status":8,"./utils":9,"@turf/helpers":13,"@turf/within":17,"jquery":18,"leaflet":19,"moment":20}],7:[function(require,module,exports){
+},{"../libs/Leaflet.VectorGrid":10,"../libs/leaflet-geojson-gridlayer":11,"./datasource.js":1,"./events":2,"./focus":3,"./infobox":4,"./interactive.js":5,"./map":7,"./status":8,"./utils":9,"@turf/helpers":13,"@turf/within":17,"jquery":18,"leaflet":19}],7:[function(require,module,exports){
 'use strict';
 
 /**
@@ -983,8 +996,8 @@ module.exports = function (idMapBox) {
 
     // defaults
     var initZoom = 14;
-    var initLat = 45.070312;
-    var initLon = 7.686856;
+    var initLat = 45.630373;
+    var initLon = 12.566082;
     var zoomControlPosition = 'bottomright';
 
     var map = L.map(idMapBox).setView([initLat, initLon], initZoom);
