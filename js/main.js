@@ -69,7 +69,6 @@ const AreaViewer = () => {
     const events = Events(status, map);
     // POIs layer
     const markerGrid = require('./datasource.js');
-    const mGrid = markerGrid(map);
     // Interactive layer
     const vectorGrid = require('./interactive.js');
     const vGrid = vectorGrid();
@@ -115,7 +114,7 @@ const AreaViewer = () => {
     // inizializzazione vectorGrid layer
     vGrid.addTo(map);
     // inizializzazione markerGrid layer
-    mGrid.addTo(map);
+    markerGrid(map, status);
     // inizializzazione focusLayer
     fLayer.addTo(map);
     // inizializzazione geocoder
@@ -141,8 +140,7 @@ const AreaViewer = () => {
     // draw focus border
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
 
-    // set default style
-    status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => mGrid.setStyle(id));
+
 
     // set current contrast
     status.observe.filter(state => 'contrast' in state).map(state => state.contrast).subscribe(contrast => {
@@ -158,7 +156,7 @@ const AreaViewer = () => {
     status.observe.filter(state => 'reset' in state).subscribe(() => {
         $('body').toggleClass(focusClass);
         map.invalidateSize();
-        mGrid.resetStyle();
+        // mGrid.resetStyle();
         vGrid.resetStyle();
         fLayer.clearLayers();
     });
@@ -230,12 +228,7 @@ const AreaViewer = () => {
         // update della posizione nello stato
         status.move({bounds:map.getBounds(),center:map.getCenter(),zoom:map.getZoom()});
     });
-    // fine cambio di zoom
-    map.on('zoomend', (e) => {
-        // aggiorno stile marker
-        // todo gestione focus nella scelta di stile
-        mGrid.update();
-    });
+
     // click su risultato geocode
     geocoder.on('markgeocode', function (e) {
         // console.debug('geocode', e.geocode.properties.osm_id);

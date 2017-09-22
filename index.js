@@ -76,10 +76,19 @@ var currentParams = {};
 
 if(params){
 // override location from get params
-    lat = params.get('lat') ? params.get('lat') : lat;
-    lon = params.get('lon') ? params.get('lon') : lon;
-    zoom = params.get('zoom') ? params.get('zoom') : zoom;
-    currentParams.c = lat+':'+lon+':'+zoom;
+//     lat = params.get('lat') ? params.get('lat') : lat;
+//     lon = params.get('lon') ? params.get('lon') : lon;
+//     zoom = params.get('zoom') ? params.get('zoom') : zoom;
+//     currentParams.c = lat+':'+lon+':'+zoom;
+    if(params.get('c')){
+        currentParams.c = params.get('c');
+        let cArray = currentParams.c.split(':');
+        lat = cArray[0];
+        lon = cArray[1];
+        zoom = cArray[2];
+    }else{
+        currentParams.c = lat+':'+lon+':'+zoom;
+    }
     contrast = params.get('contrast') === 'true';
     currentParams.contrast = contrast;
     lang = params.get('lang') ? params.get('lang') : lang;

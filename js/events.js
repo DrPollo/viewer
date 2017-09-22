@@ -44,10 +44,10 @@ module.exports = (status,map) => {
 
     // catch event listners
     document.addEventListener(setViewEvent,function (e) {
-        console.log(setViewEvent,e.detail);
-        if(!e.detail.center){ return; }
+        // console.debug(setViewEvent,e.detail);
+        if((!e.detail.lat || !e.detail.lng) && !e.detail.center){ return; }
         status.restore();
-        map.setView(e.detail.center,e.detail.zoom || locationZoom);
+        map.setView(e.detail.center || L.latLng(e.detail.lat,e.detail.lng), e.detail.zoom || locationZoom);
     },false);
 
     document.addEventListener(resetViewEvent,function (e) {

@@ -3,6 +3,7 @@ module.exports = (map) => {
     const Rx = require('rxjs/Rx');
     const Utils = require('./utils');
     const utils = Utils();
+    const moment = require('moment');
 
     // init of state params
     const initFocus = {

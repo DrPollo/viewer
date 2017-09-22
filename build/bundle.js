@@ -1,15 +1,28 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
-module.exports = function (map) {
+module.exports = function (map, status) {
+
+    // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
+    // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=21&limit=99999&tiles={x}:{y}:{z}';
+    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
+    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
+    // const markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
+    // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
+    // const markerUrl = 'http://localhost:3085/events/{x}/{y}/{z}';
+    var markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
+
     // temporal utils
     var moment = require('moment');
 
+    // default zoom_level
+    var defaultZoomLevel = 18;
+
     //default date
-    // current day from 00:00:00:000 to 23:59:59:999
+    // current week, from monday to sunday from 00:00:00:000 to 23:59:59:999
     var date = {
-        from: moment().hour(0).minute(0).second(0).millisecond(0),
-        to: moment().hour(23).minute(59).second(59).millisecond(999)
+        from: moment().isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
+        to: moment().isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
     };
 
     var colors = {
@@ -80,8 +93,9 @@ module.exports = function (map) {
      * Markers
      */
     var geojsonMarkerStyle = function geojsonMarkerStyle(feature) {
-        var type = feature.properties.entity_type;
-        var color = colors[type];
+        var type = feature.properties.entity_type || feature.properties.hasType;
+        var color = colors[type] || orange;
+        // console.debug(type,color);
         return {
             opacity: 1,
             fill: true,
@@ -91,14 +105,6 @@ module.exports = function (map) {
             fillColor: color
         };
     };
-
-    // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    var markerUrl = 'https://loggerproxy.firstlife.org/tile/{x}/{y}/{z}';
-    // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
-    // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
-
 
     var focusId = null;
     var dynamicStyle = function dynamicStyle(feature) {
@@ -120,14 +126,14 @@ module.exports = function (map) {
         }
     };
     var markerLayers = {
-        'layers': {
-            'things': {
+        "layers": {
+            "default": {
                 pointToLayer: function pointToLayer(feature, latlng) {
                     var currentZoom = map.getZoom();
                     // if(feature.area_id)
                     // console.log(feature);
 
-                    var radius = scale(currentZoom, feature.properties.zoom_level);
+                    var radius = scale(currentZoom, feature.properties.zoom_level || defaultZoomLevel);
                     var weight = Math.min(radius, maxWeight);
                     var style = Object.assign({
                         interactive: false
@@ -135,7 +141,7 @@ module.exports = function (map) {
                         weight: weight,
                         radius: radius
                     });
-                    // console.log(style,latlng);
+                    console.debug(style, latlng);
                     return L.circleMarker(latlng, style);
                 }
             }
@@ -145,6 +151,9 @@ module.exports = function (map) {
 
     mGrid.update = function () {
         var layer = mGrid.getLayers()[0];
+        if (!layer) {
+            return;
+        }
         // console.log(layer);
         var features = layer['_layers'];
         var zoom = map.getZoom();
@@ -152,7 +161,7 @@ module.exports = function (map) {
         for (var i in features) {
             var feat = features[i];
             // console.log(features[i].feature.properties.zoom_level);
-            var level = feat.feature.properties.zoom_level;
+            var level = feat.feature.properties.zoom_level || defaultZoomLevel;
             var radius = scale(zoom, level);
             var weight = Math.min(radius, maxWeight);
             feat.setRadius(radius);
@@ -166,6 +175,7 @@ module.exports = function (map) {
             }
         }
     };
+
     // cambia il focus
     mGrid.setStyle = function () {
         var id = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
@@ -179,6 +189,55 @@ module.exports = function (map) {
         focusId = null;
         mGrid.update();
     };
+
+    /*
+     * Listners
+     */
+
+    // set default style
+    status.observe.filter(function (state) {
+        return 'id' in state;
+    }).map(function (state) {
+        return state.id;
+    }).subscribe(function (id) {
+        return mGrid.setStyle(id);
+    });
+
+    status.observe.filter(function (state) {
+        return 'reset' in state;
+    }).subscribe(function () {
+        mGrid.resetStyle();
+    });
+
+    status.observe.filter(function (state) {
+        return 'date' in state;
+    }).filter(function (state) {
+        return state.date;
+    }).subscribe(function (newDate) {
+        if (!newDate.from && !newDate.to) {
+            return;
+        }
+        // change date
+        date.from = newDate.from || date.from;
+        date.to = newDate.to || date.to;
+        // change q params
+        qParams = "?start_time=".concat(date.from.utc().format('x')).concat("&end_time=", date.to.utc().format('x'));
+        // remove layer
+        mGrid.remove();
+        // new instance of mGrid
+        mGrid = L.geoJsonGridLayer(markerUrl + qParams, markerLayers);
+        mGrid.addTo(map);
+    });
+
+    // fine cambio di zoom
+    map.on('zoomend', function (e) {
+        // aggiorno stile marker
+        // todo gestione focus nella scelta di stile
+        mGrid.update();
+    });
+
+    // inizializzazione markerGrid layer
+    mGrid.addTo(map);
 
     return mGrid;
 };
@@ -232,12 +291,12 @@ module.exports = function (status, map) {
 
     // catch event listners
     document.addEventListener(setViewEvent, function (e) {
-        console.log(setViewEvent, e.detail);
-        if (!e.detail.center) {
+        // console.debug(setViewEvent,e.detail);
+        if ((!e.detail.lat || !e.detail.lng) && !e.detail.center) {
             return;
         }
         status.restore();
-        map.setView(e.detail.center, e.detail.zoom || locationZoom);
+        map.setView(e.detail.center || L.latLng(e.detail.lat, e.detail.lng), e.detail.zoom || locationZoom);
     }, false);
 
     document.addEventListener(resetViewEvent, function (e) {
@@ -751,7 +810,6 @@ var AreaViewer = function AreaViewer() {
     var events = Events(status, map);
     // POIs layer
     var markerGrid = require('./datasource.js');
-    var mGrid = markerGrid(map);
     // Interactive layer
     var vectorGrid = require('./interactive.js');
     var vGrid = vectorGrid();
@@ -796,7 +854,7 @@ var AreaViewer = function AreaViewer() {
     // inizializzazione vectorGrid layer
     vGrid.addTo(map);
     // inizializzazione markerGrid layer
-    mGrid.addTo(map);
+    markerGrid(map, status);
     // inizializzazione focusLayer
     fLayer.addTo(map);
     // inizializzazione geocoder
@@ -829,15 +887,6 @@ var AreaViewer = function AreaViewer() {
         return vGrid.highlight(id);
     });
 
-    // set default style
-    status.observe.filter(function (state) {
-        return 'id' in state;
-    }).map(function (state) {
-        return state.id;
-    }).subscribe(function (id) {
-        return mGrid.setStyle(id);
-    });
-
     // set current contrast
     status.observe.filter(function (state) {
         return 'contrast' in state;
@@ -858,7 +907,7 @@ var AreaViewer = function AreaViewer() {
     }).subscribe(function () {
         $('body').toggleClass(focusClass);
         map.invalidateSize();
-        mGrid.resetStyle();
+        // mGrid.resetStyle();
         vGrid.resetStyle();
         fLayer.clearLayers();
     });
@@ -934,12 +983,7 @@ var AreaViewer = function AreaViewer() {
         // update della posizione nello stato
         status.move({ bounds: map.getBounds(), center: map.getCenter(), zoom: map.getZoom() });
     });
-    // fine cambio di zoom
-    map.on('zoomend', function (e) {
-        // aggiorno stile marker
-        // todo gestione focus nella scelta di stile
-        mGrid.update();
-    });
+
     // click su risultato geocode
     geocoder.on('markgeocode', function (e) {
         // console.debug('geocode', e.geocode.properties.osm_id);
@@ -1040,6 +1084,7 @@ module.exports = function (map) {
     var Rx = require('rxjs/Rx');
     var Utils = require('./utils');
     var utils = Utils();
+    var moment = require('moment');
 
     // init of state params
     var initFocus = {
@@ -1251,7 +1296,7 @@ module.exports = function (map) {
     return status;
 };
 
-},{"./utils":9,"@turf/bbox":12,"rxjs/Rx":29}],9:[function(require,module,exports){
+},{"./utils":9,"@turf/bbox":12,"moment":20,"rxjs/Rx":29}],9:[function(require,module,exports){
 'use strict';
 
 module.exports = function () {
@@ -4101,7 +4146,7 @@ module.exports = function () {
             },
 
             addSubLayerData: function (sublayer, data) {
-                // console.log('addSubLayerData',sublayer,data);
+                // console.log('addSubLayerData',sublayer,data,this.options);
                 // se non c'e' crea il livello
                 if (!this._geojsons[sublayer]) {
                     this._geojsons[sublayer] = new this.geoJsonClass(null, this.options.layers[sublayer]).addTo(this._map);
