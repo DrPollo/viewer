@@ -3,13 +3,15 @@
 
 module.exports = function (map, status) {
 
+    var within = require('@turf/within');
+
     // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=21&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
+    var markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
     // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
-    var markerUrl = 'http://localhost:3085/events/{x}/{y}/{z}';
+    // const markerUrl = 'http://localhost:3085/events/{x}/{y}/{z}';
     // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
 
 
@@ -75,6 +77,14 @@ module.exports = function (map, status) {
     // start_time and end_time > UTC
     var qParams = "?start_time=".concat(date.from.utc().format('x')).concat("&end_time=", date.to.utc().format('x'));
 
+    // priority of POIs visualisation
+    //'wegovnow.liquidfeedback.com'
+    var priority = {
+        highlight: ['wegovnow.liquidfeedback.com'],
+        background: [],
+        exclude: []
+    };
+
     // exponential
     // var scale = function(x,level){
     //
@@ -98,7 +108,8 @@ module.exports = function (map, status) {
      * code diverse per lo zoom in e zoom out dalla media
      */
     var maxWeight = 1,
-        maxRadius = 6,
+        maxRadius = 12,
+        backgroundMaxRadius = 6,
         cRight = 1.4,
         cLeft = 3,
         minRadius = 1;
@@ -117,8 +128,11 @@ module.exports = function (map, status) {
     /*
      * Markers
      */
+    var getType = function getType(feature) {
+        return feature.properties.entity_type || feature.application || feature.properties.hasType;
+    };
     var geojsonMarkerStyle = function geojsonMarkerStyle(feature) {
-        var type = feature.properties.entity_type || feature.application || feature.properties.hasType;
+        var type = getType(feature);
         var color = colors(type);
         // console.debug(type,color);
         return {
@@ -132,23 +146,47 @@ module.exports = function (map, status) {
     };
 
     var focusId = null;
+    var focusGeometry = null;
     var dynamicStyle = function dynamicStyle(feature) {
-        // console.debug('focus?', focus !== null);
-        // todo priority of source
+        if (!focusId || !focusGeometry) {
+            return {};
+        }
+        var type = getType(feature);
+        // priority of source:
+        // type is to be excluded
         // se non definito id o definito e uguale all'area id
-        if (!focusId || feature.area_id === focusId) {
+        // explicit relation
+        if (focusId && feature.area_id === focusId) {
             // non cambio nulla
             return {
                 up: true
             };
-        } else {
+        }
+        // within focus area geometry
+        // console.debug('focusGeometry', feature, focusGeometry);
+        try {
+            var isInside = within({ type: "featureCollection", features: [feature] }, focusGeometry).features.length > 0;
+            if (isInside) {
+                return {
+                    up: true
+                };
+            }
+        } catch (e) {
+            console.error('@turf/within', e);
+        }
+        // keep color, keep up, bigger radius
+        if (priority.highlight.indexOf(type) > -1) {
             return {
-                radius: 1,
-                color: gray,
-                fillColor: gray,
-                up: false
+                radius: 2
             };
         }
+        // otherwise (out of focus and background or not highlighted)
+        return {
+            radius: 1,
+            color: gray,
+            fillColor: gray,
+            up: false
+        };
     };
     var getZoomLevel = function getZoomLevel(feature) {
         if (feature && feature.properties && feature.properties.zoom_level) {
@@ -180,7 +218,7 @@ module.exports = function (map, status) {
                     var currentZoom = map.getZoom();
                     // if(feature.area_id)
                     // console.log(feature);
-
+                    var type = getType(feature);
                     var radius = scale(currentZoom, getZoomLevel(feature));
                     var weight = Math.min(radius, maxWeight);
                     var style = Object.assign({
@@ -189,6 +227,20 @@ module.exports = function (map, status) {
                         weight: weight,
                         radius: radius
                     });
+                    // console.debug('check type',type,radius);
+                    // priority of source:
+                    // set priority (z-index) of highlight POIs
+                    if (priority.highlight.indexOf(type) > -1) {
+                        style.up = true;
+                    }
+                    // overwrite of radius of background POIs
+                    if (priority.background.indexOf(type) > -1) {
+                        style.radius = Math.min(style.radius, backgroundMaxRadius);
+                    }
+                    // do not render POIs if their type should be exclude
+                    if (priority.exclude.indexOf(type) > -1) {
+                        return null;
+                    }
                     // console.debug(style,latlng);
                     return L.circleMarker(latlng, style);
                 }
@@ -212,6 +264,12 @@ module.exports = function (map, status) {
             var level = getZoomLevel(feat.feature);
             var radius = scale(zoom, level);
             var weight = Math.min(radius, maxWeight);
+            // get type
+            var type = getType(feat.feature);
+            // if background set cap to backgroundMaxRadius
+            if (priority.background.indexOf(type) > -1) {
+                radius = Math.min(radius, backgroundMaxRadius);
+            }
             feat.setRadius(radius);
             // creo il nuovo stile
             var style = Object.assign({}, geojsonMarkerStyle(feat.feature), { weight: weight }, dynamicStyle(feat.feature));
@@ -225,16 +283,19 @@ module.exports = function (map, status) {
     };
 
     // cambia il focus
-    mGrid.setStyle = function () {
-        var id = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : null;
-
-        // console.debug('setting focus on ',id);
-        focusId = id;
+    mGrid.setStyle = function (focus) {
+        if (!focus) {
+            return;
+        }
+        console.debug('setting focus on ', focus);
+        focusId = focus.id;
+        focusGeometry = { type: "featureCollection", features: focus.features };
         mGrid.update();
     };
     // reset il focus
     mGrid.resetStyle = function () {
         focusId = null;
+        focusGeometry = null;
         mGrid.update();
     };
 
@@ -244,11 +305,9 @@ module.exports = function (map, status) {
 
     // set default style
     status.observe.filter(function (state) {
-        return 'id' in state;
-    }).map(function (state) {
-        return state.id;
-    }).subscribe(function (id) {
-        return mGrid.setStyle(id);
+        return 'features' in state;
+    }).subscribe(function (focus) {
+        return mGrid.setStyle(focus);
     });
 
     status.observe.filter(function (state) {
@@ -290,7 +349,7 @@ module.exports = function (map, status) {
     return mGrid;
 };
 
-},{"moment":20}],2:[function(require,module,exports){
+},{"@turf/within":17,"moment":20}],2:[function(require,module,exports){
 "use strict";
 
 /**

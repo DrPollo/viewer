@@ -1,12 +1,14 @@
 module.exports = (map, status) => {
 
+    const within = require('@turf/within');
+
     // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=21&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
+    const markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
     // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
-    const markerUrl = 'http://localhost:3085/events/{x}/{y}/{z}';
+    // const markerUrl = 'http://localhost:3085/events/{x}/{y}/{z}';
     // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
 
 
@@ -62,9 +64,6 @@ module.exports = (map, status) => {
     };
 
 
-
-
-
     const featureStyle = function (feature, zoom) {
         // console.log(feature,zoom);
         return {
@@ -77,6 +76,14 @@ module.exports = (map, status) => {
     // start_time and end_time > UTC
     let qParams = ("?start_time=").concat(date.from.utc().format('x')).concat("&end_time=",date.to.utc().format('x'));
 
+
+    // priority of POIs visualisation
+    //'wegovnow.liquidfeedback.com'
+    let priority = {
+        highlight:['wegovnow.liquidfeedback.com'],
+        background:[],
+        exclude:[]
+    };
 
 
     // exponential
@@ -102,7 +109,8 @@ module.exports = (map, status) => {
      * code diverse per lo zoom in e zoom out dalla media
      */
     const maxWeight = 1,
-        maxRadius = 6,
+        maxRadius = 12,
+        backgroundMaxRadius = 6,
         cRight = 1.4,
         cLeft = 3,
         minRadius = 1;
@@ -121,8 +129,9 @@ module.exports = (map, status) => {
     /*
      * Markers
      */
+    const getType = (feature) => {return feature.properties.entity_type || feature.application || feature.properties.hasType;};
     const geojsonMarkerStyle = (feature) => {
-        let type = feature.properties.entity_type || feature.application || feature.properties.hasType;
+        let type = getType(feature);
         let color = colors(type);
         // console.debug(type,color);
         return {
@@ -133,27 +142,48 @@ module.exports = (map, status) => {
             color: color,
             fillColor: color
         };
-
     };
 
 
     let focusId = null;
+    let focusGeometry = null;
     const dynamicStyle = (feature) => {
-        // console.debug('focus?', focus !== null);
-        // todo priority of source
+        if(!focusId || !focusGeometry){ return{}; }
+        let type = getType(feature);
+        // priority of source:
+        // type is to be excluded
         // se non definito id o definito e uguale all'area id
-        if(!focusId || feature.area_id === focusId){
+        // explicit relation
+        if(focusId && feature.area_id === focusId){
             // non cambio nulla
             return {
                 up: true
             };
-        } else {
-            return {
-                radius: 1,
-                color: gray,
-                fillColor: gray,
-                up: false
+        }
+        // within focus area geometry
+        // console.debug('focusGeometry', feature, focusGeometry);
+        try{
+            let isInside = (within({type:"featureCollection", features:[feature]}, focusGeometry).features.length > 0);
+            if(isInside) {
+                return {
+                    up: true
+                };
             }
+        }catch (e){
+            console.error('@turf/within',e);
+        }
+        // keep color, keep up, bigger radius
+        if(priority.highlight.indexOf(type) > -1) {
+            return {
+                radius: 2
+            };
+        }
+        // otherwise (out of focus and background or not highlighted)
+        return {
+            radius: 1,
+            color: gray,
+            fillColor: gray,
+            up: false
         }
     };
     const getZoomLevel = (feature) => {
@@ -183,7 +213,7 @@ module.exports = (map, status) => {
                     let currentZoom = map.getZoom();
                     // if(feature.area_id)
                     // console.log(feature);
-
+                    let type = getType(feature);
                     let radius = scale(currentZoom, getZoomLevel(feature));
                     let weight = Math.min(radius, maxWeight);
                     let style = Object.assign(
@@ -196,6 +226,18 @@ module.exports = (map, status) => {
                             radius: radius
                         }
                     );
+                    // console.debug('check type',type,radius);
+                    // priority of source:
+                    // set priority (z-index) of highlight POIs
+                    if(priority.highlight.indexOf(type) > -1) {
+                        style.up = true;
+                    }
+                    // overwrite of radius of background POIs
+                    if(priority.background.indexOf(type) > -1) {
+                        style.radius = Math.min(style.radius, backgroundMaxRadius);
+                    }
+                    // do not render POIs if their type should be exclude
+                    if(priority.exclude.indexOf(type) > -1) { return null; }
                     // console.debug(style,latlng);
                     return L.circleMarker(latlng, style);
                 }
@@ -217,9 +259,15 @@ module.exports = (map, status) => {
             let level = getZoomLevel(feat.feature);
             let radius = scale(zoom, level);
             let weight = Math.min(radius, maxWeight);
+            // get type
+            let type = getType(feat.feature);
+            // if background set cap to backgroundMaxRadius
+            if(priority.background.indexOf(type) > -1) {
+                radius = Math.min(radius, backgroundMaxRadius);
+            }
             feat.setRadius(radius);
             // creo il nuovo stile
-            let style = Object.assign({}, geojsonMarkerStyle(feat.feature), {weight: weight},dynamicStyle(feat.feature));
+            let style = Object.assign({}, geojsonMarkerStyle(feat.feature), {weight: weight}, dynamicStyle(feat.feature));
             feat.setStyle(style);
             if (style.up) {
                 feat.bringToFront();
@@ -230,14 +278,17 @@ module.exports = (map, status) => {
     };
 
     // cambia il focus
-    mGrid.setStyle = (id = null) => {
-        // console.debug('setting focus on ',id);
-        focusId = id;
+    mGrid.setStyle = (focus) => {
+        if(!focus) {return;}
+        console.debug('setting focus on ',focus);
+        focusId = focus.id;
+        focusGeometry = {type:"featureCollection", features:focus.features};
         mGrid.update();
     };
     // reset il focus
     mGrid.resetStyle = () => {
         focusId = null;
+        focusGeometry = null;
         mGrid.update();
     };
 
@@ -249,7 +300,7 @@ module.exports = (map, status) => {
 
 
     // set default style
-    status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => mGrid.setStyle(id));
+    status.observe.filter(state => 'features' in state).subscribe(focus => mGrid.setStyle(focus));
 
     status.observe.filter(state => 'reset' in state).subscribe(() => {
         mGrid.resetStyle();
