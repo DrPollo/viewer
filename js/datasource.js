@@ -156,13 +156,23 @@ module.exports = (map, status) => {
             }
         }
     };
-    const mapZoom = (type) => {
-        switch (type){
-            case '':
-                break;
-            default:
-                return 18;
+    const getZoomLevel = (feature) => {
+        if(feature && feature.properties && feature.properties.zoom_level) {return feature && feature.properties && feature.properties.zoom_level;}
+
+        // zoom considering hasType
+        if(feature && feature.properties && feature.properties.hasType) {
+            switch (feature.properties.hasType) {
+                case 'BicyclePath':
+                case 'Highway':
+                case 'Hospital':
+                case 'UrbanPark':
+                    return 16;
+                    break;
+                default: return defaultZoomLevel;
+            }
         }
+        // default
+        return defaultZoomLevel;
     };
 
     // configuration of geojson grid level: it must have "layers":{ "default":{ } }
@@ -174,7 +184,7 @@ module.exports = (map, status) => {
                     // if(feature.area_id)
                     // console.log(feature);
 
-                    let radius = scale(currentZoom, feature.properties.zoom_level || defaultZoomLevel);
+                    let radius = scale(currentZoom, getZoomLevel(feature));
                     let weight = Math.min(radius, maxWeight);
                     let style = Object.assign(
                         {
@@ -203,8 +213,8 @@ module.exports = (map, status) => {
         // console.log('nuovo raggio: ',scale(zoom));
         for (let i in features) {
             let feat = features[i];
-            // console.log(features[i].feature.properties.zoom_level);
-            let level = feat.feature.properties.zoom_level || defaultZoomLevel;
+            // console.log(feat.feature);
+            let level = getZoomLevel(feat.feature);
             let radius = scale(zoom, level);
             let weight = Math.min(radius, maxWeight);
             feat.setRadius(radius);

@@ -150,13 +150,26 @@ module.exports = function (map, status) {
             };
         }
     };
-    var mapZoom = function mapZoom(type) {
-        switch (type) {
-            case '':
-                break;
-            default:
-                return 18;
+    var getZoomLevel = function getZoomLevel(feature) {
+        if (feature && feature.properties && feature.properties.zoom_level) {
+            return feature && feature.properties && feature.properties.zoom_level;
         }
+
+        // zoom considering hasType
+        if (feature && feature.properties && feature.properties.hasType) {
+            switch (feature.properties.hasType) {
+                case 'BicyclePath':
+                case 'Highway':
+                case 'Hospital':
+                case 'UrbanPark':
+                    return 16;
+                    break;
+                default:
+                    return defaultZoomLevel;
+            }
+        }
+        // default
+        return defaultZoomLevel;
     };
 
     // configuration of geojson grid level: it must have "layers":{ "default":{ } }
@@ -168,7 +181,7 @@ module.exports = function (map, status) {
                     // if(feature.area_id)
                     // console.log(feature);
 
-                    var radius = scale(currentZoom, feature.properties.zoom_level || defaultZoomLevel);
+                    var radius = scale(currentZoom, getZoomLevel(feature));
                     var weight = Math.min(radius, maxWeight);
                     var style = Object.assign({
                         interactive: false
@@ -195,8 +208,8 @@ module.exports = function (map, status) {
         // console.log('nuovo raggio: ',scale(zoom));
         for (var i in features) {
             var feat = features[i];
-            // console.log(features[i].feature.properties.zoom_level);
-            var level = feat.feature.properties.zoom_level || defaultZoomLevel;
+            // console.log(feat.feature);
+            var level = getZoomLevel(feat.feature);
             var radius = scale(zoom, level);
             var weight = Math.min(radius, maxWeight);
             feat.setRadius(radius);
