@@ -1,10 +1,10 @@
-#AreaViewer
+# AreaViewer
 
 Map-based web viewer for FirstLife area-based explorer
 
-```http://areaviewer.firstlife.org/?c=45.629059798221725:12.563289999961855:17&contrast=false&lang=en&domain=http://areaviewer.firstlife.org/```
+``http://areaviewer.firstlife.org/?c=45.629059798221725:12.563289999961855:17&contrast=false&lang=en&domain=http://areaviewer.firstlife.org/``
 
-##Usage 
+## Usage 
 
 AreaViewer is meant to be part of WeGovNow landingpage platform. It can be used as embed and as library. 
 
@@ -62,12 +62,12 @@ document.dispatchEvent(event);
 ```
 
 Following the list of supported events: 
-#####Getting state changes (reading the current state)
+##### Getting state changes (reading the current state)
 - ``areaViewer.focusOn``: ``{}``
 - ``areaViewer.explore``: ``{}``
 - ``areaViewer.position``: ``{}``
 
-#####Triggering state changes (changing the current state)
+##### Triggering state changes (changing the current state)
 - ``areaViewer.setView``: ``{lat:<float>,lng:<float>,zoom<1-20>}`` change map viewPort
 - ``areaViewer.setBounds``: ``{[sw.lat,sw.lon,ne.lat,ne.lon]}`` change map viewport
 - ``areaViewer.setContrast``: ``{contrast:<boolean>}`` change map base layer
@@ -78,7 +78,7 @@ Following the list of supported events:
 - ``areaViewer.toExplore``: ``{null}`` exit from focus
 
 
-#####Priority params
+##### Priority params
 
 Priority params are meant to custom the visualisation of events within areaViewer:
  - highlight: what should be prominent 
@@ -87,7 +87,7 @@ Priority params are meant to custom the visualisation of events within areaViewe
  - ***todo*** include: what should be included (if defined what is not explicitly included will be excluded)
   
 
-##Install
+### Install
 To support the development of AreaViewer, ``gulpfile.js`` includes lives erver, ecma6 linter and browserify boundler scripts.
 First, install node packages running in the project directory:
 ```
@@ -97,7 +97,7 @@ To test AreaViewer, run
 ```
 npm test
 ```
-###Development
+### Development
 To start developing launch the live server
 ```
 npm dev
@@ -108,17 +108,19 @@ To compile a new `boundle.js` run gulp task `js` in the project root.
 ```
 npm build
 ```
-##Dependencies
+#### Dependencies
  - LeafletJS
  - Turf.js
  - Rx/js
-###Development dependencies
+
+### Development dependencies
  - gulp, gulp-util
  - browserify, watchify
  - babel
  - vinyl-source-stream
  - browser-sync
-##Licensing
+
+### Licensing
 Author: Alessio Antonini
 
 Licence: MIT
