@@ -130,6 +130,20 @@ module.exports = (map, status) => {
      * Markers
      */
     const getType = (feature) => {return feature.properties.entity_type || feature.application || feature.properties.hasType;};
+    const getIconName = (type) => {
+        if (type === 'FL_GROUPS') return 'People';
+        if (type === 'FL_EVENTS') return 'Calendar';
+        if (type === 'FL_NEWS') return 'Alert';
+        if (type === 'FL_ARTICLES') return 'Content';
+        if (type === 'FL_PLACES') return 'Location';
+        if (type.includes('imc.infalia')) return 'Alert';
+        if (type.includes('tmp.infalia')) return 'Activity';
+        if (type.includes('liquidfeedback')) return 'Input';
+        if (type.includes('firstlife')) return 'People';
+        if (type.includes('geokey')) return 'Content';
+        if (type.includes('communitymaps')) return 'Content';
+        return 'Content';
+    };
     const geojsonMarkerStyle = (feature) => {
         let type = getType(feature);
         let color = colors(type);
@@ -214,6 +228,7 @@ module.exports = (map, status) => {
                     // if(feature.area_id)
                     // console.log(feature);
                     let type = getType(feature);
+                    let className = getIconName(type);
                     let radius = scale(currentZoom, getZoomLevel(feature));
                     let weight = Math.min(radius, maxWeight);
                     let style = Object.assign(
@@ -223,7 +238,8 @@ module.exports = (map, status) => {
                         geojsonMarkerStyle(feature),
                         {
                             weight: weight,
-                            radius: radius
+                            radius: radius,
+                            className: className
                         }
                     );
                     // console.debug('check type',type,radius);

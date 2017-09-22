@@ -131,6 +131,20 @@ module.exports = function (map, status) {
     var getType = function getType(feature) {
         return feature.properties.entity_type || feature.application || feature.properties.hasType;
     };
+    var getIconName = function getIconName(type) {
+        if (type === 'FL_GROUPS') return 'People';
+        if (type === 'FL_EVENTS') return 'Calendar';
+        if (type === 'FL_NEWS') return 'Alert';
+        if (type === 'FL_ARTICLES') return 'Content';
+        if (type === 'FL_PLACES') return 'Location';
+        if (type.includes('imc.infalia')) return 'Alert';
+        if (type.includes('tmp.infalia')) return 'Activity';
+        if (type.includes('liquidfeedback')) return 'Input';
+        if (type.includes('firstlife')) return 'People';
+        if (type.includes('geokey')) return 'Content';
+        if (type.includes('communitymaps')) return 'Content';
+        return 'Content';
+    };
     var geojsonMarkerStyle = function geojsonMarkerStyle(feature) {
         var type = getType(feature);
         var color = colors(type);
@@ -219,13 +233,15 @@ module.exports = function (map, status) {
                     // if(feature.area_id)
                     // console.log(feature);
                     var type = getType(feature);
+                    var className = getIconName(type);
                     var radius = scale(currentZoom, getZoomLevel(feature));
                     var weight = Math.min(radius, maxWeight);
                     var style = Object.assign({
                         interactive: false
                     }, geojsonMarkerStyle(feature), {
                         weight: weight,
-                        radius: radius
+                        radius: radius,
+                        className: className
                     });
                     // console.debug('check type',type,radius);
                     // priority of source:
