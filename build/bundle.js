@@ -9,8 +9,9 @@ module.exports = function (map, status) {
     // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
     // const markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
     // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
-    // const markerUrl = 'http://localhost:3085/events/{x}/{y}/{z}';
-    var markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
+    var markerUrl = 'http://localhost:3085/events/{x}/{y}/{z}';
+    // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
+
 
     // temporal utils
     var moment = require('moment');
@@ -25,18 +26,42 @@ module.exports = function (map, status) {
         to: moment().isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
     };
 
-    var colors = {
-        'FL_GROUPS': '#3F7F91',
-        'FL_EVENTS': '#88BA5C',
-        'FL_NEWS': '#823256',
-        'FL_ARTICLES': '#FFB310',
-        'FL_PLACES': '#FE4336'
-    };
-
-    var orange = "#ff7800",
+    var orange = "#FF9800",
+        pink = "#E91E63",
+        deeporange = "#FF5722",
         blue = "#82b1ff",
-        green = "#33cd5f",
-        gray = "#dcdcdc";
+        deeppurle = "#673AB7",
+        cyan = "#00BCD4",
+        teal = "#009688",
+        light = "#03A9F4",
+        indingo = "#3F51B5",
+        azure = "",
+        purple = "",
+        green = "#4CAF50",
+        lightgreen = "#8BC34A",
+        yellow = "#FFEB3B",
+        amber = "#FFC107",
+        lime = "#CDDC39",
+        red = "#F44336",
+        wgnred = '#c32630',
+        gray = "#9E9E9E",
+        brown = "#795548",
+        bluegray = "#607D8B";
+
+    var colors = function colors(type) {
+        if (type === 'FL_GROUPS') return '#3F7F91';
+        if (type === 'FL_EVENTS') return '#88BA5C';
+        if (type === 'FL_NEWS') return '#823256';
+        if (type === 'FL_ARTICLES') return '#FFB310';
+        if (type === 'FL_PLACES') return '#FE4336';
+        if (type.includes('imc.infalia')) return blue;
+        if (type.includes('tmp.infalia')) return indingo;
+        if (type.includes('liquidfeedback')) return green;
+        if (type.includes('firstlife')) return orange;
+        if (type.includes('geokey')) return red;
+        if (type.includes('communitymaps')) return teal;
+        return '#c32630';
+    };
 
     var featureStyle = function featureStyle(feature, zoom) {
         // console.log(feature,zoom);
@@ -93,8 +118,8 @@ module.exports = function (map, status) {
      * Markers
      */
     var geojsonMarkerStyle = function geojsonMarkerStyle(feature) {
-        var type = feature.properties.entity_type || feature.properties.hasType;
-        var color = colors[type] || orange;
+        var type = feature.properties.entity_type || feature.application || feature.properties.hasType;
+        var color = colors(type);
         // console.debug(type,color);
         return {
             opacity: 1,
@@ -125,6 +150,16 @@ module.exports = function (map, status) {
             };
         }
     };
+    var mapZoom = function mapZoom(type) {
+        switch (type) {
+            case '':
+                break;
+            default:
+                return 18;
+        }
+    };
+
+    // configuration of geojson grid level: it must have "layers":{ "default":{ } }
     var markerLayers = {
         "layers": {
             "default": {
@@ -141,7 +176,7 @@ module.exports = function (map, status) {
                         weight: weight,
                         radius: radius
                     });
-                    console.debug(style, latlng);
+                    // console.debug(style,latlng);
                     return L.circleMarker(latlng, style);
                 }
             }
