@@ -609,6 +609,21 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
     // interactive mode enable/disable features rendering at focus
     var interactive = true;
 
+    var typeLabels = {
+        'city_block': {
+            "en": "City block",
+            "it": "Isolato"
+        },
+        'quartieri': {
+            "en": "Neighbourhood",
+            "it": "Quartiere"
+        },
+        "site": {
+            "en": "Outdoor place",
+            "it": "Spazio esterno"
+        }
+    };
+
     infoBox.empty();
 
     var tooltipLabel = {
@@ -685,7 +700,7 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
         if (feature && feature.name) {
             // feature.name
             // feature.type
-            label = (feature.type && feature.type !== feature.name ? feature.type + ": " : "").concat(feature.name);
+            label = parseLabel(feature);
             // console.debug('init infobox label',label);
         }
         // bottone per uscire dal focus
@@ -755,18 +770,57 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
         });
     });
 
+    // parsing label infobox
+    function parseLabel(feature) {
+        var label = "";
+        var type = feature.type.toLowerCase();
+        switch (type) {
+            case 'city_block':
+                label = label.concat(typeLabels['city_block'][lang], " ");
+                break;
+            case 'quartieri':
+                label = label.concat(typeLabels['city_block'][lang], ": ");
+                break;
+            case 'site':
+                label = label.concat(typeLabels['site'][lang], ": ");
+                break;
+            default:
+                break;
+        }
+        if (feature.type !== feature.name) {
+            if (label !== "") {
+                label = label.concat(": ");
+            }
+            label = label.concat(feature.name);
+        }
+
+        return label;
+    }
+
+    // parsing and building content entries
     function parseEntry(entry) {
         var i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="mdl-list__item-primary-content">';
         var c = '</li>';
         var name = null;
+        var icon = null;
 
         if (entry.properties.hasType) {
-            var icon = null;
+
             var type = entry.properties.hasType.toLowerCase();
             // console.debug('type?',type);
             switch (type) {
                 case 'school':
-                    icon = 'school';break;
+                    icon = 'school';
+                    break;
+                case 'initiative':
+                    icon = 'assessment';
+                    break;
+                case 'event':
+                    icon = 'event';
+                    break;
+                case 'report':
+                    icon = 'build';
+                    break;
                 default:
                     icon = 'room';
             }
@@ -776,8 +830,35 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
             }
         }
         if (entry.activity_type) {
-            // todo parse and lang
-            var activity = entry.activity_type;
+            // todo parse activity type
+            var activity = entry.activity_type.toLowerCase();
+            console.debug('activity: ', activity);
+            switch (activity) {
+                case 'object_created':
+                    break;
+                case 'object_removed':
+                    icon = 'delete';break;
+                case 'contribution_added':
+                    icon = 'playlist add';break;
+                case 'contribution_updated':
+                    icon = 'playlist add check';break;
+                case 'contribution_removed':
+                    icon = 'exposure neg 1';break;
+                case 'issue_voted_on':
+                    icon = 'exposure plus 1';break;
+                case 'interest_added':
+                    icon = 'exposure plus 1';break;
+                case 'interest_removed':
+                    icon = 'exposure neg 1';break;
+                case 'support_added':
+                    icon = 'exposure plus 1';break;
+                case 'support_removed':
+                    icon = 'exposure neg 1';break;
+                case 'suggestion_rated':
+                    icon = 'exposure';break;
+                default:
+                    break;
+            }
         }
 
         if (entry.properties.name || entry.properties.hasName || entry.details.name) {
@@ -791,8 +872,8 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
         }
 
         // action: go to content
-        if (entry.properties.external_url) {
-            var url = entry.properties.external_url;
+        if (entry.properties.reference_external_url || entry.properties.external_url) {
+            var url = entry.properties.reference_external_url || entry.properties.external_url;
             c = '</span>'.concat('<span class="mdl-list__item-secondary-content">', '<a class="mdl-list__item-secondary-action" href="', url, '">', '<i class="material-icons">', 'launch', '</i>', '</a></span>', c);
         }
 
