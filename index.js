@@ -278,13 +278,13 @@ function emitEvent(eventName, params) {
 
 // update location.search params
 function updateQueryParams(key, value) {
-    console.debug('check updateQueryParams',!currentParams);
+    // console.debug('check updateQueryParams',!currentParams);
     if (!currentParams) {return;}
-    console.debug('check updateQueryParams',location.search === null);
+    // console.debug('check updateQueryParams',location.search === null);
     if(location.search === null){ return;}
-    console.debug('check updateQueryParams',!window.history);
+    // console.debug('check updateQueryParams',!window.history);
     if(!window.history){ return;}
-    console.debug('updating location.search params', key,value);
+    // console.debug('updating location.search params', key,value);
     if(value !== null && value !== "null"){
         // aggiungo chiave e valore
         currentParams[key] = value;
