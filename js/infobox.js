@@ -138,7 +138,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
 
     // change interactivity settings
     status.observe.filter(state => 'interactive' in state).map(state => state.interactive).subscribe(newInter => {
-        interactive = newInter
+        interactive = newInter;
     });
 
     // focus
@@ -146,7 +146,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
         // clear
         featureBox.empty();
         // if featurebox disabled: exit
-        if (!interactive) {
+        if (interactive === 'false' || interactive === false) {
             return;
         }
         console.debug('add content to featurebox', content, interactive);
@@ -170,13 +170,13 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
         let type = feature.type.toLowerCase();
         switch (type) {
             case 'city_block':
-                label = label.concat(typeLabels['city_block'][lang], " ");
+                label = label.concat(typeLabels['city_block'][lang]);
                 break;
             case 'quartieri':
-                label = label.concat(typeLabels['city_block'][lang], ": ");
+                label = label.concat(typeLabels['quartieri'][lang]);
                 break;
             case 'site':
-                label = label.concat(typeLabels['site'][lang], ": ");
+                label = label.concat(typeLabels['site'][lang]);
                 break;
             default:
                 break;

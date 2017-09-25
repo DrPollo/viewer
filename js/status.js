@@ -200,7 +200,7 @@ module.exports = (map) => {
         status.interactive = (val) => {
             // check behaviour of focus mode
             console.debug('check interactive',val.interactive);
-            store["interface"]["interactive"] = (val.interactive === 'true');
+            store["interface"]["interactive"] = (val.interactive === 'false') ? false : true;
             observer.next(store["interface"]);
         };
         status.focus = focusHandler(observer);

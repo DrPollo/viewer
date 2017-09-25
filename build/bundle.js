@@ -753,7 +753,7 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
         // clear
         featureBox.empty();
         // if featurebox disabled: exit
-        if (!interactive) {
+        if (interactive === 'false' || interactive === false) {
             return;
         }
         console.debug('add content to featurebox', content, interactive);
@@ -776,13 +776,13 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
         var type = feature.type.toLowerCase();
         switch (type) {
             case 'city_block':
-                label = label.concat(typeLabels['city_block'][lang], " ");
+                label = label.concat(typeLabels['city_block'][lang]);
                 break;
             case 'quartieri':
-                label = label.concat(typeLabels['city_block'][lang], ": ");
+                label = label.concat(typeLabels['quartieri'][lang]);
                 break;
             case 'site':
-                label = label.concat(typeLabels['site'][lang], ": ");
+                label = label.concat(typeLabels['site'][lang]);
                 break;
             default:
                 break;
@@ -1617,7 +1617,7 @@ module.exports = function (map) {
         status.interactive = function (val) {
             // check behaviour of focus mode
             console.debug('check interactive', val.interactive);
-            store["interface"]["interactive"] = val.interactive === 'true';
+            store["interface"]["interactive"] = val.interactive === 'false' ? false : true;
             observer.next(store["interface"]);
         };
         status.focus = focusHandler(observer);

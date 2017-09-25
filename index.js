@@ -30,7 +30,7 @@ var vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
 
 // defaults
 var contrast = false;
-var domain = null;
+var domain = window.location.href;
 var mode = false;
 var params = null;
 var focus = null;
@@ -100,10 +100,8 @@ if(params){
     if(params.get('domain')){
         // recover domain param (used for security reasons)
         domain = params.get('domain');
-        currentParams.domain = domain;
-    }else{
-        console.error('missing mandatory param: "domain"');
     }
+    currentParams.domain = domain;
     // handling date_from param
     if(params.get('date_from') && Date.parse(params.get('date_from'))){
         date.from = params.get('date_from');
@@ -280,11 +278,13 @@ function emitEvent(eventName, params) {
 
 // update location.search params
 function updateQueryParams(key, value) {
+    console.debug('check updateQueryParams',!currentParams);
     if (!currentParams) {return;}
-    if(!location.search){ return;}
+    console.debug('check updateQueryParams',location.search === null);
+    if(location.search === null){ return;}
+    console.debug('check updateQueryParams',!window.history);
     if(!window.history){ return;}
-
-    // console.debug('updating location.search params', key,value);
+    console.debug('updating location.search params', key,value);
     if(value !== null && value !== "null"){
         // aggiungo chiave e valore
         currentParams[key] = value;
