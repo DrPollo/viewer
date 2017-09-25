@@ -52,6 +52,7 @@ module.exports = (map) => {
         "lang": null,
         "contrast": null,
         "priority": null,
+        "interactive": null,
         "date": null,
         "observe": null
     };
@@ -195,6 +196,12 @@ module.exports = (map) => {
             store["view"]["date"]["from"] = newDate.from;
             store["view"]["date"]["to"] = newDate.to;
             observer.next(store["view"]["date"]);
+        };
+        status.interactive = (val) => {
+            // check behaviour of focus mode
+            console.debug('check interactive',val.interactive);
+            store["interface"]["interactive"] = (val.interactive === 'true');
+            observer.next(store["interface"]);
         };
         status.focus = focusHandler(observer);
         status.move = (params) => {

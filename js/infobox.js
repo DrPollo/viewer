@@ -12,6 +12,10 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
     // mapBox.on('map-container-resize', function () {
     //     setTimeout(map.invalidateSize,400); // doesn't seem to do anything
     // });
+
+    // interactive mode enable/disable features rendering at focus
+    let interactive = true;
+
     infoBox.empty();
 
 
@@ -114,13 +118,17 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
         document.getElementById('exitFocus').removeEventListener('click',exitHandler);
     };
 
-    // todo reset size map in explorer
+    // change interactivity settings
+    status.observe.filter(state => 'interactive' in state).map(state => state.interactive).subscribe(newInter => {interactive = newInter});
 
-
+    // focus
     status.observe.filter(state => 'content' in state).map(state => state.content).subscribe((content) => {
-        console.debug('add content to featurebox',content);
-        // append features to featurebox
+        // clear
         featureBox.empty();
+        // if featurebox disabled: exit
+        if(!interactive){return;}
+        console.debug('add content to featurebox',content,interactive);
+        // append features to featurebox
         // sorting contents from newer to older
         content.sort((a,b) => {return a.timestamp >= b.timestamp;}).forEach((entry) => {
             let e = parseEntry(entry);

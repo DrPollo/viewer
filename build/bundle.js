@@ -391,6 +391,7 @@ module.exports = function (status, map) {
     var setLanguageEvent = "areaViewer.setLanguage";
     var setPriorityEvent = "areaViewer.setPriority";
     var setDateEvent = "areaViewer.setDate";
+    var setInteractivityEvent = "areaViewer.setInteractive";
     // state events
     var focusToEvent = "areaViewer.focusTo";
     var toExploreEvent = "areaViewer.toExplore";
@@ -455,13 +456,23 @@ module.exports = function (status, map) {
         status.date({ from: e.detail.date_from, to: e.detail.date_to });
     }, false);
 
-    // todo definition of priority of sources for visualisation purpose
+    // change behaviour of focus: enable or disable list and change of layout
+    document.addEventListener(setInteractivityEvent, function (e) {
+        console.log(setInteractivityEvent, e.detail);
+        // set current dates
+        if (e.detail.interactive === null || e.detail.interactive === "null") {
+            return;
+        }
+        status.interactive({ interactive: e.detail.interactive });
+    }, false);
+
+    // definition of priority of sources for visualisation purpose
     document.addEventListener(setPriorityEvent, function (e) {
         console.log(setPriorityEvent, e.detail);
         if (!e.detail.priority) {
             return;
         }
-        // todo set priority of POIs: {highlight:[], background:[], exluded:[]}
+        // set priority of POIs: {highlight:[], background:[], exluded:[]}
         status.priority(e.detail.priority);
     }, false);
 
@@ -476,6 +487,7 @@ module.exports = function (status, map) {
         status.focus({ id: e.detail.id });
     }, false);
 
+    // back to explore
     document.addEventListener(toExploreEvent, function (e) {
         console.log(toExploreEvent, e.detail);
         // restore the status of explorer
@@ -533,17 +545,34 @@ module.exports = function (status) {
         'FL_ARTICLES': '#FFB310',
         'FL_PLACES': '#FE4336'
     };
-    var orange = "#ff7800",
+    var orange = "#FF9800",
+        pink = "#E91E63",
+        deeporange = "#FF5722",
         blue = "#82b1ff",
-        green = "#33cd5f",
-        gray = "#dcdcdc";
+        deeppurle = "#673AB7",
+        cyan = "#00BCD4",
+        teal = "#009688",
+        light = "#03A9F4",
+        indingo = "#3F51B5",
+        azure = "",
+        purple = "",
+        green = "#4CAF50",
+        lightgreen = "#8BC34A",
+        yellow = "#FFEB3B",
+        amber = "#FFC107",
+        lime = "#CDDC39",
+        red = "#F44336",
+        wgnred = '#c32630',
+        gray = "#9E9E9E",
+        brown = "#795548",
+        bluegray = "#607D8B";
 
     var focusStyle = {
         style: {
-            color: orange,
+            color: wgnred,
             weight: 2,
             fill: false,
-            fillColor: orange,
+            fillColor: wgnred,
             opacity: 1,
             fillOpacity: 0.5
         },
@@ -576,6 +605,10 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
     // mapBox.on('map-container-resize', function () {
     //     setTimeout(map.invalidateSize,400); // doesn't seem to do anything
     // });
+
+    // interactive mode enable/disable features rendering at focus
+    var interactive = true;
+
     infoBox.empty();
 
     var tooltipLabel = {
@@ -687,17 +720,29 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
         document.getElementById('exitFocus').removeEventListener('click', exitHandler);
     };
 
-    // todo reset size map in explorer
+    // change interactivity settings
+    status.observe.filter(function (state) {
+        return 'interactive' in state;
+    }).map(function (state) {
+        return state.interactive;
+    }).subscribe(function (newInter) {
+        interactive = newInter;
+    });
 
-
+    // focus
     status.observe.filter(function (state) {
         return 'content' in state;
     }).map(function (state) {
         return state.content;
     }).subscribe(function (content) {
-        console.debug('add content to featurebox', content);
-        // append features to featurebox
+        // clear
         featureBox.empty();
+        // if featurebox disabled: exit
+        if (!interactive) {
+            return;
+        }
+        console.debug('add content to featurebox', content, interactive);
+        // append features to featurebox
         // sorting contents from newer to older
         content.sort(function (a, b) {
             return a.timestamp >= b.timestamp;
@@ -768,10 +813,28 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
 "use strict";
 
 module.exports = function () {
-    var orange = "#ff7800";
-    var blue = "#82b1ff";
-    var green = "#33cd5f";
-    var gray = "#dcdcdc";
+
+    var orange = "#FF9800",
+        pink = "#E91E63",
+        deeporange = "#FF5722",
+        blue = "#82b1ff",
+        deeppurle = "#673AB7",
+        cyan = "#00BCD4",
+        teal = "#009688",
+        light = "#03A9F4",
+        indingo = "#3F51B5",
+        azure = "",
+        purple = "",
+        green = "#4CAF50",
+        lightgreen = "#8BC34A",
+        yellow = "#FFEB3B",
+        amber = "#FFC107",
+        lime = "#CDDC39",
+        red = "#F44336",
+        wgnred = '#c32630',
+        gray = "#9E9E9E",
+        brown = "#795548",
+        bluegray = "#607D8B";
 
     // reset styles
     var resetStyle = {
@@ -780,10 +843,10 @@ module.exports = function () {
         fillColor: 'transparent'
     };
     var highlightStyle = {
-        color: orange,
+        color: wgnred,
         weight: 2,
         fill: false,
-        fillColor: orange,
+        fillColor: wgnred,
         opacity: 1,
         fillOpacity: 0.5
     };
@@ -969,10 +1032,14 @@ var AreaViewer = function AreaViewer() {
     var minHeight = 500;
     var minWidth = 500;
 
-    // interactive mode
+    // interactive mode enable/disable layout changes at focus
+    var interactive = true;
 
     // const focusClass = (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|ipad|iris|kindle|Android|Silk|lge |maemo|midp|mmp|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent)
-    var focusClass = 'focus';
+    var focusClass = {
+        true: 'focus',
+        false: 'nofocus'
+    };
 
     /*
      * moduli
@@ -1052,8 +1119,9 @@ var AreaViewer = function AreaViewer() {
         var feature = fLayer.setLayer(focus.features);
         console.debug('fitting to bounds', feature);
         // map.removeLayer(mGrid);
-        $('body').addClass(focusClass);
-        // console.debug('check body class',$('body').hasClass(focusClass));
+        console.debug('check focus behaviour', interactive, focusClass[interactive]);
+        $('body').addClass(focusClass[interactive]);
+        // console.debug('check body class',$('body').hasClass(focusClass[interactive]));
         map.invalidateSize();
         map.fitBounds(feature.getBounds());
     });
@@ -1065,6 +1133,15 @@ var AreaViewer = function AreaViewer() {
         return state.id;
     }).subscribe(function (id) {
         return vGrid.highlight(id);
+    });
+
+    // change interactivity settings
+    status.observe.filter(function (state) {
+        return 'interactive' in state;
+    }).map(function (state) {
+        return state.interactive;
+    }).subscribe(function (newInter) {
+        interactive = newInter;
     });
 
     // set current contrast
@@ -1085,7 +1162,7 @@ var AreaViewer = function AreaViewer() {
     status.observe.filter(function (state) {
         return 'reset' in state;
     }).subscribe(function () {
-        $('body').removeClass(focusClass);
+        $('body').removeClass(focusClass[interactive]);
         map.invalidateSize();
         // mGrid.resetStyle();
         vGrid.resetStyle();
@@ -1312,6 +1389,7 @@ module.exports = function (map) {
         "lang": null,
         "contrast": null,
         "priority": null,
+        "interactive": null,
         "date": null,
         "observe": null
     };
@@ -1454,6 +1532,12 @@ module.exports = function (map) {
             store["view"]["date"]["from"] = newDate.from;
             store["view"]["date"]["to"] = newDate.to;
             observer.next(store["view"]["date"]);
+        };
+        status.interactive = function (val) {
+            // check behaviour of focus mode
+            console.debug('check interactive', val.interactive);
+            store["interface"]["interactive"] = val.interactive === 'true';
+            observer.next(store["interface"]);
         };
         status.focus = focusHandler(observer);
         status.move = function (params) {

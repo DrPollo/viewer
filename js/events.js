@@ -19,6 +19,7 @@ module.exports = (status,map) => {
     const setLanguageEvent = "areaViewer.setLanguage";
     const setPriorityEvent = "areaViewer.setPriority";
     const setDateEvent = "areaViewer.setDate";
+    const setInteractivityEvent = "areaViewer.setInteractive";
     // state events
     const focusToEvent = "areaViewer.focusTo";
     const toExploreEvent = "areaViewer.toExplore";
@@ -78,11 +79,19 @@ module.exports = (status,map) => {
         status.date({from: e.detail.date_from, to: e.detail.date_to});
     },false);
 
-    // todo definition of priority of sources for visualisation purpose
+    // change behaviour of focus: enable or disable list and change of layout
+    document.addEventListener(setInteractivityEvent,function (e) {
+        console.log(setInteractivityEvent,e.detail);
+        // set current dates
+        if(e.detail.interactive === null || e.detail.interactive === "null"){  return; }
+        status.interactive({interactive: e.detail.interactive});
+    },false);
+
+    // definition of priority of sources for visualisation purpose
     document.addEventListener(setPriorityEvent,function (e) {
         console.log(setPriorityEvent,e.detail);
         if(!e.detail.priority){  return; }
-        // todo set priority of POIs: {highlight:[], background:[], exluded:[]}
+        // set priority of POIs: {highlight:[], background:[], exluded:[]}
         status.priority(e.detail.priority);
     },false);
 
@@ -95,6 +104,7 @@ module.exports = (status,map) => {
         status.focus({id:e.detail.id});
     },false);
 
+    // back to explore
     document.addEventListener(toExploreEvent,function (e) {
         console.log(toExploreEvent,e.detail);
         // restore the status of explorer

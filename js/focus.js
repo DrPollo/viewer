@@ -7,17 +7,34 @@ module.exports = (status) => {
         'FL_ARTICLES': '#FFB310',
         'FL_PLACES': '#FE4336'
     };
-    const orange = "#ff7800",
+    const orange = "#FF9800",
+        pink = "#E91E63",
+        deeporange = "#FF5722",
         blue = "#82b1ff",
-        green = "#33cd5f",
-        gray = "#dcdcdc";
+        deeppurle = "#673AB7",
+        cyan = "#00BCD4",
+        teal = "#009688",
+        light = "#03A9F4",
+        indingo = "#3F51B5",
+        azure = "",
+        purple = "",
+        green = "#4CAF50",
+        lightgreen = "#8BC34A",
+        yellow = "#FFEB3B",
+        amber = "#FFC107",
+        lime = "#CDDC39",
+        red = "#F44336",
+        wgnred = '#c32630',
+        gray = "#9E9E9E",
+        brown = "#795548",
+        bluegray = "#607D8B";
 
     const focusStyle = {
         style: {
-            color: orange,
+            color: wgnred,
             weight: 2,
             fill: false,
-            fillColor: orange,
+            fillColor: wgnred,
             opacity: 1,
             fillOpacity: 0.5
         },

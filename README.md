@@ -34,7 +34,7 @@ The initial state of AreaViewer can be partially customised including the follow
 5) highlight <Array<string>>, application names (es. highlight=app1,app2) of events to be highlighted (optional)
 6) background <Array<string>>, application names of events to be displayed as context (optional)
 7) exclude <Array<string>>, application names of events to be excluded (optional)
-
+8) interactive <boolean> (default true), sets focus mode behaviour: enable/disables the display of the list of contents and layout change
 
 ### Interacting with areaViewer
 
@@ -76,6 +76,7 @@ Following the list of supported events:
 - ``areaViewer.setPriority``: ``{highlight:[<string>],background:[<string>],exclude:[<string>]}`` change the rendering of events
 - ``areaViewer.focusTo``: ``{id:<integer/string>}`` enter focus mode on area id
 - ``areaViewer.toExplore``: ``{null}`` exit from focus
+- ``areaViewer.setInteractive``: ``{interactive:<boolean>}`` changes focus behaviour enabling/disabling the layout change and content rendering
 
 
 ##### Priority params

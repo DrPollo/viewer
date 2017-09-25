@@ -48,10 +48,14 @@ const AreaViewer = () => {
     const minHeight = 500;
     const minWidth = 500;
 
-    // interactive mode
+    // interactive mode enable/disable layout changes at focus
+    let interactive = true;
 
     // const focusClass = (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|ipad|iris|kindle|Android|Silk|lge |maemo|midp|mmp|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent)
-    const focusClass = 'focus';
+    const focusClass = {
+        true:'focus',
+        false: 'nofocus'
+    };
 
 
     /*
@@ -132,14 +136,18 @@ const AreaViewer = () => {
         let feature = fLayer.setLayer(focus.features);
         console.debug('fitting to bounds',feature);
         // map.removeLayer(mGrid);
-        $('body').addClass(focusClass);
-        // console.debug('check body class',$('body').hasClass(focusClass));
+        console.debug('check focus behaviour',interactive, focusClass[interactive]);
+        $('body').addClass(focusClass[interactive]);
+        // console.debug('check body class',$('body').hasClass(focusClass[interactive]));
         map.invalidateSize();
         map.fitBounds(feature.getBounds());
     });
 
     // draw focus border
     status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
+
+    // change interactivity settings
+    status.observe.filter(state => 'interactive' in state).map(state => state.interactive).subscribe(newInter => {interactive = newInter});
 
 
 
@@ -155,7 +163,7 @@ const AreaViewer = () => {
     // status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
     // reset del focus
     status.observe.filter(state => 'reset' in state).subscribe(() => {
-        $('body').removeClass(focusClass);
+        $('body').removeClass(focusClass[interactive]);
         map.invalidateSize();
         // mGrid.resetStyle();
         vGrid.resetStyle();
