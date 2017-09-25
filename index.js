@@ -7,10 +7,10 @@
 
 
 // defaults
-var zoom = 13;
+var zoom = 14;
 var locationZoom = 18;
-var lat = 45.070312;
-var lon = 7.686856;
+var lat = 45.630373;
+var lon = 12.566082;
 var baseColor = '#c32630';
 var mapOptions = {
     center: [lat,lon],
