@@ -22,8 +22,10 @@ module.exports = (map, status) => {
     //default date
     // current week, from monday to sunday from 00:00:00:000 to 23:59:59:999
     let date = {
-        from: moment().isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
-        to: moment().isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
+        from: moment('2017-01-01').isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
+        // from: moment().isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
+        to: moment('2018-01-01').isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
+        // to: moment().isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
     };
 
     const orange = "#FF9800",

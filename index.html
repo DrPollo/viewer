@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
     <link href='node_modules/mapbox.js/theme/style.css' rel='stylesheet'/>
+    <link rel="stylesheet" href="./mdl/material.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link type="text/css" rel="stylesheet" href="/libs/leaflet.control-geocoder/control-geocoder.css">
     <link type="text/css" rel="stylesheet" href="./css/leaflet.css">
     <link type="text/css" rel="stylesheet" href="./css/style.css">
@@ -13,11 +15,16 @@
 </head>
 <body>
 <div id="tooltipBox">test tooltip</div>
-<div id="featurebox"></div>
+<div id="featureboxcontainer">
+    <ul id="featurebox" class="mdl-list">
+
+    </ul>
+</div>
 <div id="areaViewer"></div>
 <div id="infobox">...loading</div>
 </body>
 <script type="text/javascript" src="./libs/leaflet.control-geocoder/control-geocoder.js"></script>
+<script src="./mdl/material.min.js"></script>
 <script type="text/javascript" src="./build/bundle.js"></script>
 <script type="text/javascript" src="index.js"></script>
 <script type="text/javascript">

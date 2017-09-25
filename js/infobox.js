@@ -3,6 +3,8 @@
  */
 module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
     const $ = require('jquery');
+    const moment = require('moment');
+
     // dom node id "label"
     const infoBox = $("#"+idInfoBox);
     const featureBox = $('#'+idFeatureBox);
@@ -118,14 +120,73 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
     status.observe.filter(state => 'content' in state).map(state => state.content).subscribe((content) => {
         console.debug('add content to featurebox',content);
         // append features to featurebox
+        featureBox.empty();
         content.forEach((entry) => {
-            if(!entry.properties.name) {return;}
-            featureBox.append('<span>'+entry.properties.name+'</span>');
+            let e = parseEntry(entry);
+            console.debug('check entry to append',e);
+            if(e){
+                featureBox.append(e);
+            }
         });
         // todo resize map
         console.debug('resizing map');
         // mapBox.css('height','300px');
     });
+
+    function parseEntry(entry){
+        let i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="name mdl-list__item-primary-content">';
+        let c = '</li>';
+        let name = null;
+
+        if(entry.properties.hasType) {
+            let icon = null;
+            let type = entry.properties.hasType.toLowerCase();
+            console.log('type?',type);
+            switch(type){
+                case 'school': icon = 'school'; break;
+                default:
+                    icon = 'room';
+            }
+            // icon
+            if(icon){
+                i = i.concat('<i class="material-icons mdl-list__item-icon">',icon,'</i>');
+            }
+        }
+        if(entry.activity_type) {
+            // todo parse and lang
+            let activity = entry.activity_type;
+        }
+
+        if(entry.properties.name || entry.properties.hasName || entry.details.name) {
+            name = entry.properties.name || entry.properties.hasName || entry.details.name;
+            i = i.concat('<span>',name,'</span>');
+        }
+    // timestamp > UTC
+        if(entry.timestamp){
+            let duration = moment.duration(moment() - moment(entry.timestamp)).humanize();
+            i = i.concat('<span class="mdl-list__item-sub-title">',duration,'</span>');
+        }
+
+        // todo action
+        // <span class="mdl-list__item-secondary-content"></span>
+        if(entry.properties.external_url){
+            let url = entry.properties.external_url;
+            c = ('</span>').concat('<span class="mdl-list__item-secondary-content">',
+                '<a class="mdl-list__item-secondary-action" href="',url,'">',
+                '<i class="material-icons">',
+                'launch',
+                '</i>',
+                '</a></span>',c);
+        }
+
+        // if it has a name
+        if(name){
+            return i.concat(c);
+        }
+
+        return null;
+    }
+
 
     // inits
     // init tooltip

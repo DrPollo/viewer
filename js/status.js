@@ -4,6 +4,8 @@ module.exports = (map) => {
     const Utils = require('./utils');
     const utils = Utils();
     const moment = require('moment');
+    const within = require('@turf/within');
+
 
     // init of state params
     const initFocus = {
@@ -73,11 +75,21 @@ module.exports = (map) => {
         };
     }
     // extract relevant features from map
-    function extractContent(){
+    function extractContent(focusGeometry){
         return Object.keys(map._layers).reduce((res,key) => {
             let feature = map._layers[key].feature;
+            if(!feature){return res;}
             if(feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id){
                 return res.concat(feature);
+            }
+            try{
+                // console.debug(feature, focusGeometry);
+                let isInside = (within({type:"featureCollection", features:[feature]}, {type:"featureCollection", features:[focusGeometry]}).features.length > 0);
+                if(isInside) {
+                    return res.concat(feature);
+                }
+            }catch (e){
+                console.error('@turf/within',e);
             }
             return res;
         },[]);
@@ -112,7 +124,7 @@ module.exports = (map) => {
                 let bb = BBox(store["focus"].features[0]);
                 store["focus"].bounds = bb;
                 // store["focus"].bounds = L.latLngBounds(L.latLng(bb[1], bb[0]), L.latLng(bb[3], bb[2]));
-                store["focus"]["content"] = extractContent();
+                store["focus"]["content"] = extractContent(res);
                 // propago il nuovo stato
                 // console.debug("stato focus",store["focus"]);
                 observer.next(store["focus"]);

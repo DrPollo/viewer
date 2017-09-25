@@ -13,7 +13,15 @@
     top:50%;
     left: 0;
 }
-
+.focus #featurebox{
+    padding:24px;
+    position: absolute;
+    top:0;
+    left: 50%;
+    max-height: 100%;
+    max-width: 50%;
+    overflow-y: scroll;
+}
 
 /* focus mobile vertical */
 @media only screen and (max-width: 500px){

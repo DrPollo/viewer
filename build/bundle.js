@@ -24,8 +24,10 @@ module.exports = function (map, status) {
     //default date
     // current week, from monday to sunday from 00:00:00:000 to 23:59:59:999
     var date = {
-        from: moment().isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
-        to: moment().isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
+        from: moment('2017-01-01').isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
+        // from: moment().isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
+        to: moment('2018-01-01').isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
+        // to: moment().isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
     };
 
     var orange = "#FF9800",
@@ -565,6 +567,8 @@ module.exports = function (status) {
  */
 module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
     var $ = require('jquery');
+    var moment = require('moment');
+
     // dom node id "label"
     var infoBox = $("#" + idInfoBox);
     var featureBox = $('#' + idFeatureBox);
@@ -693,23 +697,75 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
     }).subscribe(function (content) {
         console.debug('add content to featurebox', content);
         // append features to featurebox
+        featureBox.empty();
         content.forEach(function (entry) {
-            if (!entry.properties.name) {
-                return;
+            var e = parseEntry(entry);
+            console.debug('check entry to append', e);
+            if (e) {
+                featureBox.append(e);
             }
-            featureBox.append('<span>' + entry.properties.name + '</span>');
         });
         // todo resize map
         console.debug('resizing map');
         // mapBox.css('height','300px');
     });
 
+    function parseEntry(entry) {
+        var i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="name mdl-list__item-primary-content">';
+        var c = '</li>';
+        var name = null;
+
+        if (entry.properties.hasType) {
+            var icon = null;
+            var type = entry.properties.hasType.toLowerCase();
+            console.log('type?', type);
+            switch (type) {
+                case 'school':
+                    icon = 'school';break;
+                default:
+                    icon = 'room';
+            }
+            // icon
+            if (icon) {
+                i = i.concat('<i class="material-icons mdl-list__item-icon">', icon, '</i>');
+            }
+        }
+        if (entry.activity_type) {
+            // todo parse and lang
+            var activity = entry.activity_type;
+        }
+
+        if (entry.properties.name || entry.properties.hasName || entry.details.name) {
+            name = entry.properties.name || entry.properties.hasName || entry.details.name;
+            i = i.concat('<span>', name, '</span>');
+        }
+        // timestamp > UTC
+        if (entry.timestamp) {
+            var duration = moment.duration(moment() - moment(entry.timestamp)).humanize();
+            i = i.concat('<span class="mdl-list__item-sub-title">', duration, '</span>');
+        }
+
+        // todo action
+        // <span class="mdl-list__item-secondary-content"></span>
+        if (entry.properties.external_url) {
+            var url = entry.properties.external_url;
+            c = '</span>'.concat('<span class="mdl-list__item-secondary-content">', '<a class="mdl-list__item-secondary-action" href="', url, '">', '<i class="material-icons">', 'launch', '</i>', '</a></span>', c);
+        }
+
+        // if it has a name
+        if (name) {
+            return i.concat(c);
+        }
+
+        return null;
+    }
+
     // inits
     // init tooltip
     initFocusLabel();
 };
 
-},{"jquery":18}],5:[function(require,module,exports){
+},{"jquery":18,"moment":20}],5:[function(require,module,exports){
 "use strict";
 
 module.exports = function () {
@@ -1208,6 +1264,7 @@ module.exports = function (map) {
     var Utils = require('./utils');
     var utils = Utils();
     var moment = require('moment');
+    var within = require('@turf/within');
 
     // init of state params
     var initFocus = {
@@ -1277,11 +1334,23 @@ module.exports = function (map) {
         };
     }
     // extract relevant features from map
-    function extractContent() {
+    function extractContent(focusGeometry) {
         return Object.keys(map._layers).reduce(function (res, key) {
             var feature = map._layers[key].feature;
+            if (!feature) {
+                return res;
+            }
             if (feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id) {
                 return res.concat(feature);
+            }
+            try {
+                // console.debug(feature, focusGeometry);
+                var isInside = within({ type: "featureCollection", features: [feature] }, { type: "featureCollection", features: [focusGeometry] }).features.length > 0;
+                if (isInside) {
+                    return res.concat(feature);
+                }
+            } catch (e) {
+                console.error('@turf/within', e);
             }
             return res;
         }, []);
@@ -1315,7 +1384,7 @@ module.exports = function (map) {
             var bb = BBox(store["focus"].features[0]);
             store["focus"].bounds = bb;
             // store["focus"].bounds = L.latLngBounds(L.latLng(bb[1], bb[0]), L.latLng(bb[3], bb[2]));
-            store["focus"]["content"] = extractContent();
+            store["focus"]["content"] = extractContent(res);
             // propago il nuovo stato
             // console.debug("stato focus",store["focus"]);
             observer.next(store["focus"]);
@@ -1419,7 +1488,7 @@ module.exports = function (map) {
     return status;
 };
 
-},{"./utils":9,"@turf/bbox":12,"moment":20,"rxjs/Rx":29}],9:[function(require,module,exports){
+},{"./utils":9,"@turf/bbox":12,"@turf/within":17,"moment":20,"rxjs/Rx":29}],9:[function(require,module,exports){
 'use strict';
 
 module.exports = function () {
