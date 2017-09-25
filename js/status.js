@@ -19,7 +19,8 @@ module.exports = (map) => {
     };
     const initInterface = {
         "lang": "en",
-        "contrast": false
+        "contrast": false,
+        "interactive": true
     };
     const initView = {
         "c": null,

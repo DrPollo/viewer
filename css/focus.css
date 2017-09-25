@@ -26,6 +26,11 @@
 .focus #featureboxcontainer ul li{
     width: 100%;
 }
+.focus #featureboxcontainer ul li span.name{
+    height: 1em;
+    display: block;
+    overflow: hidden;
+}
 
 /* focus mobile vertical */
 @media only screen and (max-width: 500px){

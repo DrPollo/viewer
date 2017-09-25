@@ -33,10 +33,10 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
     /*
      * Listner cambio di stato
      */
-    // todo onFocus fill infobox
+    // onFocus fill infobox
     status.observe.filter(state => 'features' in state).map(state => state.features[0].properties).subscribe(feature => {
         // update infobox
-        console.debug('to update infobox',feature);
+        // console.debug('to update infobox',feature);
         // init infobox
         initFocusLabel(feature);
     });
@@ -80,7 +80,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
             // feature.name
             // feature.type
             label = (feature.type && feature.type !== feature.name ? feature.type+": " : "").concat(feature.name);
-            console.debug('init infobox label',label);
+            // console.debug('init infobox label',label);
         }
         // bottone per uscire dal focus
         let cancelButton = '<button class="mdl-button mdl-js-button mdl-button--icon" id="exitFocus" title="'+tooltipCancel[currentLang]+'"><i class="material-icons">clear</i></button>';
@@ -121,27 +121,25 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
         console.debug('add content to featurebox',content);
         // append features to featurebox
         featureBox.empty();
-        content.forEach((entry) => {
+        // sorting contents from newer to older
+        content.sort((a,b) => {return a.timestamp >= b.timestamp;}).forEach((entry) => {
             let e = parseEntry(entry);
-            console.debug('check entry to append',e);
+            // console.debug('check entry to append',e);
             if(e){
                 featureBox.append(e);
             }
         });
-        // todo resize map
-        console.debug('resizing map');
-        // mapBox.css('height','300px');
     });
 
     function parseEntry(entry){
-        let i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="name mdl-list__item-primary-content">';
+        let i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="mdl-list__item-primary-content">';
         let c = '</li>';
         let name = null;
 
         if(entry.properties.hasType) {
             let icon = null;
             let type = entry.properties.hasType.toLowerCase();
-            console.log('type?',type);
+            // console.debug('type?',type);
             switch(type){
                 case 'school': icon = 'school'; break;
                 default:
@@ -159,9 +157,9 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
 
         if(entry.properties.name || entry.properties.hasName || entry.details.name) {
             name = entry.properties.name || entry.properties.hasName || entry.details.name;
-            i = i.concat('<span>',name,'</span>');
+            i = i.concat('<span class="name">',name,'</span>');
         }
-    // timestamp > UTC
+        // timestamp > UTC, calculate duration
         if(entry.timestamp){
             let duration = moment.duration(moment() - moment(entry.timestamp)).humanize();
             i = i.concat('<span class="mdl-list__item-sub-title">',duration,'</span>');

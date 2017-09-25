@@ -48,6 +48,7 @@ const AreaViewer = () => {
     const minHeight = 500;
     const minWidth = 500;
 
+    // interactive mode
 
     // const focusClass = (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|ipad|iris|kindle|Android|Silk|lge |maemo|midp|mmp|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent)
     const focusClass = 'focus';
@@ -131,7 +132,7 @@ const AreaViewer = () => {
         let feature = fLayer.setLayer(focus.features);
         console.debug('fitting to bounds',feature);
         // map.removeLayer(mGrid);
-        $('body').toggleClass(focusClass);
+        $('body').addClass(focusClass);
         // console.debug('check body class',$('body').hasClass(focusClass));
         map.invalidateSize();
         map.fitBounds(feature.getBounds());
@@ -154,7 +155,7 @@ const AreaViewer = () => {
     // status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
     // reset del focus
     status.observe.filter(state => 'reset' in state).subscribe(() => {
-        $('body').toggleClass(focusClass);
+        $('body').removeClass(focusClass);
         map.invalidateSize();
         // mGrid.resetStyle();
         vGrid.resetStyle();

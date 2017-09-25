@@ -595,14 +595,14 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
     /*
      * Listner cambio di stato
      */
-    // todo onFocus fill infobox
+    // onFocus fill infobox
     status.observe.filter(function (state) {
         return 'features' in state;
     }).map(function (state) {
         return state.features[0].properties;
     }).subscribe(function (feature) {
         // update infobox
-        console.debug('to update infobox', feature);
+        // console.debug('to update infobox',feature);
         // init infobox
         initFocusLabel(feature);
     });
@@ -653,7 +653,7 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
             // feature.name
             // feature.type
             label = (feature.type && feature.type !== feature.name ? feature.type + ": " : "").concat(feature.name);
-            console.debug('init infobox label', label);
+            // console.debug('init infobox label',label);
         }
         // bottone per uscire dal focus
         var cancelButton = '<button class="mdl-button mdl-js-button mdl-button--icon" id="exitFocus" title="' + tooltipCancel[currentLang] + '"><i class="material-icons">clear</i></button>';
@@ -698,27 +698,27 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
         console.debug('add content to featurebox', content);
         // append features to featurebox
         featureBox.empty();
-        content.forEach(function (entry) {
+        // sorting contents from newer to older
+        content.sort(function (a, b) {
+            return a.timestamp >= b.timestamp;
+        }).forEach(function (entry) {
             var e = parseEntry(entry);
-            console.debug('check entry to append', e);
+            // console.debug('check entry to append',e);
             if (e) {
                 featureBox.append(e);
             }
         });
-        // todo resize map
-        console.debug('resizing map');
-        // mapBox.css('height','300px');
     });
 
     function parseEntry(entry) {
-        var i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="name mdl-list__item-primary-content">';
+        var i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="mdl-list__item-primary-content">';
         var c = '</li>';
         var name = null;
 
         if (entry.properties.hasType) {
             var icon = null;
             var type = entry.properties.hasType.toLowerCase();
-            console.log('type?', type);
+            // console.debug('type?',type);
             switch (type) {
                 case 'school':
                     icon = 'school';break;
@@ -737,9 +737,9 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
 
         if (entry.properties.name || entry.properties.hasName || entry.details.name) {
             name = entry.properties.name || entry.properties.hasName || entry.details.name;
-            i = i.concat('<span>', name, '</span>');
+            i = i.concat('<span class="name">', name, '</span>');
         }
-        // timestamp > UTC
+        // timestamp > UTC, calculate duration
         if (entry.timestamp) {
             var duration = moment.duration(moment() - moment(entry.timestamp)).humanize();
             i = i.concat('<span class="mdl-list__item-sub-title">', duration, '</span>');
@@ -969,6 +969,8 @@ var AreaViewer = function AreaViewer() {
     var minHeight = 500;
     var minWidth = 500;
 
+    // interactive mode
+
     // const focusClass = (/(android|bb\d+|meego).+mobile|avantgo|bada\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|ipad|iris|kindle|Android|Silk|lge |maemo|midp|mmp|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent)
     var focusClass = 'focus';
 
@@ -1050,7 +1052,7 @@ var AreaViewer = function AreaViewer() {
         var feature = fLayer.setLayer(focus.features);
         console.debug('fitting to bounds', feature);
         // map.removeLayer(mGrid);
-        $('body').toggleClass(focusClass);
+        $('body').addClass(focusClass);
         // console.debug('check body class',$('body').hasClass(focusClass));
         map.invalidateSize();
         map.fitBounds(feature.getBounds());
@@ -1083,7 +1085,7 @@ var AreaViewer = function AreaViewer() {
     status.observe.filter(function (state) {
         return 'reset' in state;
     }).subscribe(function () {
-        $('body').toggleClass(focusClass);
+        $('body').removeClass(focusClass);
         map.invalidateSize();
         // mGrid.resetStyle();
         vGrid.resetStyle();
@@ -1277,7 +1279,8 @@ module.exports = function (map) {
     };
     var initInterface = {
         "lang": "en",
-        "contrast": false
+        "contrast": false,
+        "interactive": true
     };
     var initView = {
         "c": null,

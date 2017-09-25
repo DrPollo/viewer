@@ -129,6 +129,9 @@ if(params){
         priority.exclude = params.get('exclude').split(",") || false;
         currentParams.exclude = priority.exclude;
     }
+    if(params.get('interactive') !== null){
+        currentParams.interactive = params.get('interactive');
+    }
 }else{
     console.error('cannot retrieve search params from URL location');
 }
@@ -152,8 +155,10 @@ var setContrastEvent = "areaViewer.setContrast";
 var setLanguageEvent = "areaViewer.setLanguage";
 var setDateEvent = "areaViewer.setDate";
 var setPriorityEvent = "areaViewer.setPriority";
+var setInteractivityEvent = "areaViewer.setInteractive";
 var focusToEvent = "areaViewer.focusTo";
 var toExploreEvent = "areaViewer.toExplore";
+
 
 
 /*
@@ -161,20 +166,9 @@ var toExploreEvent = "areaViewer.toExplore";
  * Output messages: receives messages from AreaViewer and emit them to top
  * Input messages: receives messages from top and broadcast them to AreaViewer
  */
-// Output messages
-// todo send focus message
-// todo send reset message
-// todo send set source message
-// top.postMessage({src:'AreaViewer',reset:true},domain);
-// emitEvent('areaViewer.resetView',{detail:{}});
 
 
 // input messages
-// todo set contrast
-// todo set viewport
-// todo set focus
-// todo set lang
-// todo set source
 window.addEventListener( "message",
     function (e) {
         if (e.defaultPrevented)
@@ -188,9 +182,6 @@ window.addEventListener( "message",
             console.log('got setContrast',e);
         }
     });
-
-
-
 
 /*
  * Init AreaViewer status
@@ -215,6 +206,8 @@ function initStatus (){
     broadcastEvent(setContrastEvent,{contrast: contrast});
     // set default viewport
     broadcastEvent(setViewEvent, {lat: lat, lng:lon, zoom:zoom});
+    // set interativity
+    broadcastEvent(setInteractivityEvent, {interactive: currentParams.interactive});
     // set focus
     if(focus && focus !== 'null') {
         setTimeout(function(){
