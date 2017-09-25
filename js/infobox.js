@@ -83,7 +83,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
             console.debug('init infobox label',label);
         }
         // bottone per uscire dal focus
-        let cancelButton = '<button id="exitFocus" title="'+tooltipCancel[currentLang]+'">&#x2715;</button>';
+        let cancelButton = '<button class="mdl-button mdl-js-button mdl-button--icon" id="exitFocus" title="'+tooltipCancel[currentLang]+'"><i class="material-icons">clear</i></button>';
         // creo nodo con bottone e label
         let defaultLabel = $('<div id="label">'+cancelButton.concat('<span class="placeName">',label,'</span></div>'));
         // svuoto
@@ -167,8 +167,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
             i = i.concat('<span class="mdl-list__item-sub-title">',duration,'</span>');
         }
 
-        // todo action
-        // <span class="mdl-list__item-secondary-content"></span>
+        // action: go to content
         if(entry.properties.external_url){
             let url = entry.properties.external_url;
             c = ('</span>').concat('<span class="mdl-list__item-secondary-content">',

@@ -31,7 +31,7 @@ body {
     color: #333;
     min-height: 22px;
     padding: 5px 8px 3px;
-    font-size: 0.9em;
+    font-size: 1em;
 }
 #label button {
     vertical-align: text-bottom;
@@ -45,7 +45,7 @@ body {
     height: 30px;
 }
 #label .placeName {
-    padding-left: 22px;
+    padding-left: 28px;
     display: inline-block;
 }
 
