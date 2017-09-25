@@ -5,6 +5,9 @@ html, body, #areaViewer {
     margin: 0px;
     padding: 0px;
 }
+body {
+    /*position: relative;*/
+}
 #areaViewer {
     position: absolute;
     top: 0;
