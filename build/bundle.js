@@ -1163,7 +1163,7 @@ var AreaViewer = function AreaViewer() {
     var $ = require('jquery');
 
     // environment
-    var env = "sandona";
+    var env = "dev";
 
     /*
      * costanti e defaults
