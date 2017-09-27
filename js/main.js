@@ -13,6 +13,8 @@ const AreaViewer = () => {
     // dom library
     const $ = require('jquery');
 
+    // environment
+    const env = "torino";
 
 
     /*
@@ -24,7 +26,15 @@ const AreaViewer = () => {
     const idMapBox = "areaViewer";
     // default language
     let lang = 'en';
-
+    switch(env){
+        case 'pt2' :
+        case 'sandona' :
+        case 'torino' :
+            lang = 'it';
+            break;
+        default:
+            lang = 'en';
+    }
     // colori
     const colors = {
         'FL_GROUPS': '#3F7F91',
@@ -66,7 +76,7 @@ const AreaViewer = () => {
     const utils = Utils();
     // mappa generale
     const Map = require('./map');
-    const map = Map(idMapBox);
+    const map = Map(idMapBox, env);
     const zoomControl = map.zoomControl;
     const mapBox = $('#'+idMapBox);
     // gestore di stato
@@ -85,7 +95,7 @@ const AreaViewer = () => {
     const fLayer = focusLayer(status);
     // infobox
     const InfoBox = require('./infobox');
-    const infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, utils);
+    const infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, utils, lang);
 
 
 
@@ -120,7 +130,7 @@ const AreaViewer = () => {
     // inizializzazione vectorGrid layer
     vGrid.addTo(map);
     // inizializzazione markerGrid layer
-    markerGrid(map, status, utils);
+    markerGrid(map, status, utils, env);
     // inizializzazione focusLayer
     fLayer.addTo(map);
     // inizializzazione geocoder

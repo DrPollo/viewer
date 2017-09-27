@@ -3,7 +3,7 @@
  */
 // definition of the map
 
-module.exports = (idMapBox) => {
+module.exports = (idMapBox, env) => {
     const $ = require('jquery');
 
     // const baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
@@ -24,9 +24,44 @@ module.exports = (idMapBox) => {
     };
 
     // defaults
-    const initZoom = 14;
-    const initLat = 45.630373;
-    const initLon = 12.566082;
+    let initZoom = 14;
+    let initLat = 45.630373;
+    let initLon = 12.566082;
+
+    switch (env){
+        case 'pt1':
+            initZoom = 14;
+            initLat = 51.483448;
+            initLon = -0.082088;
+            break;
+        case 'pt2':
+            initZoom = 14;
+            initLat = 45.070339;
+            initLon = 7.686864;
+            break;
+        case 'pt3':
+            initZoom = 14;
+            initLat = 45.630373;
+            initLon = 12.566082;
+            break;
+        case 'sandona':
+            initZoom = 14;
+            initLat = 45.630373;
+            initLon = 12.566082;
+            break;
+        case 'torino':
+            initZoom = 14;
+            initLat = 45.070339;
+            initLon = 7.686864;
+            break;
+        case 'southwark':
+            initZoom = 14;
+            initLat = 51.483448;
+            initLon = -0.082088;
+            break;
+    }
+
+
     let zoomControlPosition = 'bottomright';
 
     const map = L.map(idMapBox).setView([initLat, initLon], initZoom);

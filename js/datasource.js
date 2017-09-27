@@ -1,23 +1,24 @@
-module.exports = (map, status, utils) => {
+module.exports = (map, status, utils, env) => {
 
     const within = require('@turf/within');
-
-    // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=21&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    const markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
-    // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
-    // const markerUrl = 'http://localhost:3085/events/{x}/{y}/{z}';
-    // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
-
-
     // temporal utils
     const moment = require('moment');
 
+
+    // dev
+    let markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
+    // env management
+    switch (env){
+        case 'pt2': markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}'; break;
+        case 'pt3': markerUrl = 'https://loggerproxy-pt3.firstlife.org/tile/{x}/{y}/{z}'; break;
+        case 'sandona': markerUrl = 'https://loggerproxy-sandona.firstlife.org/tile/{x}/{y}/{z}'; break;
+        case 'torino': markerUrl = 'https://loggerproxy-torino.firstlife.org/tile/{x}/{y}/{z}'; break;
+        case 'southwark': markerUrl = 'https://loggerproxy-southwark.firstlife.org/tile/{x}/{y}/{z}'; break;
+        default:
+    }
+
     // default zoom_level
     const defaultZoomLevel = 18;
-
 
     //default date
     // current week, from monday to sunday from 00:00:00:000 to 23:59:59:999

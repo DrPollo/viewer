@@ -1,7 +1,7 @@
 /**
  * Created by drpollo on 19/09/2017.
  */
-module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, utils) => {
+module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, utils, defLang) => {
     const $ = require('jquery');
     const moment = require('moment');
 
@@ -43,7 +43,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, utils) => {
         en: 'Back'
     };
     // def lang
-    let currentLang = 'en';
+    let currentLang = defLang;
 
     // current label
     let label = null;

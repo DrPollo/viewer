@@ -7,10 +7,10 @@
 
 
 // defaults
-var zoom = 14;
+var zoom = null;
 var locationZoom = 18;
-var lat = 45.630373;
-var lon = 12.566082;
+var lat = null;
+var lon = null;
 var baseColor = '#c32630';
 var mapOptions = {
     center: [lat,lon],
@@ -197,15 +197,23 @@ function initAreaViewer(){
 
 // init status
 function initStatus (){
-    console.debug('init status');
+    // console.debug('init status');
     // set default lang
-    broadcastEvent(setLanguageEvent,{lang: lang});
+    if(lang){
+        broadcastEvent(setLanguageEvent,{lang: lang});
+    }
     // set default contrast
-    broadcastEvent(setContrastEvent,{contrast: contrast});
+    if(contrast){
+        broadcastEvent(setContrastEvent,{contrast: contrast});
+    }
     // set default viewport
-    broadcastEvent(setViewEvent, {lat: lat, lng:lon, zoom:zoom});
+    if(lat && lng && zoom){
+        broadcastEvent(setViewEvent, {lat: lat, lng:lon, zoom:zoom});
+    }
     // set interativity
-    broadcastEvent(setInteractivityEvent, {interactive: currentParams.interactive});
+    if(currentParams.interactive) {
+        broadcastEvent(setInteractivityEvent, {interactive: currentParams.interactive});
+    }
     // set focus
     if(focus && focus !== 'null') {
         setTimeout(function(){

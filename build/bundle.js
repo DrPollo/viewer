@@ -1,22 +1,28 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
-module.exports = function (map, status, utils) {
+module.exports = function (map, status, utils, env) {
 
     var within = require('@turf/within');
-
-    // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=1,4,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://api.fldev.di.unito.it/v5/fl/Things/tilesearch?domainId=21&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=12&limit=99999&tiles={x}:{y}:{z}';
-    // const markerUrl = 'https://api.firstlife.org/v5/fl/Things/tilesearch?domainId=1,4,7,9,10,11,12,13,14,15&limit=99999&tiles={x}:{y}:{z}';
-    var markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
-    // const markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';
-    // const markerUrl = 'http://localhost:3085/events/{x}/{y}/{z}';
-    // const markerUrl = 'http://localhost:3085/tile/{x}/{y}/{z}';
-
-
     // temporal utils
     var moment = require('moment');
+
+    // dev
+    var markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
+    // env management
+    switch (env) {
+        case 'pt2':
+            markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}';break;
+        case 'pt3':
+            markerUrl = 'https://loggerproxy-pt3.firstlife.org/tile/{x}/{y}/{z}';break;
+        case 'sandona':
+            markerUrl = 'https://loggerproxy-sandona.firstlife.org/tile/{x}/{y}/{z}';break;
+        case 'torino':
+            markerUrl = 'https://loggerproxy-torino.firstlife.org/tile/{x}/{y}/{z}';break;
+        case 'southwark':
+            markerUrl = 'https://loggerproxy-southwark.firstlife.org/tile/{x}/{y}/{z}';break;
+        default:
+    }
 
     // default zoom_level
     var defaultZoomLevel = 18;
@@ -724,7 +730,7 @@ module.exports = function (status) {
 /**
  * Created by drpollo on 19/09/2017.
  */
-module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, utils) {
+module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, utils, defLang) {
     var $ = require('jquery');
     var moment = require('moment');
 
@@ -765,7 +771,7 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, utils
         en: 'Back'
     };
     // def lang
-    var currentLang = 'en';
+    var currentLang = defLang;
 
     // current label
     var label = null;
@@ -1156,6 +1162,9 @@ var AreaViewer = function AreaViewer() {
     // dom library
     var $ = require('jquery');
 
+    // environment
+    var env = "torino";
+
     /*
      * costanti e defaults
      */
@@ -1165,7 +1174,15 @@ var AreaViewer = function AreaViewer() {
     var idMapBox = "areaViewer";
     // default language
     var lang = 'en';
-
+    switch (env) {
+        case 'pt2':
+        case 'sandona':
+        case 'torino':
+            lang = 'it';
+            break;
+        default:
+            lang = 'en';
+    }
     // colori
     var colors = {
         'FL_GROUPS': '#3F7F91',
@@ -1206,7 +1223,7 @@ var AreaViewer = function AreaViewer() {
     var utils = Utils();
     // mappa generale
     var Map = require('./map');
-    var map = Map(idMapBox);
+    var map = Map(idMapBox, env);
     var zoomControl = map.zoomControl;
     var mapBox = $('#' + idMapBox);
     // gestore di stato
@@ -1225,7 +1242,7 @@ var AreaViewer = function AreaViewer() {
     var fLayer = focusLayer(status);
     // infobox
     var InfoBox = require('./infobox');
-    var infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, utils);
+    var infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, utils, lang);
 
     /*
      * geocoder
@@ -1258,7 +1275,7 @@ var AreaViewer = function AreaViewer() {
     // inizializzazione vectorGrid layer
     vGrid.addTo(map);
     // inizializzazione markerGrid layer
-    markerGrid(map, status, utils);
+    markerGrid(map, status, utils, env);
     // inizializzazione focusLayer
     fLayer.addTo(map);
     // inizializzazione geocoder
@@ -1426,7 +1443,7 @@ AreaViewer();
  */
 // definition of the map
 
-module.exports = function (idMapBox) {
+module.exports = function (idMapBox, env) {
     var $ = require('jquery');
 
     // const baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
@@ -1450,6 +1467,40 @@ module.exports = function (idMapBox) {
     var initZoom = 14;
     var initLat = 45.630373;
     var initLon = 12.566082;
+
+    switch (env) {
+        case 'pt1':
+            initZoom = 14;
+            initLat = 51.483448;
+            initLon = -0.082088;
+            break;
+        case 'pt2':
+            initZoom = 14;
+            initLat = 45.070339;
+            initLon = 7.686864;
+            break;
+        case 'pt3':
+            initZoom = 14;
+            initLat = 45.630373;
+            initLon = 12.566082;
+            break;
+        case 'sandona':
+            initZoom = 14;
+            initLat = 45.630373;
+            initLon = 12.566082;
+            break;
+        case 'torino':
+            initZoom = 14;
+            initLat = 45.070339;
+            initLon = 7.686864;
+            break;
+        case 'southwark':
+            initZoom = 14;
+            initLat = 51.483448;
+            initLon = -0.082088;
+            break;
+    }
+
     var zoomControlPosition = 'bottomright';
 
     var map = L.map(idMapBox).setView([initLat, initLon], initZoom);
