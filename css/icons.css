@@ -9,3 +9,6 @@
     border-style: solid;
     border-radius: 100px;
 }
+.marker-circle .circle.background, .marker-circle .circle.circle-small{
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.15);
+}

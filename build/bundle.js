@@ -81,9 +81,8 @@ module.exports = function (map, status, utils) {
     var qParams = "?start_time=".concat(date.from.utc().format('x')).concat("&end_time=", date.to.utc().format('x'));
 
     // priority of POIs visualisation
-    //'wegovnow.liquidfeedback.com'
     var priority = {
-        highlight: ['wegovnow.liquidfeedback.com'],
+        highlight: [],
         background: [],
         exclude: []
     };
@@ -253,7 +252,7 @@ module.exports = function (map, status, utils) {
             }
             // console.debug('check marker',feat);
             // refresh icon
-            feat.setIcon(getIcon(feat.feature, feat.feature._latlng));
+            feat.setIcon(getMarkerIcon(feat.feature));
         }
     };
 
@@ -262,7 +261,7 @@ module.exports = function (map, status, utils) {
         if (!focus) {
             return;
         }
-        console.debug('setting focus on ', focus);
+        // console.debug('setting focus on ',focus);
         focusId = focus.id;
         focusGeometry = { type: "featureCollection", features: focus.features };
         mGrid.update();
@@ -327,7 +326,7 @@ module.exports = function (map, status, utils) {
         priority = prioritySettings;
     });
 
-    function getIcon(feature, latlng) {
+    function getMarkerIcon(feature) {
         var currentZoom = map.getZoom();
         // if(feature.area_id)
         // console.log(feature);
@@ -344,14 +343,13 @@ module.exports = function (map, status, utils) {
         });
 
         // do not render POIs if their type should be exclude
-        // console.debug('exclude?',priority.exclude,type);
+        console.debug('exclude?', priority.exclude, type);
         if (priority.exclude.indexOf(type) > -1) {
             return null;
         }
 
         var confIcon = {
-            className: 'marker-circle',
-            iconAnchor: latlng
+            className: 'marker-circle'
         };
 
         // if type in background or highlight is set and type is not among highlight types
@@ -363,16 +361,19 @@ module.exports = function (map, status, utils) {
             style.borderColor = gray;
             style.width = 1;
             style.backgroundColor = hexToRgba(gray, style.opacity);
+            style.class = "background";
         }
         // console.debug('check type',type,radius);
         // priority of source:
         // set priority (z-index) of highlight POIs
         // if type in highlight or background is set and type is not among background types
-        if (priority.highlight.indexOf(type) > -1 || priority.background.length > 0 && priority.background.indexOf(type) < 0) {
+        console.debug('check is highlight', type, priority, priority.highlight.indexOf(type) > -1 || priority.background.length > 0 && priority.background.indexOf(type) < 0);
+        if (priority.highlight.indexOf(type) > -1 || priority.background.indexOf(type) < 0) {
             style.up = true;
             style.opacity = '1';
             style.borderColor = darkgray;
             style.backgroundColor = hexToRgba(style.color, style.opacity);
+            style.class = "highlight";
         }
         var d = style.radius * 2;
         confIcon.iconSize = d;
@@ -383,11 +384,11 @@ module.exports = function (map, status, utils) {
 
         // management of icons considering current radius
         // icon iff radius >= min value
-        console.debug('check min radius', style.radius, minIconRadius);
+        console.debug('check marker icon', style);
         if (minIconRadius <= style.radius) {
             confIcon.html = '<div class="circle" style="' + iconStyle + '">' + utils.getIcon(feature) + '</div>';
         } else {
-            confIcon.html = '<div class="circle" style="' + iconStyle + '"></div>';
+            confIcon.html = '<div class="circle circle-small ' + style.class + '" style="' + iconStyle + '"></div>';
         }
 
         return L.divIcon(confIcon);
@@ -398,14 +399,17 @@ module.exports = function (map, status, utils) {
             var r = hex >> 16;
             var g = hex >> 8 & 0xFF;
             var b = hex & 0xFF;
-            console.debug('check rgba', "rgba(".concat(r, ", ", g, ", ", b, ", ", opacity, ")"));
+            // console.debug('check rgba',("rgba(").concat(r,", ",g,", ",b,", ",opacity,")"));
             return "rgba(".concat(r, ", ", g, ", ", b, ", ", opacity, ")");
         }
     }
 
     function getMarker(feature, latlng) {
-
-        return L.marker(latlng, { icon: getIcon(feature, latlng), interactive: false, pane: "customMarkerPane" });
+        var markerIcon = getMarkerIcon(feature);
+        if (!markerIcon) {
+            return null;
+        }
+        return L.marker(latlng, { icon: markerIcon, interactive: false, pane: "customMarkerPane" });
         // let circle = L.circleMarker(latlng, style);
         // console.debug('check circle',circle);
         // return circle;
@@ -688,7 +692,7 @@ module.exports = function (status) {
         return state.features;
     }).subscribe(function (features) {
         // update infobox
-        console.debug('check focus', features);
+        // console.debug('check focus',features);
         // init infobox
         fLayer.setLayer(features);
     });
@@ -1782,9 +1786,9 @@ module.exports = function () {
             }
         }
         if (entry.activity_type) {
-            // todo parse activity type
+            // parse activity type
             var activity = entry.activity_type.toLowerCase();
-            console.debug('activity: ', activity);
+            // console.debug('activity: ', activity);
             switch (activity) {
                 case 'object_created':
                     break;

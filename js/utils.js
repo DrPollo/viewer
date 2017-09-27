@@ -70,9 +70,9 @@ const detailsUrl = "https://tiles.firstlife.org/areas/";
             }
         }
         if (entry.activity_type) {
-            // todo parse activity type
+            // parse activity type
             let activity = entry.activity_type.toLowerCase();
-            console.debug('activity: ', activity);
+            // console.debug('activity: ', activity);
             switch (activity) {
                 case 'object_created' : break;
                 case 'object_removed' : icon = 'delete'; break;
