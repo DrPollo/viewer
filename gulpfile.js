@@ -43,7 +43,7 @@ gulp.task("minify", () =>
                 keepClassName: true
             }
         }))
-        .pipe(gulp.dest("./dist"))
+        .pipe(gulp.dest("./dist"+ (gutil.env.name ? "/"+gutil.env.name+"/" : "/") ))
 );
 gulp.task('compile',['build','minify']);
 

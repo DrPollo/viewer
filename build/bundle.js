@@ -1162,7 +1162,7 @@ var AreaViewer = function AreaViewer() {
     var $ = require('jquery');
 
     // environment
-    var env = "torino";
+    var env = "sandona";
 
     /*
      * costanti e defaults

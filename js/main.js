@@ -14,7 +14,7 @@ const AreaViewer = () => {
     const $ = require('jquery');
 
     // environment
-    const env = "torino";
+    const env = "sandona";
 
 
     /*
