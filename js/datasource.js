@@ -22,9 +22,11 @@ module.exports = (map, status, utils) => {
     //default date
     // current week, from monday to sunday from 00:00:00:000 to 23:59:59:999
     let date = {
-        from: moment('2017-01-01').isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
+        from: null,
+        // from: moment('2017-01-01').isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
         // from: moment().isoWeekday(1).hour(0).minute(0).second(0).millisecond(0),
-        to: moment('2018-01-01').isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
+        to: null
+        // to: moment('2018-01-01').isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
         // to: moment().isoWeekday(7).hour(23).minute(59).second(59).millisecond(999)
     };
 
@@ -77,7 +79,23 @@ module.exports = (map, status, utils) => {
 
     // query params
     // start_time and end_time > UTC
-    let qParams = ("?start_time=").concat(date.from.utc().format('x')).concat("&end_time=",date.to.utc().format('x'));
+    let qParams = "";
+    if(date.from && date.from.utc()){
+        if(qParams === ""){
+            qParams = qParams.concat("?");
+        } else {
+            qParams = qParams.concat("&");
+        }
+        qParams = qParams.concat("start_time=",date.from.utc().format('x'));
+    }
+    if(date.to && date.to.utc()){
+        if(qParams === ""){
+            qParams = qParams.concat("?");
+        } else {
+            qParams = qParams.concat("&");
+        }
+        qParams = qParams.concat("end_time=",date.to.utc().format('x'));
+    }
 
 
     // priority of POIs visualisation
@@ -328,7 +346,7 @@ module.exports = (map, status, utils) => {
         );
 
         // do not render POIs if their type should be exclude
-        console.debug('exclude?',priority.exclude,type);
+        // console.debug('exclude?',priority.exclude,type);
         if(priority.exclude.indexOf(type) > -1) { return null; }
 
 
@@ -352,7 +370,7 @@ module.exports = (map, status, utils) => {
         // priority of source:
         // set priority (z-index) of highlight POIs
         // if type in highlight or background is set and type is not among background types
-        console.debug('check is highlight', type, priority, priority.highlight.indexOf(type) > -1 || (priority.background.length > 0 && priority.background.indexOf(type) < 0));
+        // console.debug('check is highlight', type, priority, priority.highlight.indexOf(type) > -1 || (priority.background.length > 0 && priority.background.indexOf(type) < 0));
         if(priority.highlight.indexOf(type) > -1 || (priority.background.indexOf(type) < 0)) {
             style.up = true;
             style.opacity = '1';
@@ -375,7 +393,7 @@ module.exports = (map, status, utils) => {
 
         // management of icons considering current radius
         // icon iff radius >= min value
-        console.debug('check marker icon',style);
+        // console.debug('check marker icon',style);
         if(minIconRadius <= style.radius){
             confIcon.html = '<div class="circle" style="'+iconStyle+'">'+utils.getIcon(feature)+'</div>';
         } else {
