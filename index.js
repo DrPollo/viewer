@@ -207,7 +207,7 @@ function initStatus (){
         broadcastEvent(setContrastEvent,{contrast: contrast});
     }
     // set default viewport
-    if(lat && lng && zoom){
+    if(lat && lon && zoom){
         broadcastEvent(setViewEvent, {lat: lat, lng:lon, zoom:zoom});
     }
     // set interativity
