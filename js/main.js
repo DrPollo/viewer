@@ -145,7 +145,7 @@ const AreaViewer = () => {
     });
 
     // draw focus border
-    status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
+    // status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
 
     // change interactivity settings
     status.observe.filter(state => 'interactive' in state).map(state => state.interactive).subscribe(newInter => {interactive = newInter});

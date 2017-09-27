@@ -35,15 +35,18 @@ module.exports = (idMapBox) => {
     zoomControl.setPosition(zoomControlPosition);
 
     // pane per vectorGrid
-    map.createPane('vectorGridPane');
     map.createPane('focusPane');
+    map.createPane('customMarkerPane');
+    map.createPane('vectorGridPane');
+
     // gestione pane
+    // focusPane > focus geometry
+    map.getPane('focusPane').style.zIndex = 9;
     // overlayPane > markers
     map.getPane('overlayPane').style.zIndex = 10;
+    map.getPane('customMarkerPane').style.zIndex = 10;
     // vectorGridPane > vector tile
     map.getPane('vectorGridPane').style.zIndex = 11;
-    // focusPane > focus geometry
-    map.getPane('focusPane').style.zIndex = 12;
 
 
     // cartography

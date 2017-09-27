@@ -33,10 +33,11 @@ module.exports = (status) => {
         style: {
             color: wgnred,
             weight: 2,
-            fill: false,
+            fill: true,
             fillColor: wgnred,
             opacity: 1,
-            fillOpacity: 0.5
+            fillOpacity: 0.35,
+            dashArray: '10'
         },
         pane: 'focusPane'
     };
@@ -47,5 +48,14 @@ module.exports = (status) => {
         let feature = fLayer.addData(geoJson);
         return feature;
     };
+
+    status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => {
+        // update infobox
+        console.debug('check focus',features);
+        // init infobox
+        fLayer.setLayer(features);
+    });
+
+
     return fLayer;
 };

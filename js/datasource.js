@@ -335,7 +335,6 @@ module.exports = (map, status, utils) => {
 
         let confIcon = {
             className: 'marker-circle',
-            iconSize: d,
             iconAnchor: latlng
         };
 
@@ -361,6 +360,8 @@ module.exports = (map, status, utils) => {
             style.backgroundColor = hexToRgba(style.color,style.opacity);
         }
         let d = style.radius*2;
+        confIcon.iconSize = d;
+
 
         let iconStyle = ('').concat(
             "font-size:",d,"px;",
@@ -395,7 +396,7 @@ module.exports = (map, status, utils) => {
 
     function getMarker(feature, latlng){
 
-        return L.marker(latlng, {icon:getIcon(feature, latlng), interactive: false});
+        return L.marker(latlng, {icon:getIcon(feature, latlng), interactive: false, pane:"customMarkerPane"});
         // let circle = L.circleMarker(latlng, style);
         // console.debug('check circle',circle);
         // return circle;

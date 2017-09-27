@@ -23,6 +23,13 @@
     width: 50%;
     overflow-y: scroll;
 }
+.focus #featureboxcontainer ul {
+    margin: 0;
+    padding:0;
+}
+.focus #featureboxcontainer ul li:nth-child(odd){
+    background-color: #eaeaea;
+}
 .focus #featureboxcontainer ul li{
     width: 100%;
 }

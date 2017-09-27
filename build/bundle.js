@@ -351,7 +351,6 @@ module.exports = function (map, status, utils) {
 
         var confIcon = {
             className: 'marker-circle',
-            iconSize: d,
             iconAnchor: latlng
         };
 
@@ -376,6 +375,7 @@ module.exports = function (map, status, utils) {
             style.backgroundColor = hexToRgba(style.color, style.opacity);
         }
         var d = style.radius * 2;
+        confIcon.iconSize = d;
 
         var iconStyle = ''.concat("font-size:", d, "px;", "width:", d, "px;", "height:", d, "px;", "border-color:", style.borderColor, ";",
         // "border-color:",style.color,";",
@@ -405,7 +405,7 @@ module.exports = function (map, status, utils) {
 
     function getMarker(feature, latlng) {
 
-        return L.marker(latlng, { icon: getIcon(feature, latlng), interactive: false });
+        return L.marker(latlng, { icon: getIcon(feature, latlng), interactive: false, pane: "customMarkerPane" });
         // let circle = L.circleMarker(latlng, style);
         // console.debug('check circle',circle);
         // return circle;
@@ -666,10 +666,11 @@ module.exports = function (status) {
         style: {
             color: wgnred,
             weight: 2,
-            fill: false,
+            fill: true,
             fillColor: wgnred,
             opacity: 1,
-            fillOpacity: 0.5
+            fillOpacity: 0.35,
+            dashArray: '10'
         },
         pane: 'focusPane'
     };
@@ -680,6 +681,18 @@ module.exports = function (status) {
         var feature = fLayer.addData(geoJson);
         return feature;
     };
+
+    status.observe.filter(function (state) {
+        return 'features' in state;
+    }).map(function (state) {
+        return state.features;
+    }).subscribe(function (features) {
+        // update infobox
+        console.debug('check focus', features);
+        // init infobox
+        fLayer.setLayer(features);
+    });
+
     return fLayer;
 };
 
@@ -915,7 +928,7 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, utils
         // action: go to content
         if (entry.properties.reference_external_url || entry.properties.external_url) {
             var url = entry.properties.reference_external_url || entry.properties.external_url;
-            c = '</span>'.concat('<span class="mdl-list__item-secondary-content">', '<a class="mdl-list__item-secondary-action" href="', url, '">', '<i class="material-icons">', 'launch', '</i>', '</a></span>', c);
+            c = '</span>'.concat('<span class="mdl-list__item-secondary-content">', '<a class="mdl-list__item-secondary-action" target="_top" href="', url, '">', '<i class="material-icons">', 'launch', '</i>', '</a></span>', c);
         }
 
         // if it has a name
@@ -1249,13 +1262,7 @@ var AreaViewer = function AreaViewer() {
     });
 
     // draw focus border
-    status.observe.filter(function (state) {
-        return 'id' in state;
-    }).map(function (state) {
-        return state.id;
-    }).subscribe(function (id) {
-        return vGrid.highlight(id);
-    });
+    // status.observe.filter(state => 'id' in state).map(state => state.id).subscribe(id => vGrid.highlight(id));
 
     // change interactivity settings
     status.observe.filter(function (state) {
@@ -1429,15 +1436,18 @@ module.exports = function (idMapBox) {
     zoomControl.setPosition(zoomControlPosition);
 
     // pane per vectorGrid
-    map.createPane('vectorGridPane');
     map.createPane('focusPane');
+    map.createPane('customMarkerPane');
+    map.createPane('vectorGridPane');
+
     // gestione pane
+    // focusPane > focus geometry
+    map.getPane('focusPane').style.zIndex = 9;
     // overlayPane > markers
     map.getPane('overlayPane').style.zIndex = 10;
+    map.getPane('customMarkerPane').style.zIndex = 10;
     // vectorGridPane > vector tile
     map.getPane('vectorGridPane').style.zIndex = 11;
-    // focusPane > focus geometry
-    map.getPane('focusPane').style.zIndex = 12;
 
     // cartography
     var baseLayer = layers['base'].addTo(map);

@@ -216,7 +216,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, utils) => {
         if (entry.properties.reference_external_url || entry.properties.external_url) {
             let url = entry.properties.reference_external_url || entry.properties.external_url;
             c = ('</span>').concat('<span class="mdl-list__item-secondary-content">',
-                '<a class="mdl-list__item-secondary-action" href="', url, '">',
+                '<a class="mdl-list__item-secondary-action" target="_top" href="', url, '">',
                 '<i class="material-icons">',
                 'launch',
                 '</i>',
