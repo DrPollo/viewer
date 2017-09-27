@@ -40,8 +40,8 @@ var date = {
 };
 var priority = {
     highlight: [],
-    background: false,
-    exclude: false
+    background: [],
+    exclude: []
 };
 
 var label = document.getElementById('label');
@@ -120,11 +120,11 @@ if(params){
         currentParams.highlight = priority.highlight;
     }
     if(params.get('background')){
-        priority.background = params.get('background').split(",") || false;
+        priority.background = params.get('background').split(",") || [];
         currentParams.background = priority.background;
     }
     if(params.get('exclude')){
-        priority.exclude = params.get('exclude').split(",") || false;
+        priority.exclude = params.get('exclude').split(",") || [];
         currentParams.exclude = priority.exclude;
     }
     if(params.get('interactive') !== null){
@@ -217,10 +217,9 @@ function initStatus (){
         broadcastEvent(setDateEvent,{date_from:date.from,date_to:date.to});
     }
     // set priority: {highlight:[], background:[], exclude:[]}
-    if(priority.highlight.length > 0 || priority.highlight.length > 0 || priority.highlight.length > 0){
-        setTimeout(function(){
-            broadcastEvent(setPriorityEvent,{priority:priority});
-        },1500);
+    console.debug('check priority',priority);
+    if(priority.highlight.length > 0 || priority.background.length > 0 || priority.exclude.length > 0){
+        broadcastEvent(setPriorityEvent,{priority:priority});
     }
 }
 

@@ -1,4 +1,4 @@
-module.exports = (map, status) => {
+module.exports = (map, status, utils) => {
 
     const within = require('@turf/within');
 
@@ -48,7 +48,8 @@ module.exports = (map, status) => {
         wgnred = '#c32630',
         gray = "#9E9E9E",
         brown = "#795548",
-        bluegray = "#607D8B";
+        bluegray = "#607D8B",
+        darkgray = "#666";
 
     const colors = (type) => {
         if (type === 'FL_GROUPS') return '#3F7F91';
@@ -88,18 +89,6 @@ module.exports = (map, status) => {
     };
 
 
-    // exponential
-    // var scale = function(x,level){
-    //
-    //     if(x > level)
-    //         return 0;
-    //     // https://www.desmos.com/calculator/3fisjexbvp
-    //     // return Math.log(num*10);
-    //     var a = 0.05,
-    //     b = 1.33,
-    //     c = 0;
-    //     return Math.floor(a*(Math.pow(b,x))+c);
-    // }
 
 
     /*
@@ -110,12 +99,15 @@ module.exports = (map, status) => {
      * cLeft & cRight = spread (between 2 - 3)
      * code diverse per lo zoom in e zoom out dalla media
      */
-    const maxWeight = 1,
-        maxRadius = 12,
-        backgroundMaxRadius = 6,
+    const maxWeight = 2,
+        maxRadius = 10,
+        backgroundMaxRadius = 8,
         cRight = 1.4,
         cLeft = 3,
-        minRadius = 1;
+        minRadius = 2.5,
+        // related to material icon size
+        minIconRadius = 14,
+        defOpacity = 0.8;
     const scale = (x, level) => {
         let c = x < level ? cLeft : cRight;
         let k = Math.pow((x - level), 2) * -1;
@@ -124,9 +116,9 @@ module.exports = (map, status) => {
         let radius = Math.floor(maxRadius * Math.exp(z));
         // console.log(radius);
         // senza soglia
-        // return Math.max(radius, minRadius);
+        return Math.max(radius, minRadius);
         // con soglia
-        return radius;
+        // return radius;
     };
     /*
      * Markers
@@ -151,7 +143,7 @@ module.exports = (map, status) => {
         let color = colors(type);
         // console.debug(type,color);
         return {
-            opacity: 1,
+            opacity: defOpacity,
             fill: true,
             fillOpacity: 0.8,
             weight: 0,
@@ -226,38 +218,7 @@ module.exports = (map, status) => {
         "layers": {
             "default": {
                 pointToLayer: function (feature, latlng) {
-                    let currentZoom = map.getZoom();
-                    // if(feature.area_id)
-                    // console.log(feature);
-                    let type = getType(feature);
-                    let className = getIconName(type);
-                    let radius = scale(currentZoom, getZoomLevel(feature));
-                    let weight = Math.min(radius, maxWeight);
-                    let style = Object.assign(
-                        {
-                            interactive: false
-                        },
-                        geojsonMarkerStyle(feature),
-                        {
-                            weight: weight,
-                            radius: radius,
-                            className: className
-                        }
-                    );
-                    // console.debug('check type',type,radius);
-                    // priority of source:
-                    // set priority (z-index) of highlight POIs
-                    if(priority.highlight.indexOf(type) > -1) {
-                        style.up = true;
-                    }
-                    // overwrite of radius of background POIs
-                    if(priority.background.indexOf(type) > -1) {
-                        style.radius = Math.min(style.radius, backgroundMaxRadius);
-                    }
-                    // do not render POIs if their type should be exclude
-                    if(priority.exclude.indexOf(type) > -1) { return null; }
-                    // console.debug(style,latlng);
-                    return L.circleMarker(latlng, style);
+                   return getMarker(feature,latlng);
                 }
             }
         }
@@ -283,17 +244,12 @@ module.exports = (map, status) => {
             if(priority.background.indexOf(type) > -1) {
                 radius = Math.min(radius, backgroundMaxRadius);
             }
-            feat.setRadius(radius);
-            // creo il nuovo stile
-            let style = Object.assign({}, geojsonMarkerStyle(feat.feature), {weight: weight}, dynamicStyle(feat.feature));
-            feat.setStyle(style);
-            if (style.up) {
-                feat.bringToFront();
-            } else {
-                feat.bringToBack();
-            }
+            // console.debug('check marker',feat);
+            // refresh icon
+            feat.setIcon(getIcon(feat.feature, feat.feature._latlng));
         }
     };
+
 
     // cambia il focus
     mGrid.setStyle = (focus) => {
@@ -345,9 +301,161 @@ module.exports = (map, status) => {
         mGrid.update();
     });
 
+    status.observe.filter(state => 'priority' in state).map(state => state.priority).subscribe((prioritySettings) => {
+        // console.log('setting priority', prioritySettings, priority);
+        priority = prioritySettings;
+    });
+
+
+
+    function getIcon(feature, latlng){
+        let currentZoom = map.getZoom();
+        // if(feature.area_id)
+        // console.log(feature);
+        let type = getType(feature);
+        let className = getIconName(type);
+        let radius = scale(currentZoom, getZoomLevel(feature));
+        let weight = Math.min(radius, maxWeight);
+        let style = Object.assign(
+            {
+                interactive: false
+            },
+            geojsonMarkerStyle(feature),
+            {
+                weight: weight,
+                radius: radius*2,
+                className: className
+            }
+        );
+
+        // do not render POIs if their type should be exclude
+        // console.debug('exclude?',priority.exclude,type);
+        if(priority.exclude.indexOf(type) > -1) { return null; }
+
+
+        let confIcon = {
+            className: 'marker-circle',
+            iconSize: d,
+            iconAnchor: latlng
+        };
+
+
+        // if type in background or highlight is set and type is not among highlight types
+        // overwrite of radius of background POIs
+        // console.debug('check is background',type,priority,priority.background.indexOf(type) > -1 || (priority.highlight.length > 0 && priority.highlight.indexOf(type) < 0));
+        if(priority.background.indexOf(type) > -1 || (priority.highlight.length > 0 && priority.highlight.indexOf(type) < 0)) {
+            style.radius = Math.min(style.radius, backgroundMaxRadius);
+            style.opacity = '0.5';
+            style.borderColor = gray;
+            style.width = 1;
+            style.backgroundColor = hexToRgba(gray,style.opacity);
+        }
+        // console.debug('check type',type,radius);
+        // priority of source:
+        // set priority (z-index) of highlight POIs
+        // if type in highlight or background is set and type is not among background types
+        if(priority.highlight.indexOf(type) > -1 || (priority.background.length > 0 && priority.background.indexOf(type) < 0)) {
+            style.up = true;
+            style.opacity = '1';
+            style.borderColor = darkgray;
+            style.backgroundColor = hexToRgba(style.color,style.opacity);
+        }
+        let d = style.radius*2;
+
+        let iconStyle = ('').concat(
+            "font-size:",d,"px;",
+            "width:",d,"px;",
+            "height:",d,"px;",
+            "border-color:",style.borderColor,";",
+            // "border-color:",style.color,";",
+            "border-width:",style.weight,"px ",style.weight,"px;",
+            "background-color:",style.backgroundColor,";");
+
+        // management of icons considering current radius
+        // icon iff radius >= min value
+        console.debug('check min radius',style.radius, minIconRadius);
+        if(minIconRadius <= style.radius){
+            confIcon.html = '<div class="circle" style="'+iconStyle+'">'+utils.getIcon(feature)+'</div>';
+        } else {
+            confIcon.html = '<div class="circle" style="'+iconStyle+'"></div>';
+        }
+
+        return L.divIcon(confIcon);
+
+        function hexToRgba(input,opacity){
+            let hex = parseInt(input.substring(1),16);
+
+            let r = hex >> 16;
+            let g = hex >> 8 & 0xFF;
+            let b = hex & 0xFF;
+            console.debug('check rgba',("rgba(").concat(r,", ",g,", ",b,", ",opacity,")"));
+            return ("rgba(").concat(r,", ",g,", ",b,", ",opacity,")");
+        }
+    }
+
+    function getMarker(feature, latlng){
+
+        return L.marker(latlng, {icon:getIcon(feature, latlng), interactive: false});
+        // let circle = L.circleMarker(latlng, style);
+        // console.debug('check circle',circle);
+        // return circle;
+    }
+
 
     // inizializzazione markerGrid layer
     mGrid.addTo(map);
 
     return mGrid
 };
+
+
+
+
+
+
+
+
+// exponential
+// var scale = function(x,level){
+//
+//     if(x > level)
+//         return 0;
+//     // https://www.desmos.com/calculator/3fisjexbvp
+//     // return Math.log(num*10);
+//     var a = 0.05,
+//     b = 1.33,
+//     c = 0;
+//     return Math.floor(a*(Math.pow(b,x))+c);
+// }
+
+// circles
+// mGrid.update = () => {
+//     let layer = mGrid.getLayers()[0];
+//     if(!layer){return;}
+//     // console.log(layer);
+//     let features = layer['_layers'];
+//     let zoom = map.getZoom();
+//     // console.log('nuovo raggio: ',scale(zoom));
+//     for (let i in features) {
+//         let feat = features[i];
+//         // console.log(feat.feature);
+//         let level = getZoomLevel(feat.feature);
+//         let radius = scale(zoom, level);
+//         let weight = Math.min(radius, maxWeight);
+//         // get type
+//         let type = getType(feat.feature);
+//         // if background set cap to backgroundMaxRadius
+//         if(priority.background.indexOf(type) > -1) {
+//             radius = Math.min(radius, backgroundMaxRadius);
+//         }
+//         feat.setRadius(radius);
+//         // creo il nuovo stile
+//         let style = Object.assign({}, geojsonMarkerStyle(feat.feature), {weight: weight}, dynamicStyle(feat.feature));
+//         feat.setStyle(style);
+//         if (style.up) {
+//             feat.bringToFront();
+//         } else {
+//             feat.bringToBack();
+//         }
+//     }
+// };

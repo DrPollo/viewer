@@ -1,0 +1,11 @@
+.marker-circle .circle .mdl-list__item-icon.material-icons{
+    color: white;
+    position:relative;
+    top: calc(50% - 12px);
+    left: calc(50% - 12px);
+}
+.marker-circle .circle{
+    box-shadow: 1px 1px 5px rgba(0,0,0,0.35);
+    border-style: solid;
+    border-radius: 100px;
+}

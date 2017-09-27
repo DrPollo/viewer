@@ -1,7 +1,7 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
-module.exports = function (map, status) {
+module.exports = function (map, status, utils) {
 
     var within = require('@turf/within');
 
@@ -50,7 +50,8 @@ module.exports = function (map, status) {
         wgnred = '#c32630',
         gray = "#9E9E9E",
         brown = "#795548",
-        bluegray = "#607D8B";
+        bluegray = "#607D8B",
+        darkgray = "#666";
 
     var colors = function colors(type) {
         if (type === 'FL_GROUPS') return '#3F7F91';
@@ -87,20 +88,6 @@ module.exports = function (map, status) {
         exclude: []
     };
 
-    // exponential
-    // var scale = function(x,level){
-    //
-    //     if(x > level)
-    //         return 0;
-    //     // https://www.desmos.com/calculator/3fisjexbvp
-    //     // return Math.log(num*10);
-    //     var a = 0.05,
-    //     b = 1.33,
-    //     c = 0;
-    //     return Math.floor(a*(Math.pow(b,x))+c);
-    // }
-
-
     /*
      * Gaussian
      * https://www.desmos.com/calculator/oihvoxtriz
@@ -109,12 +96,17 @@ module.exports = function (map, status) {
      * cLeft & cRight = spread (between 2 - 3)
      * code diverse per lo zoom in e zoom out dalla media
      */
-    var maxWeight = 1,
-        maxRadius = 12,
-        backgroundMaxRadius = 6,
+    var maxWeight = 2,
+        maxRadius = 10,
+        backgroundMaxRadius = 8,
         cRight = 1.4,
         cLeft = 3,
-        minRadius = 1;
+        minRadius = 2.5,
+
+
+    // related to material icon size
+    minIconRadius = 14,
+        defOpacity = 0.8;
     var scale = function scale(x, level) {
         var c = x < level ? cLeft : cRight;
         var k = Math.pow(x - level, 2) * -1;
@@ -123,9 +115,9 @@ module.exports = function (map, status) {
         var radius = Math.floor(maxRadius * Math.exp(z));
         // console.log(radius);
         // senza soglia
-        // return Math.max(radius, minRadius);
+        return Math.max(radius, minRadius);
         // con soglia
-        return radius;
+        // return radius;
     };
     /*
      * Markers
@@ -152,7 +144,7 @@ module.exports = function (map, status) {
         var color = colors(type);
         // console.debug(type,color);
         return {
-            opacity: 1,
+            opacity: defOpacity,
             fill: true,
             fillOpacity: 0.8,
             weight: 0,
@@ -231,36 +223,7 @@ module.exports = function (map, status) {
         "layers": {
             "default": {
                 pointToLayer: function pointToLayer(feature, latlng) {
-                    var currentZoom = map.getZoom();
-                    // if(feature.area_id)
-                    // console.log(feature);
-                    var type = getType(feature);
-                    var className = getIconName(type);
-                    var radius = scale(currentZoom, getZoomLevel(feature));
-                    var weight = Math.min(radius, maxWeight);
-                    var style = Object.assign({
-                        interactive: false
-                    }, geojsonMarkerStyle(feature), {
-                        weight: weight,
-                        radius: radius,
-                        className: className
-                    });
-                    // console.debug('check type',type,radius);
-                    // priority of source:
-                    // set priority (z-index) of highlight POIs
-                    if (priority.highlight.indexOf(type) > -1) {
-                        style.up = true;
-                    }
-                    // overwrite of radius of background POIs
-                    if (priority.background.indexOf(type) > -1) {
-                        style.radius = Math.min(style.radius, backgroundMaxRadius);
-                    }
-                    // do not render POIs if their type should be exclude
-                    if (priority.exclude.indexOf(type) > -1) {
-                        return null;
-                    }
-                    // console.debug(style,latlng);
-                    return L.circleMarker(latlng, style);
+                    return getMarker(feature, latlng);
                 }
             }
         }
@@ -288,15 +251,9 @@ module.exports = function (map, status) {
             if (priority.background.indexOf(type) > -1) {
                 radius = Math.min(radius, backgroundMaxRadius);
             }
-            feat.setRadius(radius);
-            // creo il nuovo stile
-            var style = Object.assign({}, geojsonMarkerStyle(feat.feature), { weight: weight }, dynamicStyle(feat.feature));
-            feat.setStyle(style);
-            if (style.up) {
-                feat.bringToFront();
-            } else {
-                feat.bringToBack();
-            }
+            // console.debug('check marker',feat);
+            // refresh icon
+            feat.setIcon(getIcon(feat.feature, feat.feature._latlng));
         }
     };
 
@@ -361,11 +318,149 @@ module.exports = function (map, status) {
         mGrid.update();
     });
 
+    status.observe.filter(function (state) {
+        return 'priority' in state;
+    }).map(function (state) {
+        return state.priority;
+    }).subscribe(function (prioritySettings) {
+        // console.log('setting priority', prioritySettings, priority);
+        priority = prioritySettings;
+    });
+
+    function getIcon(feature, latlng) {
+        var currentZoom = map.getZoom();
+        // if(feature.area_id)
+        // console.log(feature);
+        var type = getType(feature);
+        var className = getIconName(type);
+        var radius = scale(currentZoom, getZoomLevel(feature));
+        var weight = Math.min(radius, maxWeight);
+        var style = Object.assign({
+            interactive: false
+        }, geojsonMarkerStyle(feature), {
+            weight: weight,
+            radius: radius * 2,
+            className: className
+        });
+
+        // do not render POIs if their type should be exclude
+        // console.debug('exclude?',priority.exclude,type);
+        if (priority.exclude.indexOf(type) > -1) {
+            return null;
+        }
+
+        var confIcon = {
+            className: 'marker-circle',
+            iconSize: d,
+            iconAnchor: latlng
+        };
+
+        // if type in background or highlight is set and type is not among highlight types
+        // overwrite of radius of background POIs
+        // console.debug('check is background',type,priority,priority.background.indexOf(type) > -1 || (priority.highlight.length > 0 && priority.highlight.indexOf(type) < 0));
+        if (priority.background.indexOf(type) > -1 || priority.highlight.length > 0 && priority.highlight.indexOf(type) < 0) {
+            style.radius = Math.min(style.radius, backgroundMaxRadius);
+            style.opacity = '0.5';
+            style.borderColor = gray;
+            style.width = 1;
+            style.backgroundColor = hexToRgba(gray, style.opacity);
+        }
+        // console.debug('check type',type,radius);
+        // priority of source:
+        // set priority (z-index) of highlight POIs
+        // if type in highlight or background is set and type is not among background types
+        if (priority.highlight.indexOf(type) > -1 || priority.background.length > 0 && priority.background.indexOf(type) < 0) {
+            style.up = true;
+            style.opacity = '1';
+            style.borderColor = darkgray;
+            style.backgroundColor = hexToRgba(style.color, style.opacity);
+        }
+        var d = style.radius * 2;
+
+        var iconStyle = ''.concat("font-size:", d, "px;", "width:", d, "px;", "height:", d, "px;", "border-color:", style.borderColor, ";",
+        // "border-color:",style.color,";",
+        "border-width:", style.weight, "px ", style.weight, "px;", "background-color:", style.backgroundColor, ";");
+
+        // management of icons considering current radius
+        // icon iff radius >= min value
+        console.debug('check min radius', style.radius, minIconRadius);
+        if (minIconRadius <= style.radius) {
+            confIcon.html = '<div class="circle" style="' + iconStyle + '">' + utils.getIcon(feature) + '</div>';
+        } else {
+            confIcon.html = '<div class="circle" style="' + iconStyle + '"></div>';
+        }
+
+        return L.divIcon(confIcon);
+
+        function hexToRgba(input, opacity) {
+            var hex = parseInt(input.substring(1), 16);
+
+            var r = hex >> 16;
+            var g = hex >> 8 & 0xFF;
+            var b = hex & 0xFF;
+            console.debug('check rgba', "rgba(".concat(r, ", ", g, ", ", b, ", ", opacity, ")"));
+            return "rgba(".concat(r, ", ", g, ", ", b, ", ", opacity, ")");
+        }
+    }
+
+    function getMarker(feature, latlng) {
+
+        return L.marker(latlng, { icon: getIcon(feature, latlng), interactive: false });
+        // let circle = L.circleMarker(latlng, style);
+        // console.debug('check circle',circle);
+        // return circle;
+    }
+
     // inizializzazione markerGrid layer
     mGrid.addTo(map);
 
     return mGrid;
 };
+
+// exponential
+// var scale = function(x,level){
+//
+//     if(x > level)
+//         return 0;
+//     // https://www.desmos.com/calculator/3fisjexbvp
+//     // return Math.log(num*10);
+//     var a = 0.05,
+//     b = 1.33,
+//     c = 0;
+//     return Math.floor(a*(Math.pow(b,x))+c);
+// }
+
+// circles
+// mGrid.update = () => {
+//     let layer = mGrid.getLayers()[0];
+//     if(!layer){return;}
+//     // console.log(layer);
+//     let features = layer['_layers'];
+//     let zoom = map.getZoom();
+//     // console.log('nuovo raggio: ',scale(zoom));
+//     for (let i in features) {
+//         let feat = features[i];
+//         // console.log(feat.feature);
+//         let level = getZoomLevel(feat.feature);
+//         let radius = scale(zoom, level);
+//         let weight = Math.min(radius, maxWeight);
+//         // get type
+//         let type = getType(feat.feature);
+//         // if background set cap to backgroundMaxRadius
+//         if(priority.background.indexOf(type) > -1) {
+//             radius = Math.min(radius, backgroundMaxRadius);
+//         }
+//         feat.setRadius(radius);
+//         // creo il nuovo stile
+//         let style = Object.assign({}, geojsonMarkerStyle(feat.feature), {weight: weight}, dynamicStyle(feat.feature));
+//         feat.setStyle(style);
+//         if (style.up) {
+//             feat.bringToFront();
+//         } else {
+//             feat.bringToBack();
+//         }
+//     }
+// };
 
 },{"@turf/within":17,"moment":20}],2:[function(require,module,exports){
 "use strict";
@@ -468,7 +563,7 @@ module.exports = function (status, map) {
 
     // definition of priority of sources for visualisation purpose
     document.addEventListener(setPriorityEvent, function (e) {
-        console.log(setPriorityEvent, e.detail);
+        // console.debug(setPriorityEvent,e.detail);
         if (!e.detail.priority) {
             return;
         }
@@ -478,7 +573,7 @@ module.exports = function (status, map) {
 
     // request focus on id
     document.addEventListener(focusToEvent, function (e) {
-        console.log(focusToEvent, e.detail);
+        console.debug(focusToEvent, e.detail);
         // check area id
         if (!e.detail.id) {
             return;
@@ -594,7 +689,7 @@ module.exports = function (status) {
 /**
  * Created by drpollo on 19/09/2017.
  */
-module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
+module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, utils) {
     var $ = require('jquery');
     var moment = require('moment');
 
@@ -802,64 +897,10 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox) {
         var i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="mdl-list__item-primary-content">';
         var c = '</li>';
         var name = null;
-        var icon = null;
 
-        if (entry.properties.hasType) {
-
-            var type = entry.properties.hasType.toLowerCase();
-            // console.debug('type?',type);
-            switch (type) {
-                case 'school':
-                    icon = 'school';
-                    break;
-                case 'initiative':
-                    icon = 'assessment';
-                    break;
-                case 'event':
-                    icon = 'event';
-                    break;
-                case 'report':
-                    icon = 'build';
-                    break;
-                default:
-                    icon = 'room';
-            }
-            // icon
-            if (icon) {
-                i = i.concat('<i class="material-icons mdl-list__item-icon">', icon, '</i>');
-            }
-        }
-        if (entry.activity_type) {
-            // todo parse activity type
-            var activity = entry.activity_type.toLowerCase();
-            console.debug('activity: ', activity);
-            switch (activity) {
-                case 'object_created':
-                    break;
-                case 'object_removed':
-                    icon = 'delete';break;
-                case 'contribution_added':
-                    icon = 'playlist add';break;
-                case 'contribution_updated':
-                    icon = 'playlist add check';break;
-                case 'contribution_removed':
-                    icon = 'exposure neg 1';break;
-                case 'issue_voted_on':
-                    icon = 'exposure plus 1';break;
-                case 'interest_added':
-                    icon = 'exposure plus 1';break;
-                case 'interest_removed':
-                    icon = 'exposure neg 1';break;
-                case 'support_added':
-                    icon = 'exposure plus 1';break;
-                case 'support_removed':
-                    icon = 'exposure neg 1';break;
-                case 'suggestion_rated':
-                    icon = 'exposure';break;
-                default:
-                    break;
-            }
-        }
+        // icon
+        var icon = utils.getIcon(entry);
+        i = i.concat('<i class="material-icons mdl-list__item-icon">', icon, '</i>');
 
         if (entry.properties.name || entry.properties.hasName || entry.details.name) {
             name = entry.properties.name || entry.properties.hasName || entry.details.name;
@@ -1125,6 +1166,9 @@ var AreaViewer = function AreaViewer() {
     /*
      * moduli
      */
+    // utilities
+    var Utils = require('./utils');
+    var utils = Utils();
     // mappa generale
     var Map = require('./map');
     var map = Map(idMapBox);
@@ -1146,10 +1190,7 @@ var AreaViewer = function AreaViewer() {
     var fLayer = focusLayer(status);
     // infobox
     var InfoBox = require('./infobox');
-    var infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox);
-    // utilities
-    var Utils = require('./utils');
-    var utils = Utils();
+    var infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, utils);
 
     /*
      * geocoder
@@ -1182,7 +1223,7 @@ var AreaViewer = function AreaViewer() {
     // inizializzazione vectorGrid layer
     vGrid.addTo(map);
     // inizializzazione markerGrid layer
-    markerGrid(map, status);
+    markerGrid(map, status, utils);
     // inizializzazione focusLayer
     fLayer.addTo(map);
     // inizializzazione geocoder
@@ -1602,6 +1643,7 @@ module.exports = function (map) {
             observer.next(store["interface"]);
         };
         status.priority = function (priority) {
+            // console.debug('check setting of priority',priority);
             // todo management of flags
             // all, none, true, false
             store["view"]["priority"] = priority;
@@ -1616,7 +1658,7 @@ module.exports = function (map) {
         };
         status.interactive = function (val) {
             // check behaviour of focus mode
-            console.debug('check interactive', val.interactive);
+            // console.debug('check interactive',val.interactive);
             store["interface"]["interactive"] = val.interactive === 'false' ? false : true;
             observer.next(store["interface"]);
         };
@@ -1705,9 +1747,69 @@ module.exports = function () {
         });
     }
 
+    function getIcon(entry) {
+        var icon = 'place';
+
+        if (entry.properties.hasType) {
+
+            var type = entry.properties.hasType.toLowerCase();
+            // console.debug('type?',type);
+            switch (type) {
+                case 'school':
+                    icon = 'school';
+                    break;
+                case 'initiative':
+                    icon = 'assessment';
+                    break;
+                case 'event':
+                    icon = 'event';
+                    break;
+                case 'report':
+                    icon = 'build';
+                    break;
+                default:
+                    icon = 'room';
+            }
+        }
+        if (entry.activity_type) {
+            // todo parse activity type
+            var activity = entry.activity_type.toLowerCase();
+            console.debug('activity: ', activity);
+            switch (activity) {
+                case 'object_created':
+                    break;
+                case 'object_removed':
+                    icon = 'delete';break;
+                case 'contribution_added':
+                    icon = 'playlist add';break;
+                case 'contribution_updated':
+                    icon = 'playlist add check';break;
+                case 'contribution_removed':
+                    icon = 'exposure neg 1';break;
+                case 'issue_voted_on':
+                    icon = 'exposure plus 1';break;
+                case 'interest_added':
+                    icon = 'exposure plus 1';break;
+                case 'interest_removed':
+                    icon = 'exposure neg 1';break;
+                case 'support_added':
+                    icon = 'exposure plus 1';break;
+                case 'support_removed':
+                    icon = 'exposure neg 1';break;
+                case 'suggestion_rated':
+                    icon = 'exposure';break;
+                default:
+                    break;
+            }
+        }
+
+        return '<i class="material-icons mdl-list__item-icon">' + icon + '</i>';
+    }
+
     return {
         hideStyle: hideStyle,
-        getFeature: getFeature
+        getFeature: getFeature,
+        getIcon: getIcon
     };
 };
 

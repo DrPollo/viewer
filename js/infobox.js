@@ -1,7 +1,7 @@
 /**
  * Created by drpollo on 19/09/2017.
  */
-module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
+module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, utils) => {
     const $ = require('jquery');
     const moment = require('moment');
 
@@ -196,52 +196,11 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox) => {
         let i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="mdl-list__item-primary-content">';
         let c = '</li>';
         let name = null;
-        let icon = null;
 
-        if (entry.properties.hasType) {
+        // icon
+        let icon = utils.getIcon(entry);
+        i = i.concat('<i class="material-icons mdl-list__item-icon">', icon, '</i>');
 
-            let type = entry.properties.hasType.toLowerCase();
-            // console.debug('type?',type);
-            switch (type) {
-                case 'school':
-                    icon = 'school';
-                    break;
-                case 'initiative':
-                    icon = 'assessment';
-                    break;
-                case 'event':
-                    icon = 'event';
-                    break;
-                case 'report':
-                    icon = 'build';
-                    break;
-                default:
-                    icon = 'room';
-            }
-            // icon
-            if (icon) {
-                i = i.concat('<i class="material-icons mdl-list__item-icon">', icon, '</i>');
-            }
-        }
-        if (entry.activity_type) {
-            // todo parse activity type
-            let activity = entry.activity_type.toLowerCase();
-            console.debug('activity: ', activity);
-            switch (activity) {
-                case 'object_created' : break;
-                case 'object_removed' : icon = 'delete'; break;
-                case 'contribution_added' : icon = 'playlist add'; break;
-                case 'contribution_updated': icon = 'playlist add check'; break;
-                case 'contribution_removed' : icon = 'exposure neg 1'; break;
-                case 'issue_voted_on' : icon = 'exposure plus 1'; break;
-                case 'interest_added' : icon = 'exposure plus 1'; break;
-                case 'interest_removed' : icon = 'exposure neg 1'; break;
-                case 'support_added' : icon = 'exposure plus 1'; break;
-                case 'support_removed' : icon = 'exposure neg 1'; break;
-                case 'suggestion_rated' : icon = 'exposure'; break;
-                default: break;
-            }
-        }
 
         if (entry.properties.name || entry.properties.hasName || entry.details.name) {
             name = entry.properties.name || entry.properties.hasName || entry.details.name;

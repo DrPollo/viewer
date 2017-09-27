@@ -185,6 +185,7 @@ module.exports = (map) => {
             observer.next(store["interface"]);
         };
         status.priority = (priority) => {
+            // console.debug('check setting of priority',priority);
             // todo management of flags
             // all, none, true, false
             store["view"]["priority"] = priority;
@@ -199,7 +200,7 @@ module.exports = (map) => {
         };
         status.interactive = (val) => {
             // check behaviour of focus mode
-            console.debug('check interactive',val.interactive);
+            // console.debug('check interactive',val.interactive);
             store["interface"]["interactive"] = (val.interactive === 'false') ? false : true;
             observer.next(store["interface"]);
         };

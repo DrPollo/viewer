@@ -63,7 +63,7 @@ document.dispatchEvent(event);
 
 Following the list of supported events: 
 ##### Getting state changes (reading the current state)
-- ``areaViewer.focusOn``: ``{}``
+- ``areaViewer.focusOn``: ``{bounds, id, features, content}``
 - ``areaViewer.explore``: ``{}``
 - ``areaViewer.position``: ``{}``
 

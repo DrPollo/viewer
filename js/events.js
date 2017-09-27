@@ -89,7 +89,7 @@ module.exports = (status,map) => {
 
     // definition of priority of sources for visualisation purpose
     document.addEventListener(setPriorityEvent,function (e) {
-        console.log(setPriorityEvent,e.detail);
+        // console.debug(setPriorityEvent,e.detail);
         if(!e.detail.priority){  return; }
         // set priority of POIs: {highlight:[], background:[], exluded:[]}
         status.priority(e.detail.priority);
@@ -97,7 +97,7 @@ module.exports = (status,map) => {
 
     // request focus on id
     document.addEventListener(focusToEvent,function (e) {
-        console.log(focusToEvent,e.detail);
+        console.debug(focusToEvent,e.detail);
         // check area id
         if(!e.detail.id){  return; }
         // focus on id

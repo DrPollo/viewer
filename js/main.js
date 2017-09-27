@@ -61,6 +61,9 @@ const AreaViewer = () => {
     /*
      * moduli
      */
+    // utilities
+    const Utils = require('./utils');
+    const utils = Utils();
     // mappa generale
     const Map = require('./map');
     const map = Map(idMapBox);
@@ -82,10 +85,8 @@ const AreaViewer = () => {
     const fLayer = focusLayer(status);
     // infobox
     const InfoBox = require('./infobox');
-    const infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox);
-    // utilities
-    const Utils = require('./utils');
-    const utils = Utils();
+    const infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, utils);
+
 
 
     /*
@@ -119,7 +120,7 @@ const AreaViewer = () => {
     // inizializzazione vectorGrid layer
     vGrid.addTo(map);
     // inizializzazione markerGrid layer
-    markerGrid(map, status);
+    markerGrid(map, status, utils);
     // inizializzazione focusLayer
     fLayer.addTo(map);
     // inizializzazione geocoder

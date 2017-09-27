@@ -44,8 +44,60 @@ const detailsUrl = "https://tiles.firstlife.org/areas/";
         });
     }
 
+
+    function getIcon(entry) {
+        let icon = 'place';
+
+        if (entry.properties.hasType) {
+
+            let type = entry.properties.hasType.toLowerCase();
+            // console.debug('type?',type);
+            switch (type) {
+                case 'school':
+                    icon = 'school';
+                    break;
+                case 'initiative':
+                    icon = 'assessment';
+                    break;
+                case 'event':
+                    icon = 'event';
+                    break;
+                case 'report':
+                    icon = 'build';
+                    break;
+                default:
+                    icon = 'room';
+            }
+        }
+        if (entry.activity_type) {
+            // todo parse activity type
+            let activity = entry.activity_type.toLowerCase();
+            console.debug('activity: ', activity);
+            switch (activity) {
+                case 'object_created' : break;
+                case 'object_removed' : icon = 'delete'; break;
+                case 'contribution_added' : icon = 'playlist add'; break;
+                case 'contribution_updated': icon = 'playlist add check'; break;
+                case 'contribution_removed' : icon = 'exposure neg 1'; break;
+                case 'issue_voted_on' : icon = 'exposure plus 1'; break;
+                case 'interest_added' : icon = 'exposure plus 1'; break;
+                case 'interest_removed' : icon = 'exposure neg 1'; break;
+                case 'support_added' : icon = 'exposure plus 1'; break;
+                case 'support_removed' : icon = 'exposure neg 1'; break;
+                case 'suggestion_rated' : icon = 'exposure'; break;
+                default: break;
+            }
+        }
+
+
+        return '<i class="material-icons mdl-list__item-icon">'+ icon + '</i>';
+    }
+
+
+
     return {
         hideStyle: hideStyle,
-        getFeature: getFeature
+        getFeature: getFeature,
+        getIcon: getIcon
     }
 };
