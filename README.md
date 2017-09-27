@@ -27,7 +27,7 @@ AreaViewer can be included within an iframe html tag.
 The initial state of AreaViewer can be partially customised including the following search parameters:
 
 0) ***domain*** (required) to setup the communication between the application and the iframe (es. domain=https://wegovnow.firstlife.org)
-1) start_time and end_time UTC time (Unix Time milliseconds), interval to be considered. The default is the current week.
+1) start_time and end_time UTC time (Unix Time milliseconds), interval to be considered. The default is null.
 2) c (center) \<lat:lng:zoom\> hash encoding of the centre of the map latitude, longitude and zoom level of the initial zoom level
 3) contrast <boolean> to select normal or high contrast cartography
 4) lang \<[ISO 639-1 codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)\> language (default agent lang if defined or "en") 
@@ -64,8 +64,8 @@ document.dispatchEvent(event);
 Following the list of supported events: 
 ##### Getting state changes (reading the current state)
 - ``areaViewer.focusOn``: ``{bounds, id, features, content}``
-- ``areaViewer.explore``: ``{}``
-- ``areaViewer.position``: ``{}``
+- ``areaViewer.explore``: ``{<empty>}``
+- ``areaViewer.position``: ``{c:<hash lat:lng:zoom>, date{from,to}, priority: {highlight, background, exclude}}``
 
 ##### Triggering state changes (changing the current state)
 - ``areaViewer.setView``: ``{lat:<float>,lng:<float>,zoom<1-20>}`` change map viewPort
@@ -82,11 +82,10 @@ Following the list of supported events:
 ##### Priority params
 
 Priority params are meant to custom the visualisation of events within areaViewer:
- - highlight: what should be prominent 
- - background: what is less relevant
+ - highlight: what should be prominent (colored, icons and bigger)
+ - background: what is less relevant (small, gray and no icons)
  - exclude: what should not be rendered
- - ***todo*** include: what should be included (if defined what is not explicitly included will be excluded)
-  
+ 
 
 ### Install
 To support the development of AreaViewer, ``gulpfile.js`` includes lives erver, ecma6 linter and browserify boundler scripts.
