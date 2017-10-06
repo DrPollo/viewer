@@ -15,6 +15,7 @@ var mapOptions = {
     center: [lat, lon],
     zoom: zoom
 };
+var defaultInteractive = true;
 var zoomControlPosition = 'bottomright';
 // var baselayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png';
 // var contrastlayer = 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png';
@@ -135,8 +136,11 @@ if (window.location.getParameter('exclude')) {
     priority.exclude = window.location.getParameter('exclude').split(",") || [];
     currentParams.exclude = priority.exclude;
 }
-if (window.location.getParameter('interactive') !== null) {
+if (window.location.getParameter('interactive') !== null && window.location.getParameter('interactive') !== 'null' && typeof window.location.getParameter('interactive') !== 'undefined')  {
+    // console.log('check',window.location.getParameter('interactive'));
     currentParams.interactive = window.location.getParameter('interactive');
+}else{
+    currentParams.interactive = defaultInteractive;
 }
 
 
@@ -290,7 +294,7 @@ function emitEvent(eventName, params) {
 
 // update location.search params
 function updateQueryParams(key, value) {
-    // console.debug('check updateQueryParams',!currentParams);
+    console.debug('check updateQueryParams',currentParams);
     if (!currentParams) {
         return;
     }
@@ -302,8 +306,8 @@ function updateQueryParams(key, value) {
     if (!window.history) {
         return;
     }
-    // console.debug('updating location.search params', key,value);
-    if (value !== null && value !== "null") {
+    console.debug('updating location.search params', key,value);
+    if (value !== null && value !== "null" && value !== "undefined") {
         // aggiungo chiave e valore
         currentParams[key] = value;
     } else if (currentParams[key]) {

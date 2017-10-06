@@ -83,7 +83,7 @@ module.exports = (status,map) => {
     document.addEventListener(setInteractivityEvent,function (e) {
         console.log(setInteractivityEvent,e.detail);
         // set current dates
-        if(e.detail.interactive === null || e.detail.interactive === "null"){  return; }
+        if(e.detail.interactive === null || e.detail.interactive === "null"|| e.detail.interactive === "undefined"){  return; }
         status.interactive({interactive: e.detail.interactive});
     },false);
 

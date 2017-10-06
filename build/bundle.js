@@ -583,7 +583,7 @@ module.exports = function (status, map) {
     document.addEventListener(setInteractivityEvent, function (e) {
         console.log(setInteractivityEvent, e.detail);
         // set current dates
-        if (e.detail.interactive === null || e.detail.interactive === "null") {
+        if (e.detail.interactive === null || e.detail.interactive === "null" || e.detail.interactive === "undefined") {
             return;
         }
         status.interactive({ interactive: e.detail.interactive });
