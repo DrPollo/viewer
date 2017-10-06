@@ -32,6 +32,12 @@
     background: transparent;
     left:8px;
 }
+.leaflet-left .leaflet-control-zoom {
+    left:8px;
+}
+.leaflet-right .leaflet-control-zoom {
+    right:8px;
+}
 .leaflet-touch .leaflet-control-layers, .leaflet-touch .leaflet-bar {
     border:none;
     /*box-shadow: 1px 1px 5px rgba(0,0,0,0.35);*/
