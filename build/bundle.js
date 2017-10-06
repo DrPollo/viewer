@@ -1578,7 +1578,7 @@ module.exports = function (idMapBox, env) {
             break;
     }
 
-    var zoomControlPosition = 'bottomright';
+    var zoomControlPosition = 'bottomleft';
 
     var map = L.map(idMapBox).setView([initLat, initLon], initZoom);
     // control position

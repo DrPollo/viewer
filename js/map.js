@@ -62,7 +62,7 @@ module.exports = (idMapBox, env) => {
     }
 
 
-    let zoomControlPosition = 'bottomright';
+    let zoomControlPosition = 'bottomleft';
 
     const map = L.map(idMapBox).setView([initLat, initLon], initZoom);
     // control position

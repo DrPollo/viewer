@@ -28,7 +28,10 @@
 .leaflet-control-geocoder button{
     border-radius: 2px;
 }
-.leaflet-control-zoom { background: transparent; }
+.leaflet-control-zoom {
+    background: transparent;
+    left:8px;
+}
 .leaflet-touch .leaflet-control-layers, .leaflet-touch .leaflet-bar {
     border:none;
     /*box-shadow: 1px 1px 5px rgba(0,0,0,0.35);*/
