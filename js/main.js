@@ -23,6 +23,7 @@ const AreaViewer = () => {
     // id infobox tag
     const idInfoBox = "infobox";
     const idFeatureBox = "featurebox";
+    const idFeatureHeader = "featureboxheader";
     const idMapBox = "areaViewer";
     // default language
     let lang = 'en';
@@ -95,7 +96,7 @@ const AreaViewer = () => {
     const fLayer = focusLayer(status);
     // infobox
     const InfoBox = require('./infobox');
-    const infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, utils, lang);
+    const infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeader, utils, lang);
 
 
 

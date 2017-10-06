@@ -6,7 +6,8 @@ html, body, #areaViewer {
     padding: 0px;
 }
 body {
-    /*position: relative;*/
+    position: absolute;
+    top: 0;
 }
 #areaViewer {
     position: absolute;
@@ -15,37 +16,3 @@ body {
     background: #c7d4e8;
     box-shadow: 1px 1px 3px rgba(0,0,0, 0.35);
 }
-#infobox {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    background: transparent;
-    width: auto;
-    max-width: 50%;
-}
-#label{
-    background: white;
-    box-shadow: 1px 1px 5px rgba(0,0,0,0.35);
-    /*font-family: Verdana, Arial, Calibri;*/
-    border-radius: 2px;
-    color: #333;
-    min-height: 22px;
-    padding: 5px 8px 3px;
-    font-size: 1em;
-}
-#label button {
-    vertical-align: text-bottom;
-    border: 0px solid;
-    background: white;
-    cursor: pointer;
-    position: absolute;
-    top: 0px;
-    left: 0px;
-    width: 30px;
-    height: 30px;
-}
-#label .placeName {
-    padding-left: 28px;
-    display: inline-block;
-}
-

@@ -1,17 +1,25 @@
+#infobox {
+    max-width: 50%;
+    margin:20px 0px;
+}
+#label{
+    padding: 0px 4px;
+}
+
 
 #tooltipBox {display: none;}
-
+.focus {
+    background-color: #fafafa;
+}
 /* focus mobile desktop */
 .focus #areaViewer{
-    max-height: 50%;
+    max-height: calc(100% - 144px);
+    /*max-height: 100%;*/
     max-width: 50%;
+    top:72px;
 }
-.focus #tooltipBox{
-    max-height: 50%;
-    max-width: 50%;
-    position: absolute;
-    top:50%;
-    left: 0;
+.focus #featureboxheader{
+    padding:2px 18px;
 }
 .focus #featureboxcontainer{
     position: absolute;
@@ -22,6 +30,7 @@
     max-width: 50%;
     width: 50%;
     overflow-y: scroll;
+    background-color: #fafafa;
 }
 .focus #featureboxcontainer ul {
     margin: 0;
@@ -42,8 +51,8 @@
 /* focus mobile vertical */
 @media only screen and (max-width: 500px){
     .focus #areaViewer{
-        top:30px;
-        max-height: calc(33% - 30px);
+        top:72px;
+        max-height: 33%;
         max-width: 100%;
     }
     .focus #tooltipBox{ display: none; }
@@ -58,14 +67,25 @@
         overflow-x: hidden;
         overflow-wrap: break-word;
     }
+    .focus #featureboxcontainer{
+        position: absolute;
+        top:calc(33% + 72px);
+        left: 0;
+        max-height: calc(33% + 72px);
+        height: calc(33% + 72px);
+        max-width: 100%;
+        width: 100%;
+        overflow-y: scroll;
+        background-color: #fafafa;
+    }
 }
 
 /* focus mobile horizontal */
 @media only screen and (max-height: 500px){
     .focus #areaViewer{
         max-width: 50%;
-        top:30px;
-        max-height: calc(100% - 30px);
+        top:72px;
+        max-height: calc(100% - 72px);
     }
     #infobox {
         top:0;

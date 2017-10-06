@@ -374,9 +374,6 @@ module.exports = (map, status, utils, env) => {
             style = Object.assign(style,outsideFocusStyle(style,type));
         }
 
-        if(focusId) console.log('check style',style);
-
-
         // build icon given the computed style
         let d = style.radius*2;
         confIcon.iconSize = d;

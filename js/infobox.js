@@ -1,14 +1,17 @@
 /**
  * Created by drpollo on 19/09/2017.
  */
-module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, utils, defLang) => {
+module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeader, utils, defLang) => {
     const $ = require('jquery');
     const moment = require('moment');
 
     // dom node id "label"
     const infoBox = $("#" + idInfoBox);
     const featureBox = $('#' + idFeatureBox);
+    const featureHeader = $('#'+idFeatureHeader);
+
     const mapBox = $('#' + idMapBox);
+
     // mapBox.on('map-container-resize', function () {
     //     setTimeout(map.invalidateSize,400); // doesn't seem to do anything
     // });
@@ -41,6 +44,16 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, utils, defLang
     const tooltipCancel = {
         it: "Indietro",
         en: 'Back'
+    };
+    const headerText = {
+      empty:{
+          it: "Nessun contenuto",
+          en: "No contents yet"
+      },
+      full:{
+          it: "Contenuti",
+          en: "Contents"
+      }
     };
     // def lang
     let currentLang = defLang;
@@ -161,6 +174,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, utils, defLang
                 featureBox.append(e);
             }
         });
+        setFocusHeader(content);
     });
 
 
@@ -229,6 +243,17 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, utils, defLang
         }
 
         return null;
+    }
+
+    function setFocusHeader(content) {
+        // clear header
+        featureHeader.empty();
+        // default header
+        if(!content || typeof content === 'undefined' || content.length < 1){
+           return featureHeader.append('<span>'+headerText.empty[currentLang]+'</span>');
+        }
+        // todo build header
+        return featureHeader.append('<span>'+headerText.full[currentLang]+'</span>');
     }
 
 

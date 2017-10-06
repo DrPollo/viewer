@@ -392,8 +392,6 @@ module.exports = function (map, status, utils, env) {
             style = Object.assign(style, outsideFocusStyle(style, type));
         }
 
-        if (focusId) console.log('check style', style);
-
         // build icon given the computed style
         var d = style.radius * 2;
         confIcon.iconSize = d;
@@ -783,14 +781,17 @@ module.exports = function (status) {
 /**
  * Created by drpollo on 19/09/2017.
  */
-module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, utils, defLang) {
+module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeader, utils, defLang) {
     var $ = require('jquery');
     var moment = require('moment');
 
     // dom node id "label"
     var infoBox = $("#" + idInfoBox);
     var featureBox = $('#' + idFeatureBox);
+    var featureHeader = $('#' + idFeatureHeader);
+
     var mapBox = $('#' + idMapBox);
+
     // mapBox.on('map-container-resize', function () {
     //     setTimeout(map.invalidateSize,400); // doesn't seem to do anything
     // });
@@ -822,6 +823,16 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, utils
     var tooltipCancel = {
         it: "Indietro",
         en: 'Back'
+    };
+    var headerText = {
+        empty: {
+            it: "Nessun contenuto",
+            en: "No contents yet"
+        },
+        full: {
+            it: "Contenuti",
+            en: "Contents"
+        }
     };
     // def lang
     var currentLang = defLang;
@@ -957,6 +968,7 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, utils
                 featureBox.append(e);
             }
         });
+        setFocusHeader(content);
     });
 
     // parsing label infobox
@@ -1018,6 +1030,17 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, utils
         }
 
         return null;
+    }
+
+    function setFocusHeader(content) {
+        // clear header
+        featureHeader.empty();
+        // default header
+        if (!content || typeof content === 'undefined' || content.length < 1) {
+            return featureHeader.append('<span>' + headerText.empty[currentLang] + '</span>');
+        }
+        // todo build header
+        return featureHeader.append('<span>' + headerText.full[currentLang] + '</span>');
     }
 
     // inits
@@ -1224,6 +1247,7 @@ var AreaViewer = function AreaViewer() {
     // id infobox tag
     var idInfoBox = "infobox";
     var idFeatureBox = "featurebox";
+    var idFeatureHeader = "featureboxheader";
     var idMapBox = "areaViewer";
     // default language
     var lang = 'en';
@@ -1295,7 +1319,7 @@ var AreaViewer = function AreaViewer() {
     var fLayer = focusLayer(status);
     // infobox
     var InfoBox = require('./infobox');
-    var infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, utils, lang);
+    var infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeader, utils, lang);
 
     /*
      * geocoder
