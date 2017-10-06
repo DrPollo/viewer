@@ -122,6 +122,7 @@ module.exports = function (map, status, utils, env) {
     var maxWeight = 2,
         maxRadius = 10,
         backgroundMaxRadius = 8,
+        backgroundOpacity = 0.6,
         cRight = 1.4,
         cLeft = 3,
         minRadius = 2.5,
@@ -178,47 +179,7 @@ module.exports = function (map, status, utils, env) {
 
     var focusId = null;
     var focusGeometry = null;
-    var dynamicStyle = function dynamicStyle(feature) {
-        if (!focusId || !focusGeometry) {
-            return {};
-        }
-        var type = getType(feature);
-        // priority of source:
-        // type is to be excluded
-        // se non definito id o definito e uguale all'area id
-        // explicit relation
-        if (focusId && feature.area_id === focusId) {
-            // non cambio nulla
-            return {
-                up: true
-            };
-        }
-        // within focus area geometry
-        // console.debug('focusGeometry', feature, focusGeometry);
-        try {
-            var isInside = within({ type: "featureCollection", features: [feature] }, focusGeometry).features.length > 0;
-            if (isInside) {
-                return {
-                    up: true
-                };
-            }
-        } catch (e) {
-            console.error('@turf/within', e);
-        }
-        // keep color, keep up, bigger radius
-        if (priority.highlight.indexOf(type) > -1) {
-            return {
-                radius: 2
-            };
-        }
-        // otherwise (out of focus and background or not highlighted)
-        return {
-            radius: 1,
-            color: gray,
-            fillColor: gray,
-            up: false
-        };
-    };
+
     var getZoomLevel = function getZoomLevel(feature) {
         if (feature && feature.properties && feature.properties.zoom_level) {
             return feature && feature.properties && feature.properties.zoom_level;
@@ -254,6 +215,7 @@ module.exports = function (map, status, utils, env) {
     var mGrid = L.geoJsonGridLayer(markerUrl + qParams, markerLayers);
 
     mGrid.update = function () {
+        console.log('grid update');
         var layer = mGrid.getLayers()[0];
         if (!layer) {
             return;
@@ -399,6 +361,40 @@ module.exports = function (map, status, utils, env) {
             style.backgroundColor = hexToRgba(style.color, style.opacity);
             style.class = "highlight";
         }
+
+        /*
+         * focus management
+         */
+        // priority of source:
+        // type is to be excluded
+        // se non definito id o definito e uguale all'area id
+        // explicit relation
+        if (focusId && feature.area_id === focusId) {
+            // non cambio nulla
+        } else if (focusId && focusGeometry) {
+            // within focus area geometry
+            // console.debug('focusGeometry', feature, focusGeometry);
+            try {
+                var isInside = within({
+                    type: "featureCollection",
+                    features: [feature]
+                }, focusGeometry).features.length > 0;
+                if (!isInside) {
+                    // todo change style
+                    style = Object.assign(style, outsideFocusStyle(style, type));
+                }
+            } catch (e) {
+                console.error('@turf/within', e);
+                // todo change style
+                style = Object.assign(style, outsideFocusStyle(style, type));
+            }
+        } else if (focusId) {
+            style = Object.assign(style, outsideFocusStyle(style, type));
+        }
+
+        if (focusId) console.log('check style', style);
+
+        // build icon given the computed style
         var d = style.radius * 2;
         confIcon.iconSize = d;
 
@@ -426,9 +422,26 @@ module.exports = function (map, status, utils, env) {
             // console.debug('check rgba',("rgba(").concat(r,", ",g,", ",b,", ",opacity,")"));
             return "rgba(".concat(r, ", ", g, ", ", b, ", ", opacity, ")");
         }
+
+        function outsideFocusStyle(style, type) {
+            // console.debug('outsideFocusStyle',style,type,priority.highlight);
+            // keep color, keep up, bigger radius
+            if (priority.highlight.indexOf(type) > -1) {
+                return {
+                    radius: Math.min(style.radius, backgroundMaxRadius)
+                };
+            }
+            // outside focus style
+            return {
+                radius: Math.min(style.radius, backgroundMaxRadius),
+                backgroundColor: hexToRgba(gray, backgroundOpacity),
+                borderColor: hexToRgba(gray, style.opacity)
+            };
+        }
     }
 
     function getMarker(feature, latlng) {
+        // console.debug('get marker',feature, latlng);
         var markerIcon = getMarkerIcon(feature);
         if (!markerIcon) {
             return null;
@@ -457,6 +470,46 @@ module.exports = function (map, status, utils, env) {
 //     c = 0;
 //     return Math.floor(a*(Math.pow(b,x))+c);
 // }
+
+// const dynamicStyle = (feature) => {
+//     if(!focusId || !focusGeometry){ return{}; }
+//     let type = getType(feature);
+//     // priority of source:
+//     // type is to be excluded
+//     // se non definito id o definito e uguale all'area id
+//     // explicit relation
+//     if(focusId && feature.area_id === focusId){
+//         // non cambio nulla
+//         return {
+//             up: true
+//         };
+//     }
+//     // within focus area geometry
+//     // console.debug('focusGeometry', feature, focusGeometry);
+//     try{
+//         let isInside = (within({type:"featureCollection", features:[feature]}, focusGeometry).features.length > 0);
+//         if(isInside) {
+//             return {
+//                 up: true
+//             };
+//         }
+//     }catch (e){
+//         console.error('@turf/within',e);
+//     }
+//     // keep color, keep up, bigger radius
+//     if(priority.highlight.indexOf(type) > -1) {
+//         return {
+//             radius: 2
+//         };
+//     }
+//     // otherwise (out of focus and background or not highlighted)
+//     return {
+//         radius: 1,
+//         color: gray,
+//         fillColor: gray,
+//         up: false
+//     }
+// };
 
 // circles
 // mGrid.update = () => {
