@@ -8,6 +8,7 @@ html, body, #areaViewer {
 body {
     position: absolute;
     top: 0;
+    overflow: hidden;
 }
 #areaViewer {
     position: absolute;

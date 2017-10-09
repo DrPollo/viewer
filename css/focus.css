@@ -72,8 +72,8 @@
         position: absolute;
         top:calc(33% + 72px);
         left: 0;
-        max-height: calc(33% + 72px);
-        height: calc(33% + 72px);
+        max-height: calc(66% - 72px);
+        height: calc(66% - 72px);
         max-width: 100%;
         width: 100%;
         overflow-y: scroll;
