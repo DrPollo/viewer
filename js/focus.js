@@ -51,7 +51,7 @@ module.exports = (status) => {
 
     status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => {
         // update infobox
-        // console.debug('check focus',features);
+        console.debug('check focus',features);
         // init infobox
         fLayer.setLayer(features);
     });

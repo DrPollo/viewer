@@ -144,11 +144,11 @@ const AreaViewer = () => {
     // fit to bounds
     // valuta se fare fix dello zoom > options.maxZoom = map.getCenter();
     status.observe.filter(state => 'features' in state).subscribe(focus => {
-        console.log('focus management',focus);
+        console.log('focus management',focus.features);
         let feature = fLayer.setLayer(focus.features);
-        console.debug('fitting to bounds',feature);
+        console.debug('fLayer.setLayer',feature);
         // map.removeLayer(mGrid);
-        console.debug('check focus behaviour',interactive, focusClass[interactive]);
+        // console.debug('check focus behaviour',interactive, focusClass[interactive]);
         $('body').addClass(focusClass[interactive]);
         // console.debug('check body class',$('body').hasClass(focusClass[interactive]));
         map.invalidateSize();
@@ -179,6 +179,8 @@ const AreaViewer = () => {
         map.invalidateSize();
         // mGrid.resetStyle();
         vGrid.resetStyle();
+        // remove geometry
+        console.debug('check fLayer',fLayer);
         fLayer.clearLayers();
     });
 
@@ -210,6 +212,8 @@ const AreaViewer = () => {
 
     /*
      * Gestione eventi mappa
+     * 1) click su vGrid is top priority
+     * 2) click on map as fallback in case of empty areas
      */
     vGrid.on('click', e => {
         if (e.originalEvent.defaultPrevented) {
@@ -217,21 +221,22 @@ const AreaViewer = () => {
         }
         e.originalEvent.preventDefault();
 
-        console.debug('click event at', e.latlng);
+        // console.debug('click event at', e.latlng, e.layer.properties);
         // recupero focus se attuale
         let focus = status.getFocus();
+        console.debug('is focus?',focus);
         if (focus) {
-            // console.debug('click inside focus area',focus);
+            console.debug('click inside focus area',focus);
             let pt = turf.point([e.latlng.lng, e.latlng.lat]);
             let geoJSON = {type: "FeatureCollection", features: focus.features};
-            console.debug('within?', pt, geoJSON);
+            // console.debug('within?', pt, geoJSON);
             try{
                 let result = within(turf.featureCollection([pt]), geoJSON);
-                console.debug('within?', result);
+                // console.debug('within?', result);
                 if (result.features.length < 1) {
                     status.restore();
                 } else {
-                    status.focus(e.layer.properties);
+                    status.focus({feature: e.layer.properties, id: e.layer.properties.id});
                 }
             } catch (e){
                 console.error('turf.within error',e);
@@ -241,9 +246,30 @@ const AreaViewer = () => {
 
         } else {
             // azione focus
-            status.focus(e.layer.properties);
+            status.focus({feature: e.layer.properties, id: e.layer.properties.id});
         }
     });
+    map.on('click',(e)=>{
+        // console.debug('click on map, it should be handled?',!e.originalEvent.defaultPrevented);
+        // fallback click outside
+        if (e.originalEvent.defaultPrevented) {
+            return;
+        }
+        e.originalEvent.preventDefault();
+
+        //if focus > exit to explore
+        console.debug('click on map, current status',status.current());
+        if(status.current() === "focus"){
+            return status.restore();
+        }else{
+            // console.debug('click on map, params',{lat: e.latlng.lat, lng: e.latlng.lng, zoom: map.getZoom()});
+            // fallback focus: tile shape as default geometry
+            status.focus({lat: e.latlng.lat, lng: e.latlng.lng, zoom: map.getZoom()});
+        }
+    });
+
+
+
     // prima del cambio di zoom
     map.on('moveend', (e) => {
         // update della posizione nello stato

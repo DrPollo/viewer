@@ -5,7 +5,7 @@ module.exports = (map) => {
     const utils = Utils();
     const moment = require('moment');
     const within = require('@turf/within');
-
+    const tilebelt = require('@mapbox/tilebelt');
 
     // init of state params
     const initFocus = {
@@ -54,30 +54,40 @@ module.exports = (map) => {
         "priority": null,
         "interactive": null,
         "date": null,
-        "observe": null
+        "observe": null,
+        "current": () => current
     };
 
     // focus handler
     // init of focus handler requires the observer
     function focusHandler(observer) {
+        // console.debug('focusHandler',observer);
         // gestiore del focus
         return (entry) => {
-            switch(current){
-                case "focus":
-                    // check if focus is inside the current focus
-                    if(store["focus"].features.lenght > 0 && JSON.stringify(store["focus"].features).find(entry.id)){
+            console.debug('focusHandler',entry);
+            //fallback focus in case no entry is defined
+            if(!entry.feature && !entry.id){
+                virtualFocus(entry,observer);
+            }else{
+                // if entry is defined
+                switch(current){
+                    case "focus":
+                        // check if focus is inside the current focus
+                        if(store["focus"].features.lenght > 0 && JSON.stringify(store["focus"].features).find(entry.id)){
+                            focus(entry, observer);
+                        } else {
+                            //nothing to do
+                        }
+                        break;
+                    default:
                         focus(entry, observer);
-                    } else {
-                        //nothing to do
-                    }
-                    break;
-                default:
-                    focus(entry, observer);
+                }
             }
         };
     }
     // extract relevant features from map
     function extractContent(focusGeometry){
+        if(typeof map.layer === 'undefined' || !map._layers || !Array.isArray(map.layer) ){return [];}
         return Object.keys(map._layers).reduce((res,key) => {
             let feature = map._layers[key].feature;
             if(!feature){return res;}
@@ -96,19 +106,84 @@ module.exports = (map) => {
             return res;
         },[]);
     }
+    // fallback: focus on a tile
+    function virtualFocus(entry,observer){
+        // console.debug('virtual focus on ',entry, observer);
+        if(!entry && !(entry.tileId || (entry.lat && entry.lng && entry.zoom ) )){return;}
+
+        let tile = null;
+        let tileId = null;
+        // tileId
+        if(entry.tileId){
+            tileId = entry.tileId;
+            let tmp = entry.tileId.split(":");
+            tile = [parseFloat(tmp[0]),parseFloat(tmp[1]),parseInt(tmp[2])];
+            console.debug('focus on tileId, tile',tile);
+        }else {
+            // from latlng and zoom to tile
+            tile = tilebelt.pointToTile(parseFloat(entry.lng), parseFloat(entry.lat), parseInt(entry.zoom));
+            // tile = [x,y,z], tileId = x:y:z
+            if (!tile) { return; }
+            tileId = tile[0] + ":" + tile[1] + ":" + tile[2];
+            console.debug('virtual focus on tile', tileId);
+            // tile to bbox
+            if (!tileId) {
+                return;
+            }
+        }
+        if (!tile) { return; }
+        if (!tileId) { return; }
+
+        let bbox = tilebelt.tileToBBOX(tile);
+        console.debug('virtual focus on bbox',bbox);
+        // bbox to GeoJSON feature poligon
+        if(!bbox){return;}
+        let polygon = tilebelt.tileToGeoJSON(tile);
+        // let polygon = bboxPolygon(bbox);
+        console.debug('virtual focus on polygon',polygon);
+
+        // update polygon with extra info
+        if(!polygon){return;}
+        polygon.id = tileId;
+
+        polygon.properties = {
+            id : tileId,
+            type : 'tile'
+        };
+
+        // update status
+        store["focus"].id = tileId;
+        store["focus"].bounds = bbox;
+        store["focus"].features = [polygon];
+        // extractContent from tile
+        store["focus"]["content"] = extractContent(polygon);
+
+        current = "focus";
+
+        observer.next(store["focus"]);
+
+    }
     // focus handler
     function focus(entry, observer) {
         console.debug('focus on ',entry);
         current = "focus";
         // set id
         store["focus"].id = entry.id;
+
+        // management of tileId = x:y:z
+        if(entry.id && entry.id.split(":").length === 3){
+            return virtualFocus({tileId : entry.id},observer);
+        }
+
+
         // set bounds
         let bounds = null;
-        if (entry.bbox) {
-            let bbox = JSON.parse(entry.bbox);
-            bounds = L.latLngBounds(L.latLng(bbox[1], bbox[0]), L.latLng(bbox[3], bbox[2]));
-            store["focus"].bounds = bounds;
-        }
+        // if (entry.bbox) {
+        //     let bbox = JSON.parse(entry.bbox);
+        //     bounds = L.latLngBounds(L.latLng(bbox[1], bbox[0]), L.latLng(bbox[3], bbox[2]));
+        //     store["focus"].bounds = bounds;
+        // }
+
         // recupero il contenuto
         utils.getFeature(entry.id).then(
             res => {
@@ -124,11 +199,11 @@ module.exports = (map) => {
                     store["focus"].features = [];
                 }
                 let bb = BBox(store["focus"].features[0]);
-                store["focus"].bounds = bb;
+                store["focus"].bounds = [bb[1],bb[0],bb[3],bb[4]];
                 // store["focus"].bounds = L.latLngBounds(L.latLng(bb[1], bb[0]), L.latLng(bb[3], bb[2]));
                 store["focus"]["content"] = extractContent(res);
                 // propago il nuovo stato
-                // console.debug("stato focus",store["focus"]);
+                console.debug("stato focus",store["focus"]);
                 observer.next(store["focus"]);
             },
             err => {
@@ -163,6 +238,7 @@ module.exports = (map) => {
 
     // observable da restituire
     status.observe = Rx.Observable.create(function (observer) {
+        console.debug('check observer',Object.assign({},observer) );
         // costruttori delle azioni di cambio di stato
         status.lang = (lang) => {
             if(store["interface"]["lang"] === lang){
@@ -223,6 +299,7 @@ module.exports = (map) => {
             }
         };
         status.restore = () => {
+            console.debug('to restore?', current !== "explorer");
             if(current === "explorer")
                 return;
 

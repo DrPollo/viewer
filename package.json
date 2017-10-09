@@ -32,7 +32,9 @@
   "author": "Alessio Antonini",
   "license": "MIT",
   "dependencies": {
+    "@mapbox/tilebelt": "^1.0.1",
     "@turf/bbox": "^4.7.3",
+    "@turf/bbox-polygon": "^4.7.3",
     "@turf/helpers": "^4.5.2",
     "@turf/within": "^4.5.2",
     "gulp-babel-minify": "^0.2.0",
