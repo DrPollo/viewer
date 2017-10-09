@@ -44,13 +44,26 @@ module.exports = () => {
             fill: false,
             weight: 0
         };
+        // debug purpose
+        // return {
+        //     fill: true,
+        //     color: lime,
+        //     fillColor: lime,
+        //     fillOpacity:0.35,
+        //     weight: 1
+        // };
     };
 
     const vectorMapStyling = {
         nazioni: featureStyle,
+        nazioni_mondo: featureStyle,
         regioni: featureStyle,
+        regioni_europa: featureStyle,
         provincie: featureStyle,
+        province_europa: featureStyle,
         comuni: featureStyle,
+        comune: featureStyle,
+        comuni_italia: featureStyle,
         circoscrizioni: featureStyle,
         quartieri: featureStyle,
         city_block: featureStyle,
@@ -71,105 +84,95 @@ module.exports = () => {
             case 1:
             case 2:
                 return [
-                    "nazioni",
-                    "waterareas",
-                    "waterways"
+                    "nazioni_mondo",
+                    "waterareas"
                 ];
                 break;
             case 3:
             case 4:
                 return [
-                    "nazioni",
-                    "regioni",
-                    "provincie",
-                    "waterareas",
-                    "waterways"
+                    "nazioni_mondo",
+                    "regioni_europa",
+                    "province_europa"
                 ];
                 break;
             case 5:
             case 6:
                 return [
-                    "nazioni",
-                    "regioni",
-                    "provincie",
-                    "landusages",
-                    "roads",
-                    "waterareas",
-                    "waterways"];
+                    "nazioni_mondo",
+                    "regioni_europa",
+                    "province_europa"
+                ];
                 break;
             case 7:
             case 8:
                 return [
-                    "nazioni",
-                    "regioni",
-                    "provincie",
-                    "landusages",
-                    "roads",
-                    "waterareas",
-                    "waterways",
-                    "comuni",];
+                    "nazioni_mondo",
+                    "regioni_europa",
+                    "province_europa"
+                ];
                 break;
             case 9:
             case 10:
                 return [
-                    "nazioni",
-                    "regioni",
-                    "provincie",
-                    "landusages",
-                    "roads",
-                    "waterareas",
-                    "waterways",
-                    "comuni"];
+                    "nazioni_mondo",
+                    "regioni_europa",
+                    "province_europa",
+                    "comuni_italia",
+                    "comune"
+                ];
                 break;
             case 11:
             case 12:
                 return [
-                    "provincie",
-                    "landusages",
-                    "roads",
-                    "waterareas",
-                    "waterways",
-                    "comuni"];
+                    "province_europa",
+                    "comuni_italia",
+                    "comune"
+                ];
                 break;
             case 13:
             case 14:
                 return [
-                    "provincie",
+                    "province_europa",
+                    "comuni_italia",
+                    "comune",
                     "quartieri",
                     "landusages",
-                    "comuni"];
+                    "waterareas"
+
+                ];
                 break;
             case 15:
             case 16:
                 return [
-                    "comuni",
+                    "comuni_italia",
+                    "quartieri",
                     "city_block",
-                    "landusages",
                     "waterareas",
-                    "waterways",
-                    "quartieri",];
+                    "landusages"
+                ];
                 break;
             case 17:
             case 18:
                 return [
-                    "site",
+                    "quartieri",
+                    "city_block",
+                    "waterareas",
                     "landusages",
                     "building",
-                    "roads",
-                    "waterareas",
-                    "waterways",
-                    "quartieri",
-                    "city_block",];
+                    "site"
+                ];
                 break;
             case 19:
             case 20:
                 return [
-                    "site",
-                    "building",
-                    "roads",
+                    "city_block",
                     "waterareas",
-                    "waterways",
-                    "indoor"];
+                    "landusages",
+                    "building",
+                    "site",
+                    "indoor"
+                ];
                 break;
             default:
                 return Object.keys(layers);
