@@ -279,7 +279,6 @@ module.exports = (map, status, utils, env) => {
     // fine cambio di zoom
     map.on('zoomend', (e) => {
         // aggiorno stile marker
-        // todo gestione focus nella scelta di stile
         mGrid.update();
     });
 
@@ -339,8 +338,8 @@ module.exports = (map, status, utils, env) => {
         if(priority.highlight.indexOf(type) > -1 || (priority.background.indexOf(type) < 0)) {
             style.up = true;
             style.opacity = '1';
-            style.borderColor = darkgray;
-            style.backgroundColor = hexToRgba(style.color,style.opacity);
+            style.borderColor = style.color;
+            style.backgroundColor = hexToRgba(style.color,'0.85');
             style.class = "highlight";
         }
 
