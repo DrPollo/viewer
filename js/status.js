@@ -87,7 +87,9 @@ module.exports = (map) => {
     }
     // extract relevant features from map
     function extractContent(focusGeometry){
-        if(typeof map.layer === 'undefined' || !map._layers || !Array.isArray(map.layer) ){return [];}
+        // console.debug('extractContent?',typeof map._layers === 'undefined',  !map._layers);
+        if(typeof map._layers === 'undefined' || !map._layers ){return [];}
+        console.debug('extractContent',map, focusGeometry);
         return Object.keys(map._layers).reduce((res,key) => {
             let feature = map._layers[key].feature;
             if(!feature){return res;}
@@ -97,6 +99,7 @@ module.exports = (map) => {
             try{
                 // console.debug(feature, focusGeometry);
                 let isInside = (within({type:"featureCollection", features:[feature]}, {type:"featureCollection", features:[focusGeometry]}).features.length > 0);
+                console.debug('is inside?',isInside);
                 if(isInside) {
                     return res.concat(feature);
                 }
