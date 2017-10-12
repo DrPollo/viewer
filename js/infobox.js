@@ -31,6 +31,10 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
         "site": {
             "en": "Outdoor place",
             "it": "Spazio esterno"
+        },
+        "tile": {
+            "en": "Area",
+            "it": "Area"
         }
     };
 
@@ -110,7 +114,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
 
         // gestisco la creazione della label
         // se ho una nuova feature aggiorno label
-        if (feature && feature.name) {
+        if (feature) {
             // feature.name
             // feature.type
             label = parseLabel(feature);
@@ -126,6 +130,8 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
         infoBox.append(defaultLabel);
         // init listner
         initExitListner();
+
+        console.debug('label: ',label, 'from feature: ' ,feature);
     };
 
 
@@ -192,10 +198,12 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
             case 'site':
                 label = label.concat(typeLabels['site'][lang]);
                 break;
+            case 'tile':
+                label = label.concat(typeLabels['tile'][lang]);
             default:
                 break;
         }
-        if (feature.type !== feature.name) {
+        if (typeof feature.name !== "undefined" && feature.type !== feature.name) {
             if(label !== ""){
                 label = label.concat(": ");
             }
