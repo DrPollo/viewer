@@ -26,15 +26,15 @@ AreaViewer can be included within an iframe html tag.
 ### Initialization of areaViewer
 The initial state of AreaViewer can be partially customised including the following search parameters:
 
-0) ***domain*** (required) to setup the communication between the application and the iframe (es. domain=https://wegovnow.firstlife.org)
-1) start_time and end_time UTC time (Unix Time milliseconds), interval to be considered. The default is null.
-2) c (center) \<lat:lng:zoom\> hash encoding of the centre of the map latitude, longitude and zoom level of the initial zoom level
-3) contrast <boolean> to select normal or high contrast cartography
-4) lang \<[ISO 639-1 codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)\> language (default agent lang if defined or "en") 
-5) highlight <Array<string>>, application names (es. highlight=app1,app2) of events to be highlighted (optional)
-6) background <Array<string>>, application names of events to be displayed as context (optional)
-7) exclude <Array<string>>, application names of events to be excluded (optional)
-8) interactive <boolean> (default true), sets focus mode behaviour: enable/disables the display of the list of contents and layout change
+1. ***domain*** (required) to setup the communication between the application and the iframe (es. domain=https://wegovnow.firstlife.org)
+2. start_time and end_time UTC time (Unix Time milliseconds), interval to be considered. The default is null.
+3. c (center) \<lat:lng:zoom\> hash encoding of the centre of the map latitude, longitude and zoom level of the initial zoom level
+4. contrast <boolean> to select normal or high contrast cartography
+5. lang \<[ISO 639-1 codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)\> language (default agent lang if defined or "en") 
+6. highlight <Array<string>>, application names (es. highlight=app1,app2) of events to be highlighted (optional)
+7. background <Array<string>>, application names of events to be displayed as context (optional)
+8. exclude <Array<string>>, application names of events to be excluded (optional)
+9. interactive <boolean> (default true), sets focus mode behaviour: enable/disables the display of the list of contents and layout change
 
 ### Interacting with areaViewer
 
@@ -63,7 +63,7 @@ document.dispatchEvent(event);
 
 Following the list of supported events: 
 ##### Getting state changes (reading the current state)
-- ``areaViewer.focusOn``: ``{bounds, id, features, content}``
+- ``areaViewer.focusOn``: ``{bounds: <array>, id:<string>, features: <geoJSON features>, content: <array> }``
 - ``areaViewer.explore``: ``{<empty>}``
 - ``areaViewer.position``: ``{c:<hash lat:lng:zoom>, date{from,to}, priority: {highlight, background, exclude}}``
 
