@@ -14,8 +14,8 @@ const AreaViewer = () => {
     const $ = require('jquery');
 
     // environment
-    const env = "pt3";
-
+    const env = "sandona";
+    console.log('current environment:',env);
 
     /*
      * costanti e defaults
