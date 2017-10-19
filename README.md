@@ -108,19 +108,25 @@ To compile a new `boundle.js` run gulp task `js` in the project root.
 ```
 npm build
 ```
+
+#### Build distributions
+
+1. ``js/main.js`` > change ``env`` variable
+2. ``gulp minify --name=<dist_name>`` to generate ``dist/dist_name/bundle.js`` file 
+
 #### Dependencies
  - LeafletJS
  - Turf.js
  - Rx/js
 
-### Development dependencies
+#### Development dependencies
  - gulp, gulp-util
  - browserify, watchify
  - babel
  - vinyl-source-stream
  - browser-sync
 
-### Licensing
+#### Licensing
 Author: Alessio Antonini
 
 Licence: MIT
