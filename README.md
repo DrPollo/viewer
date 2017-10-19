@@ -112,7 +112,8 @@ npm build
 #### Build distributions
 
 1. ``js/main.js`` > change ``env`` variable
-2. ``gulp compile --name=<dist_name>`` to generate ``dist/dist_name/bundle.js`` file 
+2. ``gulp build`` to generate the bundle for the specific environment
+2. ``gulp minify --name=<dist_name>`` to generate ``dist/dist_name/bundle.js`` file 
 
 #### Dependencies
  - LeafletJS

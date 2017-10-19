@@ -1258,7 +1258,7 @@ var AreaViewer = function AreaViewer() {
     var $ = require('jquery');
 
     // environment
-    var env = "sandona";
+    var env = "pt3";
     console.log('current environment:', env);
 
     /*

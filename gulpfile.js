@@ -45,7 +45,9 @@ gulp.task("minify", () =>
         }))
         .pipe(gulp.dest("./dist"+ (gutil.env.name ? "/"+gutil.env.name+"/" : "/") ))
 );
-gulp.task('compile',['build','minify']);
+
+// todo debug: build is asynch and minify starts before the end of build
+// gulp.task('compile',['build','minify']);
 
 gulp.task('test',function () {
     browserSync.init({
