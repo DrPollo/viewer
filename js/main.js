@@ -14,7 +14,7 @@ const AreaViewer = () => {
     const $ = require('jquery');
 
     // environment
-    const env = "sandona";
+    const env = "dev";
     console.log('current environment:',env);
 
     /*
