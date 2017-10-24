@@ -9,16 +9,16 @@ module.exports = (map, status, utils, env) => {
     let markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
     // env management
     switch (env){
-        case 'pt2': markerUrl = 'https://loggerproxy-pt2.firstlife.org/tile/{x}/{y}/{z}'; break;
-        case 'pt3': markerUrl = 'https://loggerproxy-pt3.firstlife.org/tile/{x}/{y}/{z}'; break;
-        case 'sandona': markerUrl = 'https://loggerproxy-sandona.firstlife.org/tile/{x}/{y}/{z}'; break;
-        case 'torino': markerUrl = 'https://loggerproxy-torino.firstlife.org/tile/{x}/{y}/{z}'; break;
-        case 'southwark': markerUrl = 'https://loggerproxy-southwark.firstlife.org/tile/{x}/{y}/{z}'; break;
+        case 'pt2': markerUrl = 'https://loggerproxy-pt2.firstlife.org/events/{x}/{y}/{z}'; break;
+        case 'pt3': markerUrl = 'https://loggerproxy-pt3.firstlife.org/events/{x}/{y}/{z}'; break;
+        case 'sandona': markerUrl = 'https://loggerproxy-sandona.firstlife.org/events/{x}/{y}/{z}'; break;
+        case 'torino': markerUrl = 'https://loggerproxy-torino.firstlife.org/events/{x}/{y}/{z}'; break;
+        case 'southwark': markerUrl = 'https://loggerproxy-southwark.firstlife.org/events/{x}/{y}/{z}'; break;
         default:
     }
 
     // default zoom_level
-    const defaultZoomLevel = 18;
+    const defaultZoomLevel = 20;
 
     //default date
     // current week, from monday to sunday from 00:00:00:000 to 23:59:59:999
