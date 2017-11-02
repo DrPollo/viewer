@@ -14,7 +14,7 @@ const AreaViewer = () => {
     const $ = require('jquery');
 
     // environment
-    const env = "pt3";
+    const env = "dev";
     console.log('current environment:',env);
 
     /*
