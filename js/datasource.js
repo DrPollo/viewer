@@ -15,7 +15,6 @@ module.exports = (map, status, utils, env) => {
     const mGrid = L.featureGroup();
 
 
-
 // environment management
     switch (env) {
         case 'sandona':
@@ -51,7 +50,7 @@ module.exports = (map, status, utils, env) => {
     otmUrl = "http://localhost:3085/";
 
 
-    const http = axios.create({baseURL:otmUrl});
+    const http = axios.create({baseURL: otmUrl});
 
 
     // default zoom_level
@@ -104,7 +103,7 @@ module.exports = (map, status, utils, env) => {
         if (type.includes('geokey')) return red;
         if (type.includes('communitymaps')) return teal;
 
-        console.debug('wgnred?',type);
+        console.debug('wgnred?', type);
         return wgnred;
     };
 
@@ -119,23 +118,21 @@ module.exports = (map, status, utils, env) => {
 
     // query params
     // start_time and end_time > UTC
-    let qParams = "?token="+token;
-    if(date.from && date.from.utc()){
-        qParams = qParams.concat("&start_time=",date.from.utc().format('x'));
+    let qParams = "?token=" + token;
+    if (date.from && date.from.utc()) {
+        qParams = qParams.concat("&start_time=", date.from.utc().format('x'));
     }
-    if(date.to && date.to.utc()){
-        qParams = qParams.concat("&end_time=",date.to.utc().format('x'));
+    if (date.to && date.to.utc()) {
+        qParams = qParams.concat("&end_time=", date.to.utc().format('x'));
     }
 
 
     // priority of POIs visualisation
     let priority = {
-        highlight:[],
-        background:[],
-        exclude:[]
+        highlight: [],
+        background: [],
+        exclude: []
     };
-
-
 
 
     /*
@@ -212,15 +209,15 @@ module.exports = (map, status, utils, env) => {
     const getZoomLevel = (feature) => {
         // console.debug('getZoomLevel',feature);
 
-      if(feature && feature.properties && feature.properties.zoom_level) {
-          return feature.properties.zoom_level < 1 || feature.properties.zoom_level > 20 ? defaultZoomLevel : feature.properties.zoom_level;
-      }
-      if(feature && feature.properties && feature.properties.additionalProperties && feature.properties.additionalProperties.zoom_level) {
-          return feature.properties.additionalProperties.zoom_level < 1 || feature.properties.additionalProperties.zoom_level > 20 ? defaultZoomLevel : feature.properties.additionalProperties.zoom_level;
-      }
+        if (feature && feature.properties && feature.properties.zoom_level) {
+            return feature.properties.zoom_level < 1 || feature.properties.zoom_level > 20 ? defaultZoomLevel : feature.properties.zoom_level;
+        }
+        if (feature && feature.properties && feature.properties.additionalProperties && feature.properties.additionalProperties.zoom_level) {
+            return feature.properties.additionalProperties.zoom_level < 1 || feature.properties.additionalProperties.zoom_level > 20 ? defaultZoomLevel : feature.properties.additionalProperties.zoom_level;
+        }
 
         // zoom considering hasType
-        if(feature && feature.properties && feature.properties.hasType) {
+        if (feature && feature.properties && feature.properties.hasType) {
             switch (feature.properties.hasType) {
                 case 'BicyclePath':
                 case 'Highway':
@@ -228,7 +225,8 @@ module.exports = (map, status, utils, env) => {
                 case 'UrbanPark':
                     return 16;
                     break;
-                default: return defaultZoomLevel;
+                default:
+                    return defaultZoomLevel;
             }
         }
         // default
@@ -239,8 +237,10 @@ module.exports = (map, status, utils, env) => {
     const update = () => {
         // console.debug('grid update', mGrid.getLayers());
         let markers = mGrid.getLayers();
-        if(!markers || !Array.isArray(markers) || markers.length < 1){return;}
-        markers.map ((marker) => {
+        if (!markers || !Array.isArray(markers) || markers.length < 1) {
+            return;
+        }
+        markers.map((marker) => {
             // console.debug('updating marker:',marker);
             // refresh icon
             marker.setIcon(getMarkerIcon(marker.options.feature));
@@ -264,7 +264,6 @@ module.exports = (map, status, utils, env) => {
     // };
 
 
-
     /*
      * Listners
      */
@@ -272,20 +271,28 @@ module.exports = (map, status, utils, env) => {
 
     // set default style
     status.observe.filter(state => 'features' in state).subscribe(focus => {
-    // mGrid.setStyle(focus)
-        // todo set marker style
+        // set marker style with focus
+        if (!focus) {
+            return;
+        }
+        // console.debug('setting focus on ',focus);
+        focusId = focus.id;
+        focusGeometry = {type: "featureCollection", features: focus.features};
+        update();
     });
 
     // on exit focus mode > reset markers style
     status.observe.filter(state => 'reset' in state).subscribe(() => {
-        // mGrid.resetStyle();
-        // todo reset marker style
+        // reset marker style without focus
+        focusId = null;
+        focusGeometry = null;
+        update();
     });
 
-    status.observe.filter(state => "bounds" in state).map(state => state.bounds).subscribe( bounds => {
-        console.debug('datasource, new bounds ',bounds);
+    status.observe.filter(state => "bounds" in state).map(state => state.bounds).subscribe(bounds => {
+        console.debug('datasource, new bounds ', bounds);
 
-        console.log('get markers to update',mGrid);
+        console.log('get markers to update', mGrid);
 
         // call to OTM logger > add events to mGrid
         getEvents(bounds);
@@ -306,12 +313,14 @@ module.exports = (map, status, utils, env) => {
     });
 
     status.observe.filter(state => 'date' in state).filter(state => state.date).subscribe((newDate) => {
-        if(!newDate.from && !newDate.to) {return;}
+        if (!newDate.from && !newDate.to) {
+            return;
+        }
         // change date
         date.from = newDate.from || date.from;
         date.to = newDate.to || date.to;
         // change q params
-        qParams = ("?token="+token).concat("&start_time=",date.from.utc().format('x')).concat("&end_time=",date.to.utc().format('x'));
+        qParams = ("?token=" + token).concat("&start_time=", date.from.utc().format('x')).concat("&end_time=", date.to.utc().format('x'));
         // remove layer
         // mGrid.remove();
         // // new instance of mGrid
@@ -320,7 +329,7 @@ module.exports = (map, status, utils, env) => {
     });
 
 
-    function getMarkerIcon(feature){
+    function getMarkerIcon(feature) {
         let currentZoom = map.getZoom();
         // if(feature.area_id)
         // console.log(feature);
@@ -335,14 +344,16 @@ module.exports = (map, status, utils, env) => {
             geojsonMarkerStyle(feature),
             {
                 weight: weight,
-                radius: radius*2,
+                radius: radius * 2,
                 className: className
             }
         );
 
         // do not render POIs if their type should be exclude
         // console.debug('exclude?',priority.exclude,type);
-        if(priority.exclude.indexOf(type) > -1) { return null; }
+        if (priority.exclude.indexOf(type) > -1) {
+            return null;
+        }
 
 
         let confIcon = {
@@ -353,12 +364,12 @@ module.exports = (map, status, utils, env) => {
         // if type in background or highlight is set and type is not among highlight types
         // overwrite of radius of background POIs
         // console.debug('check is background',type,priority,priority.background.indexOf(type) > -1 || (priority.highlight.length > 0 && priority.highlight.indexOf(type) < 0));
-        if(priority.background.indexOf(type) > -1 || (priority.highlight.length > 0 && priority.highlight.indexOf(type) < 0)) {
+        if (priority.background.indexOf(type) > -1 || (priority.highlight.length > 0 && priority.highlight.indexOf(type) < 0)) {
             style.radius = Math.min(style.radius, backgroundMaxRadius);
             style.opacity = '0.5';
             style.borderColor = gray;
             style.width = 1;
-            style.backgroundColor = hexToRgba(gray,style.opacity);
+            style.backgroundColor = hexToRgba(gray, style.opacity);
             style.class = "background";
         }
         // console.debug('check type',type,radius);
@@ -366,11 +377,11 @@ module.exports = (map, status, utils, env) => {
         // set priority (z-index) of highlight POIs
         // if type in highlight or background is set and type is not among background types
         // console.debug('check is highlight', type, priority, priority.highlight.indexOf(type) > -1 || (priority.background.length > 0 && priority.background.indexOf(type) < 0));
-        if(priority.highlight.indexOf(type) > -1 || (priority.background.indexOf(type) < 0)) {
+        if (priority.highlight.indexOf(type) > -1 || (priority.background.indexOf(type) < 0)) {
             style.up = true;
             style.opacity = '1';
             style.borderColor = style.color;
-            style.backgroundColor = hexToRgba(style.color,'0.85');
+            style.backgroundColor = hexToRgba(style.color, '0.85');
             style.class = "highlight";
         }
 
@@ -383,9 +394,9 @@ module.exports = (map, status, utils, env) => {
         // type is to be excluded
         // se non definito id o definito e uguale all'area id
         // explicit relation
-        if(focusId && feature.area_id === focusId){
+        if (focusId && feature.area_id === focusId) {
             // non cambio nulla
-        } else if(focusId && focusGeometry) {
+        } else if (focusId && focusGeometry) {
             // within focus area geometry
             // console.debug('focusGeometry', feature, focusGeometry);
             try {
@@ -395,78 +406,87 @@ module.exports = (map, status, utils, env) => {
                 }, focusGeometry).features.length > 0);
                 if (!isInside) {
                     // todo change style
-                    style = Object.assign(style,outsideFocusStyle(style,type));
+                    style = Object.assign(style, outsideFocusStyle(style, type));
                 }
             } catch (e) {
                 console.error('@turf/within', e);
                 // todo change style
-                style = Object.assign(style,outsideFocusStyle(style,type));
+                style = Object.assign(style, outsideFocusStyle(style, type));
             }
-        } else if(focusId){
-            style = Object.assign(style,outsideFocusStyle(style,type));
+        } else if (focusId) {
+            style = Object.assign(style, outsideFocusStyle(style, type));
         }
 
         // build icon given the computed style
-        let d = style.radius*2;
+        let d = style.radius * 2;
         confIcon.iconSize = d;
 
 
         let iconStyle = ('').concat(
-            "font-size:",d,"px;",
-            "width:",d,"px;",
-            "height:",d,"px;",
-            "border-color:",style.borderColor,";",
+            "font-size:", d, "px;",
+            "width:", d, "px;",
+            "height:", d, "px;",
+            "border-color:", style.borderColor, ";",
             // "border-color:",style.color,";",
-            "border-width:",style.weight,"px ",style.weight,"px;",
-            "background-color:",style.backgroundColor,";");
+            "border-width:", style.weight, "px ", style.weight, "px;",
+            "background-color:", style.backgroundColor, ";");
 
         // management of icons considering current radius
         // icon iff radius >= min value
         // console.debug('check marker icon',style);
-        if(minIconRadius <= style.radius){
-            confIcon.html = '<div class="circle" style="'+iconStyle+'">'+utils.getIcon(feature)+'</div>';
+        if (minIconRadius <= style.radius) {
+            confIcon.html = '<div class="circle" style="' + iconStyle + '">' + utils.getIcon(feature) + '</div>';
         } else {
-            confIcon.html = '<div class="circle circle-small '+style.class+'" style="'+iconStyle+'"></div>';
+            confIcon.html = '<div class="circle circle-small ' + style.class + '" style="' + iconStyle + '"></div>';
         }
         // console.debug('getMarkerIcon',confIcon, style.backgroundColor === wgnred);
         return L.divIcon(confIcon);
 
-        function hexToRgba(input,opacity){
-            let hex = parseInt(input.substring(1),16);
+        function hexToRgba(input, opacity) {
+            let hex = parseInt(input.substring(1), 16);
 
             let r = hex >> 16;
             let g = hex >> 8 & 0xFF;
             let b = hex & 0xFF;
             // console.debug('check rgba',("rgba(").concat(r,", ",g,", ",b,", ",opacity,")"));
-            return ("rgba(").concat(r,", ",g,", ",b,", ",opacity,")");
+            return ("rgba(").concat(r, ", ", g, ", ", b, ", ", opacity, ")");
         }
 
-        function outsideFocusStyle(style,type){
+        function outsideFocusStyle(style, type) {
             // console.debug('outsideFocusStyle',style,type,priority.highlight);
             // keep color, keep up, bigger radius
             if (priority.highlight.indexOf(type) > -1) {
                 return {
-                    radius: Math.min(style.radius,backgroundMaxRadius)
+                    radius: Math.min(style.radius, backgroundMaxRadius)
                 };
             }
             // outside focus style
             return {
-                radius: Math.min(style.radius,backgroundMaxRadius),
-                backgroundColor : hexToRgba(gray,backgroundOpacity),
-                borderColor : hexToRgba(gray,style.opacity)
+                radius: Math.min(style.radius, backgroundMaxRadius),
+                backgroundColor: hexToRgba(gray, backgroundOpacity),
+                borderColor: hexToRgba(gray, style.opacity)
             };
         }
     }
 
-    function getMarker(feature){
+    function getMarker(feature) {
 
-        if(!feature.geometry || !feature.geometry.type === 'point') {return }
-        let latlng = [feature.geometry.coordinates[1],feature.geometry.coordinates[0]];
-        console.debug('creating marker',latlng,feature);
+        if (!feature.geometry || !feature.geometry.type === 'point') {
+            return
+        }
+        let latlng = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
+        console.debug('creating marker', latlng, feature);
         let markerIcon = getMarkerIcon(feature);
-        if(!markerIcon){return null;}
+        if (!markerIcon) {
+            return null;
+        }
         // console.log('adding',feature.id,"in",mGrid.getLayers());
-        let marker = L.marker(latlng, {icon:markerIcon, interactive: false, pane:"customMarkerPane", feature:feature });
+        let marker = L.marker(latlng, {
+            icon: markerIcon,
+            interactive: false,
+            pane: "customMarkerPane",
+            feature: feature
+        });
         marker._leaflet_id = feature.id;
         return marker;
         // let circle = L.circleMarker(latlng, style);
@@ -475,38 +495,42 @@ module.exports = (map, status, utils, env) => {
     }
 
     // retrieve events from OTM logger
-    function getEvents(bbox){
+    function getEvents(bbox) {
         // boundingbox=bbox
         // loggerUrl
-        let url = ('proxy').concat(qParams,'&boundingbox=',bbox);
+        let url = ('proxy').concat(qParams, '&boundingbox=', bbox);
         // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
         http.get(url)
             .then(function (response) {
                 // console.debug('getEvents, response',response.data);
-                if(!response.data || !response.data.event_list ) {return console.error('getEvents, wrong format from OTM');}
+                if (!response.data || !response.data.event_list) {
+                    return console.error('getEvents, wrong format from OTM');
+                }
                 let events = response.data.event_list;
-                let markers = events.reduce( (r, event) => {
+                let markers = events.reduce((r, event) => {
                     // console.debug(r,event);
-                    if(!event.activity_objects || !Array.isArray(event.activity_objects) || event.activity_objects.length < 1) {
+                    if (!event.activity_objects || !Array.isArray(event.activity_objects) || event.activity_objects.length < 1) {
                         // console.debug('skip',r);
                         return r;
                     }
-                    let tmp = Object.assign({},event);
+                    let tmp = Object.assign({}, event);
                     delete tmp.activity_objects;
-                    let feature = Object.assign(tmp,event.activity_objects[0]);
+                    let feature = Object.assign(tmp, event.activity_objects[0]);
                     let marker = getMarker(feature);
                     // console.debug('check',mGrid.hasLayer(marker));
-                    if(mGrid.hasLayer(marker)) {return r;}
+                    if (mGrid.hasLayer(marker)) {
+                        return r;
+                    }
                     mGrid.addLayer(marker);
                     return r.concat(marker);
                 }, []);
                 // mGrid.addLayer(markers);
                 // map.removeLayer(mGrid)
                 // mGrid.addTo(map)
-                console.debug('getEvents, markers',mGrid.getLayers());
+                console.debug('getEvents, markers', mGrid.getLayers());
             }).catch(function (error) {
-                console.error('getEvents, errror',error);
-            });
+            console.error('getEvents, errror', error);
+        });
     }
 
 
@@ -515,12 +539,6 @@ module.exports = (map, status, utils, env) => {
 
     return mGrid
 };
-
-
-
-
-
-
 
 
 // exponential

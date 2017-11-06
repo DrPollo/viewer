@@ -268,16 +268,24 @@ module.exports = function (map, status, utils, env) {
     status.observe.filter(function (state) {
         return 'features' in state;
     }).subscribe(function (focus) {
-        // mGrid.setStyle(focus)
-        // todo set marker style
+        // set marker style with focus
+        if (!focus) {
+            return;
+        }
+        // console.debug('setting focus on ',focus);
+        focusId = focus.id;
+        focusGeometry = { type: "featureCollection", features: focus.features };
+        update();
     });
 
     // on exit focus mode > reset markers style
     status.observe.filter(function (state) {
         return 'reset' in state;
     }).subscribe(function () {
-        // mGrid.resetStyle();
-        // todo reset marker style
+        // reset marker style without focus
+        focusId = null;
+        focusGeometry = null;
+        update();
     });
 
     status.observe.filter(function (state) {
@@ -470,7 +478,12 @@ module.exports = function (map, status, utils, env) {
             return null;
         }
         // console.log('adding',feature.id,"in",mGrid.getLayers());
-        var marker = L.marker(latlng, { icon: markerIcon, interactive: false, pane: "customMarkerPane", feature: feature });
+        var marker = L.marker(latlng, {
+            icon: markerIcon,
+            interactive: false,
+            pane: "customMarkerPane",
+            feature: feature
+        });
         marker._leaflet_id = feature.id;
         return marker;
         // let circle = L.circleMarker(latlng, style);
