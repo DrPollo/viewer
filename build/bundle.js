@@ -53,7 +53,7 @@ module.exports = function (map, status, utils, env) {
     var http = axios.create({ baseURL: otmUrl });
 
     // default zoom_level
-    var defaultZoomLevel = 20;
+    var defaultZoomLevel = 19;
 
     //default date
     // current week, from monday to sunday from 00:00:00:000 to 23:59:59:999
@@ -101,7 +101,9 @@ module.exports = function (map, status, utils, env) {
         if (type.includes('firstlife')) return orange;
         if (type.includes('geokey')) return red;
         if (type.includes('communitymaps')) return teal;
-        return '#c32630';
+
+        console.debug('wgnred?', type);
+        return wgnred;
     };
 
     var featureStyle = function featureStyle(feature, zoom) {
@@ -165,7 +167,9 @@ module.exports = function (map, status, utils, env) {
      * Markers
      */
     var getType = function getType(feature) {
-        return feature.properties.entity_type || feature.application || feature.properties.hasType;
+        var type = feature.properties.entity_type || feature.application || feature.properties.hasType;
+        // console.debug('check type',type);
+        return type;
     };
     var getIconName = function getIconName(type) {
         if (type === 'FL_GROUPS') return 'People';
@@ -182,6 +186,7 @@ module.exports = function (map, status, utils, env) {
         return 'Content';
     };
     var geojsonMarkerStyle = function geojsonMarkerStyle(feature) {
+        // console.debug('check default style',feature);
         var type = getType(feature);
         var color = colors(type);
         // console.debug(type,color);
@@ -234,7 +239,7 @@ module.exports = function (map, status, utils, env) {
         markers.map(function (marker) {
             // console.debug('updating marker:',marker);
             // refresh icon
-            marker.setIcon(getMarkerIcon(marker.options));
+            marker.setIcon(getMarkerIcon(marker.options.feature));
         });
     };
     //
@@ -375,6 +380,8 @@ module.exports = function (map, status, utils, env) {
             style.class = "highlight";
         }
 
+        // console.debug('check style',style.backgroundColor);
+
         /*
          * focus management
          */
@@ -421,7 +428,7 @@ module.exports = function (map, status, utils, env) {
         } else {
             confIcon.html = '<div class="circle circle-small ' + style.class + '" style="' + iconStyle + '"></div>';
         }
-
+        // console.debug('getMarkerIcon',confIcon, style.backgroundColor === wgnred);
         return L.divIcon(confIcon);
 
         function hexToRgba(input, opacity) {
@@ -457,14 +464,13 @@ module.exports = function (map, status, utils, env) {
             return;
         }
         var latlng = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
-        // console.debug('creating marker',latlng,feature);
+        console.debug('creating marker', latlng, feature);
         var markerIcon = getMarkerIcon(feature);
         if (!markerIcon) {
             return null;
         }
-
-        console.log('adding', feature.id, "in", mGrid.getLayers());
-        var marker = L.marker(latlng, { icon: markerIcon, interactive: false, pane: "customMarkerPane", properties: feature.properties });
+        // console.log('adding',feature.id,"in",mGrid.getLayers());
+        var marker = L.marker(latlng, { icon: markerIcon, interactive: false, pane: "customMarkerPane", feature: feature });
         marker._leaflet_id = feature.id;
         return marker;
         // let circle = L.circleMarker(latlng, style);
@@ -494,7 +500,7 @@ module.exports = function (map, status, utils, env) {
                 delete tmp.activity_objects;
                 var feature = Object.assign(tmp, event.activity_objects[0]);
                 var marker = getMarker(feature);
-                console.debug('check', mGrid.hasLayer(marker));
+                // console.debug('check',mGrid.hasLayer(marker));
                 if (mGrid.hasLayer(marker)) {
                     return r;
                 }
@@ -1652,11 +1658,11 @@ module.exports = function (idMapBox, env) {
     // map setup
     var layers = {
         base: L.tileLayer(baselayer, {
-            maxZoom: 20,
+            maxZoom: 19,
             attribution: baseAttribution
         }),
         contrast: L.tileLayer(contrastlayer, {
-            maxZoom: 20,
+            maxZoom: 19,
             attribution: contrastAttribution
         })
     };

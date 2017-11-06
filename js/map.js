@@ -28,11 +28,11 @@ module.exports = (idMapBox, env) => {
     // map setup
     const layers = {
         base: L.tileLayer(baselayer, {
-            maxZoom: 20,
+            maxZoom: 19,
             attribution: baseAttribution
         }),
         contrast: L.tileLayer(contrastlayer, {
-            maxZoom: 20,
+            maxZoom: 19,
             attribution: contrastAttribution
         })
     };
