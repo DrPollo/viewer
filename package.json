@@ -37,6 +37,7 @@
     "@turf/bbox-polygon": "^4.7.3",
     "@turf/helpers": "^4.5.2",
     "@turf/within": "^4.5.2",
+    "axios": "^0.17.0",
     "gulp-babel-minify": "^0.2.0",
     "jquery": "^3.2.1",
     "leaflet": "^1.0.3",

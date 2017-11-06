@@ -7,22 +7,50 @@ module.exports = function (map, status, utils, env) {
     // temporal utils
     var moment = require('moment');
 
-    // dev
-    var markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
-    // env management
+    var axios = require('axios');
+
+    // dev env
+    var token = 'ZmI5MzNmNjQtOWMxNC00ZjNiLTg3ZmYtZGViOWQ0MmI3NTAx';
+    var otmUrl = "https://api.ontomap.eu/api/v1/";
+    var loggerUrl = "https://api.ontomap.eu/api/v1/logger/";
+
+    // featureGroup
+    var mGrid = L.featureGroup();
+
+    // environment management
     switch (env) {
-        case 'pt2':
-            markerUrl = 'https://loggerproxy-pt2.firstlife.org/events/{x}/{y}/{z}';break;
-        case 'pt3':
-            markerUrl = 'https://loggerproxy-pt3.firstlife.org/events/{x}/{y}/{z}';break;
         case 'sandona':
-            markerUrl = 'https://loggerproxy-sandona.firstlife.org/events/{x}/{y}/{z}';break;
+            otmUrl = "https://sandona.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://sandona.api.ontomap.eu/api/v1/logger/";
+            token = 'ZmI5MzNmNjQtOWMxNC00ZjNiLTg3ZmYtZGViOWQ0MmI3NTAx';
+            break;
         case 'torino':
-            markerUrl = 'https://loggerproxy-torino.firstlife.org/events/{x}/{y}/{z}';break;
+            otmUrl = "https://torino.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://torino.api.ontomap.eu/api/v1/logger/";
+            token = 'YzFiYjQzYjEtODRjNS00ZDk5LWJlOGEtZDQwYzdhMjkwYzk3';
+            break;
         case 'southwark':
-            markerUrl = 'https://loggerproxy-southwark.firstlife.org/events/{x}/{y}/{z}';break;
+            otmUrl = "https://southwark.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://southwark.api.ontomap.eu/api/v1/logger/";
+            break;
+        case 'pt3':
+            otmUrl = "https://p3.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://p3.api.ontomap.eu/api/v1/logger/";
+            token = 'OTM5MTg2NzgtYWQzMy00YzI1LWIzZmQtOWM1NmM0ZTU2ZjJl';
+            break;
+        case 'pt2':
+            otmUrl = "https://p2.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://p2.api.ontomap.eu/api/v1/logger/";
+            token = 'NWNkNDEzYjktOTZiYS00NGE0LThjZDQtMTI0MDE5OWE5YzBh';
+            break;
         default:
+            break;
     }
+
+    // DEV DEV DEV
+    otmUrl = "http://localhost:3085/";
+
+    var http = axios.create({ baseURL: otmUrl });
 
     // default zoom_level
     var defaultZoomLevel = 20;
@@ -86,22 +114,12 @@ module.exports = function (map, status, utils, env) {
 
     // query params
     // start_time and end_time > UTC
-    var qParams = "";
+    var qParams = "?token=" + token;
     if (date.from && date.from.utc()) {
-        if (qParams === "") {
-            qParams = qParams.concat("?");
-        } else {
-            qParams = qParams.concat("&");
-        }
-        qParams = qParams.concat("start_time=", date.from.utc().format('x'));
+        qParams = qParams.concat("&start_time=", date.from.utc().format('x'));
     }
     if (date.to && date.to.utc()) {
-        if (qParams === "") {
-            qParams = qParams.concat("?");
-        } else {
-            qParams = qParams.concat("&");
-        }
-        qParams = qParams.concat("end_time=", date.to.utc().format('x'));
+        qParams = qParams.concat("&end_time=", date.to.utc().format('x'));
     }
 
     // priority of POIs visualisation
@@ -126,6 +144,7 @@ module.exports = function (map, status, utils, env) {
         cRight = 1.4,
         cLeft = 3,
         minRadius = 2.5,
+
 
     // related to material icon size
     minIconRadius = 14,
@@ -180,8 +199,13 @@ module.exports = function (map, status, utils, env) {
     var focusGeometry = null;
 
     var getZoomLevel = function getZoomLevel(feature) {
+        // console.debug('getZoomLevel',feature);
+
         if (feature && feature.properties && feature.properties.zoom_level) {
-            return feature && feature.properties && feature.properties.zoom_level;
+            return feature.properties.zoom_level < 1 || feature.properties.zoom_level > 20 ? defaultZoomLevel : feature.properties.zoom_level;
+        }
+        if (feature && feature.properties && feature.properties.additionalProperties && feature.properties.additionalProperties.zoom_level) {
+            return feature.properties.additionalProperties.zoom_level < 1 || feature.properties.additionalProperties.zoom_level > 20 ? defaultZoomLevel : feature.properties.additionalProperties.zoom_level;
         }
 
         // zoom considering hasType
@@ -201,62 +225,35 @@ module.exports = function (map, status, utils, env) {
         return defaultZoomLevel;
     };
 
-    // configuration of geojson grid level: it must have "layers":{ "default":{ } }
-    var markerLayers = {
-        "layers": {
-            "default": {
-                pointToLayer: function pointToLayer(feature, latlng) {
-                    return getMarker(feature, latlng);
-                }
-            }
-        }
-    };
-    var mGrid = L.geoJsonGridLayer(markerUrl + qParams, markerLayers);
-
-    mGrid.update = function () {
-        console.log('grid update');
-        var layer = mGrid.getLayers()[0];
-        if (!layer) {
+    var update = function update() {
+        // console.debug('grid update', mGrid.getLayers());
+        var markers = mGrid.getLayers();
+        if (!markers || !Array.isArray(markers) || markers.length < 1) {
             return;
         }
-        // console.log(layer);
-        var features = layer['_layers'];
-        var zoom = map.getZoom();
-        // console.log('nuovo raggio: ',scale(zoom));
-        for (var i in features) {
-            var feat = features[i];
-            // console.log(feat.feature);
-            var level = getZoomLevel(feat.feature);
-            var radius = scale(zoom, level);
-            var weight = Math.min(radius, maxWeight);
-            // get type
-            var type = getType(feat.feature);
-            // if background set cap to backgroundMaxRadius
-            if (priority.background.indexOf(type) > -1) {
-                radius = Math.min(radius, backgroundMaxRadius);
-            }
-            // console.debug('check marker',feat);
+        markers.map(function (marker) {
+            // console.debug('updating marker:',marker);
             // refresh icon
-            feat.setIcon(getMarkerIcon(feat.feature));
-        }
+            marker.setIcon(getMarkerIcon(marker.options));
+        });
     };
+    //
+    //
+    // // cambia il focus
+    // mGrid.setStyle = (focus) => {
+    //     if(!focus) {return;}
+    //     // console.debug('setting focus on ',focus);
+    //     focusId = focus.id;
+    //     focusGeometry = {type:"featureCollection", features:focus.features};
+    //     mGrid.update();
+    // };
+    // // reset il focus
+    // mGrid.resetStyle = () => {
+    //     focusId = null;
+    //     focusGeometry = null;
+    //     mGrid.update();
+    // };
 
-    // cambia il focus
-    mGrid.setStyle = function (focus) {
-        if (!focus) {
-            return;
-        }
-        // console.debug('setting focus on ',focus);
-        focusId = focus.id;
-        focusGeometry = { type: "featureCollection", features: focus.features };
-        mGrid.update();
-    };
-    // reset il focus
-    mGrid.resetStyle = function () {
-        focusId = null;
-        focusGeometry = null;
-        mGrid.update();
-    };
 
     /*
      * Listners
@@ -266,13 +263,46 @@ module.exports = function (map, status, utils, env) {
     status.observe.filter(function (state) {
         return 'features' in state;
     }).subscribe(function (focus) {
-        return mGrid.setStyle(focus);
+        // mGrid.setStyle(focus)
+        // todo set marker style
     });
 
+    // on exit focus mode > reset markers style
     status.observe.filter(function (state) {
         return 'reset' in state;
     }).subscribe(function () {
-        mGrid.resetStyle();
+        // mGrid.resetStyle();
+        // todo reset marker style
+    });
+
+    status.observe.filter(function (state) {
+        return "bounds" in state;
+    }).map(function (state) {
+        return state.bounds;
+    }).subscribe(function (bounds) {
+        console.debug('datasource, new bounds ', bounds);
+
+        console.log('get markers to update', mGrid);
+
+        // call to OTM logger > add events to mGrid
+        getEvents(bounds);
+
+        // todo call to OTM > add to mGrid
+    });
+
+    // fine cambio di zoom
+    map.on('zoomend', function (e) {
+        // aggiorno stile marker
+        update();
+    });
+
+    status.observe.filter(function (state) {
+        return 'priority' in state;
+    }).map(function (state) {
+        return state.priority;
+    }).subscribe(function (prioritySettings) {
+        // console.log('setting priority', prioritySettings, priority);
+        priority = prioritySettings;
     });
 
     status.observe.filter(function (state) {
@@ -287,27 +317,12 @@ module.exports = function (map, status, utils, env) {
         date.from = newDate.from || date.from;
         date.to = newDate.to || date.to;
         // change q params
-        qParams = "?start_time=".concat(date.from.utc().format('x')).concat("&end_time=", date.to.utc().format('x'));
+        qParams = ("?token=" + token).concat("&start_time=", date.from.utc().format('x')).concat("&end_time=", date.to.utc().format('x'));
         // remove layer
-        mGrid.remove();
-        // new instance of mGrid
-        mGrid = L.geoJsonGridLayer(markerUrl + qParams, markerLayers);
-        mGrid.addTo(map);
-    });
-
-    // fine cambio di zoom
-    map.on('zoomend', function (e) {
-        // aggiorno stile marker
-        mGrid.update();
-    });
-
-    status.observe.filter(function (state) {
-        return 'priority' in state;
-    }).map(function (state) {
-        return state.priority;
-    }).subscribe(function (prioritySettings) {
-        // console.log('setting priority', prioritySettings, priority);
-        priority = prioritySettings;
+        // mGrid.remove();
+        // // new instance of mGrid
+        // mGrid = L.geoJsonGridLayer(markerUrl+qParams, markerLayers);
+        // mGrid.addTo(map);
     });
 
     function getMarkerIcon(feature) {
@@ -436,16 +451,63 @@ module.exports = function (map, status, utils, env) {
         }
     }
 
-    function getMarker(feature, latlng) {
-        // console.debug('get marker',feature, latlng);
+    function getMarker(feature) {
+
+        if (!feature.geometry || !feature.geometry.type === 'point') {
+            return;
+        }
+        var latlng = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
+        // console.debug('creating marker',latlng,feature);
         var markerIcon = getMarkerIcon(feature);
         if (!markerIcon) {
             return null;
         }
-        return L.marker(latlng, { icon: markerIcon, interactive: false, pane: "customMarkerPane" });
+
+        console.log('adding', feature.id, "in", mGrid.getLayers());
+        var marker = L.marker(latlng, { icon: markerIcon, interactive: false, pane: "customMarkerPane", properties: feature.properties });
+        marker._leaflet_id = feature.id;
+        return marker;
         // let circle = L.circleMarker(latlng, style);
         // console.debug('check circle',circle);
         // return circle;
+    }
+
+    // retrieve events from OTM logger
+    function getEvents(bbox) {
+        // boundingbox=bbox
+        // loggerUrl
+        var url = 'proxy'.concat(qParams, '&boundingbox=', bbox);
+        // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
+        http.get(url).then(function (response) {
+            // console.debug('getEvents, response',response.data);
+            if (!response.data || !response.data.event_list) {
+                return console.error('getEvents, wrong format from OTM');
+            }
+            var events = response.data.event_list;
+            var markers = events.reduce(function (r, event) {
+                // console.debug(r,event);
+                if (!event.activity_objects || !Array.isArray(event.activity_objects) || event.activity_objects.length < 1) {
+                    // console.debug('skip',r);
+                    return r;
+                }
+                var tmp = Object.assign({}, event);
+                delete tmp.activity_objects;
+                var feature = Object.assign(tmp, event.activity_objects[0]);
+                var marker = getMarker(feature);
+                console.debug('check', mGrid.hasLayer(marker));
+                if (mGrid.hasLayer(marker)) {
+                    return r;
+                }
+                mGrid.addLayer(marker);
+                return r.concat(marker);
+            }, []);
+            // mGrid.addLayer(markers);
+            // map.removeLayer(mGrid)
+            // mGrid.addTo(map)
+            console.debug('getEvents, markers', mGrid.getLayers());
+        }).catch(function (error) {
+            console.error('getEvents, errror', error);
+        });
     }
 
     // inizializzazione markerGrid layer
@@ -539,7 +601,7 @@ module.exports = function (map, status, utils, env) {
 //     }
 // };
 
-},{"@turf/within":18,"moment":21}],2:[function(require,module,exports){
+},{"@turf/within":18,"axios":19,"moment":47}],2:[function(require,module,exports){
 "use strict";
 
 /**
@@ -1054,7 +1116,7 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, idFea
     initFocusLabel();
 };
 
-},{"jquery":19,"moment":21}],5:[function(require,module,exports){
+},{"jquery":45,"moment":47}],5:[function(require,module,exports){
 "use strict";
 
 module.exports = function () {
@@ -1526,6 +1588,7 @@ var AreaViewer = function AreaViewer() {
 
     // prima del cambio di zoom
     map.on('moveend', function (e) {
+        // console.debug('main, moveend',e);
         // update della posizione nello stato
         status.move({ bounds: map.getBounds(), center: map.getCenter(), zoom: map.getZoom() });
     });
@@ -1556,7 +1619,7 @@ module.exports.AreaViewer = AreaViewer;
 // main init
 AreaViewer();
 
-},{"../libs/Leaflet.VectorGrid":10,"../libs/leaflet-geojson-gridlayer":11,"./datasource.js":1,"./events":2,"./focus":3,"./infobox":4,"./interactive.js":5,"./map":7,"./status":8,"./utils":9,"@turf/helpers":14,"@turf/within":18,"jquery":19,"leaflet":20}],7:[function(require,module,exports){
+},{"../libs/Leaflet.VectorGrid":10,"../libs/leaflet-geojson-gridlayer":11,"./datasource.js":1,"./events":2,"./focus":3,"./infobox":4,"./interactive.js":5,"./map":7,"./status":8,"./utils":9,"@turf/helpers":14,"@turf/within":18,"jquery":45,"leaflet":46}],7:[function(require,module,exports){
 'use strict';
 
 /**
@@ -1673,7 +1736,7 @@ module.exports = function (idMapBox, env) {
     return map;
 };
 
-},{"jquery":19}],8:[function(require,module,exports){
+},{"jquery":45}],8:[function(require,module,exports){
 'use strict';
 
 module.exports = function (map) {
@@ -1722,7 +1785,17 @@ module.exports = function (map) {
 
     var _current = "explorer";
 
-    // state actions
+    /* state actions
+     * focus > enter focus mode
+     * move > change viewport
+     * restore > enter explore mode (exit focus mode)
+     * lang > change language
+     * contrast > change map base layer
+     * priority > change highlight, exclude and background lists
+     * date > chage date_from and date_to (interval) in entries query
+     * observe > returns the channel
+     * current > current state
+    */
     var status = {
         "focus": null,
         "move": null,
@@ -1976,12 +2049,12 @@ module.exports = function (map) {
         };
         status.focus = focusHandler(observer);
         status.move = function (params) {
-
+            var bounds = params.bounds;
             // update current map center
             store["view"]["c"] = params.center.lat + ":" + params.center.lng + ":" + params.zoom;
+            store["view"]["bounds"] = "".concat(bounds.getNorthEast().lng, ",", bounds.getNorthEast().lat, ",", bounds.getSouthWest().lng, ",", bounds.getSouthWest().lat);
             observer.next(store["view"]);
 
-            var bounds = params.bounds;
             // console.log('saving? ',current);
             switch (_current) {
                 case "focus":
@@ -2010,7 +2083,7 @@ module.exports = function (map) {
     return status;
 };
 
-},{"./utils":9,"@mapbox/tilebelt":12,"@turf/bbox":13,"@turf/within":18,"moment":21,"rxjs/Rx":30}],9:[function(require,module,exports){
+},{"./utils":9,"@mapbox/tilebelt":12,"@turf/bbox":13,"@turf/within":18,"moment":47,"rxjs/Rx":57}],9:[function(require,module,exports){
 'use strict';
 
 module.exports = function () {
@@ -2128,2540 +2201,2681 @@ module.exports = function () {
 
 },{}],10:[function(require,module,exports){
 (function () {
-'use strict';
+    'use strict';
 
-function __$strToBlobUri(str, mime, isBinary) {try {return window.URL.createObjectURL(new Blob([Uint8Array.from(str.split('').map(function(c) {return c.charCodeAt(0)}))], {type: mime}));} catch (e) {return "data:" + mime + (isBinary ? ";base64," : ",") + str;}}
-(function(self) {
-  'use strict';
-
-  if (self.fetch) {
-    return
-  }
-
-  var support = {
-    searchParams: 'URLSearchParams' in self,
-    iterable: 'Symbol' in self && 'iterator' in Symbol,
-    blob: 'FileReader' in self && 'Blob' in self && (function() {
-      try {
-        new Blob();
-        return true
-      } catch(e) {
-        return false
-      }
-    })(),
-    formData: 'FormData' in self,
-    arrayBuffer: 'ArrayBuffer' in self
-  };
-
-  if (support.arrayBuffer) {
-    var viewClasses = [
-      '[object Int8Array]',
-      '[object Uint8Array]',
-      '[object Uint8ClampedArray]',
-      '[object Int16Array]',
-      '[object Uint16Array]',
-      '[object Int32Array]',
-      '[object Uint32Array]',
-      '[object Float32Array]',
-      '[object Float64Array]'
-    ];
-
-    var isDataView = function(obj) {
-      return obj && DataView.prototype.isPrototypeOf(obj)
-    };
-
-    var isArrayBufferView = ArrayBuffer.isView || function(obj) {
-      return obj && viewClasses.indexOf(Object.prototype.toString.call(obj)) > -1
-    };
-  }
-
-  function normalizeName(name) {
-    if (typeof name !== 'string') {
-      name = String(name);
-    }
-    if (/[^a-z0-9\-#$%&'*+.\^_`|~]/i.test(name)) {
-      throw new TypeError('Invalid character in header field name')
-    }
-    return name.toLowerCase()
-  }
-
-  function normalizeValue(value) {
-    if (typeof value !== 'string') {
-      value = String(value);
-    }
-    return value
-  }
-
-  // Build a destructive iterator for the value list
-  function iteratorFor(items) {
-    var iterator = {
-      next: function() {
-        var value = items.shift();
-        return {done: value === undefined, value: value}
-      }
-    };
-
-    if (support.iterable) {
-      iterator[Symbol.iterator] = function() {
-        return iterator
-      };
-    }
-
-    return iterator
-  }
-
-  function Headers(headers) {
-    this.map = {};
-
-    if (headers instanceof Headers) {
-      headers.forEach(function(value, name) {
-        this.append(name, value);
-      }, this);
-    } else if (Array.isArray(headers)) {
-      headers.forEach(function(header) {
-        this.append(header[0], header[1]);
-      }, this);
-    } else if (headers) {
-      Object.getOwnPropertyNames(headers).forEach(function(name) {
-        this.append(name, headers[name]);
-      }, this);
-    }
-  }
-
-  Headers.prototype.append = function(name, value) {
-    name = normalizeName(name);
-    value = normalizeValue(value);
-    var oldValue = this.map[name];
-    this.map[name] = oldValue ? oldValue+','+value : value;
-  };
-
-  Headers.prototype['delete'] = function(name) {
-    delete this.map[normalizeName(name)];
-  };
-
-  Headers.prototype.get = function(name) {
-    name = normalizeName(name);
-    return this.has(name) ? this.map[name] : null
-  };
-
-  Headers.prototype.has = function(name) {
-    return this.map.hasOwnProperty(normalizeName(name))
-  };
-
-  Headers.prototype.set = function(name, value) {
-    this.map[normalizeName(name)] = normalizeValue(value);
-  };
-
-  Headers.prototype.forEach = function(callback, thisArg) {
-    var this$1 = this;
-
-    for (var name in this.map) {
-      if (this$1.map.hasOwnProperty(name)) {
-        callback.call(thisArg, this$1.map[name], name, this$1);
-      }
-    }
-  };
-
-  Headers.prototype.keys = function() {
-    var items = [];
-    this.forEach(function(value, name) { items.push(name); });
-    return iteratorFor(items)
-  };
-
-  Headers.prototype.values = function() {
-    var items = [];
-    this.forEach(function(value) { items.push(value); });
-    return iteratorFor(items)
-  };
-
-  Headers.prototype.entries = function() {
-    var items = [];
-    this.forEach(function(value, name) { items.push([name, value]); });
-    return iteratorFor(items)
-  };
-
-  if (support.iterable) {
-    Headers.prototype[Symbol.iterator] = Headers.prototype.entries;
-  }
-
-  function consumed(body) {
-    if (body.bodyUsed) {
-      return Promise.reject(new TypeError('Already read'))
-    }
-    body.bodyUsed = true;
-  }
-
-  function fileReaderReady(reader) {
-    return new Promise(function(resolve, reject) {
-      reader.onload = function() {
-        resolve(reader.result);
-      };
-      reader.onerror = function() {
-        reject(reader.error);
-      };
-    })
-  }
-
-  function readBlobAsArrayBuffer(blob) {
-    var reader = new FileReader();
-    var promise = fileReaderReady(reader);
-    reader.readAsArrayBuffer(blob);
-    return promise
-  }
-
-  function readBlobAsText(blob) {
-    var reader = new FileReader();
-    var promise = fileReaderReady(reader);
-    reader.readAsText(blob);
-    return promise
-  }
-
-  function readArrayBufferAsText(buf) {
-    var view = new Uint8Array(buf);
-    var chars = new Array(view.length);
-
-    for (var i = 0; i < view.length; i++) {
-      chars[i] = String.fromCharCode(view[i]);
-    }
-    return chars.join('')
-  }
-
-  function bufferClone(buf) {
-    if (buf.slice) {
-      return buf.slice(0)
-    } else {
-      var view = new Uint8Array(buf.byteLength);
-      view.set(new Uint8Array(buf));
-      return view.buffer
-    }
-  }
-
-  function Body() {
-    this.bodyUsed = false;
-
-    this._initBody = function(body) {
-      this._bodyInit = body;
-      if (!body) {
-        this._bodyText = '';
-      } else if (typeof body === 'string') {
-        this._bodyText = body;
-      } else if (support.blob && Blob.prototype.isPrototypeOf(body)) {
-        this._bodyBlob = body;
-      } else if (support.formData && FormData.prototype.isPrototypeOf(body)) {
-        this._bodyFormData = body;
-      } else if (support.searchParams && URLSearchParams.prototype.isPrototypeOf(body)) {
-        this._bodyText = body.toString();
-      } else if (support.arrayBuffer && support.blob && isDataView(body)) {
-        this._bodyArrayBuffer = bufferClone(body.buffer);
-        // IE 10-11 can't handle a DataView body.
-        this._bodyInit = new Blob([this._bodyArrayBuffer]);
-      } else if (support.arrayBuffer && (ArrayBuffer.prototype.isPrototypeOf(body) || isArrayBufferView(body))) {
-        this._bodyArrayBuffer = bufferClone(body);
-      } else {
-        throw new Error('unsupported BodyInit type')
-      }
-
-      if (!this.headers.get('content-type')) {
-        if (typeof body === 'string') {
-          this.headers.set('content-type', 'text/plain;charset=UTF-8');
-        } else if (this._bodyBlob && this._bodyBlob.type) {
-          this.headers.set('content-type', this._bodyBlob.type);
-        } else if (support.searchParams && URLSearchParams.prototype.isPrototypeOf(body)) {
-          this.headers.set('content-type', 'application/x-www-form-urlencoded;charset=UTF-8');
+    function __$strToBlobUri(str, mime, isBinary) {
+        try {
+            return window.URL.createObjectURL(new Blob([Uint8Array.from(str.split('').map(function (c) {
+                return c.charCodeAt(0);
+            }))], { type: mime }));
+        } catch (e) {
+            return "data:" + mime + (isBinary ? ";base64," : ",") + str;
         }
-      }
-    };
-
-    if (support.blob) {
-      this.blob = function() {
-        var rejected = consumed(this);
-        if (rejected) {
-          return rejected
-        }
-
-        if (this._bodyBlob) {
-          return Promise.resolve(this._bodyBlob)
-        } else if (this._bodyArrayBuffer) {
-          return Promise.resolve(new Blob([this._bodyArrayBuffer]))
-        } else if (this._bodyFormData) {
-          throw new Error('could not read FormData body as blob')
-        } else {
-          return Promise.resolve(new Blob([this._bodyText]))
-        }
-      };
-
-      this.arrayBuffer = function() {
-        if (this._bodyArrayBuffer) {
-          return consumed(this) || Promise.resolve(this._bodyArrayBuffer)
-        } else {
-          return this.blob().then(readBlobAsArrayBuffer)
-        }
-      };
     }
+    (function (self) {
+        'use strict';
 
-    this.text = function() {
-      var rejected = consumed(this);
-      if (rejected) {
-        return rejected
-      }
-
-      if (this._bodyBlob) {
-        return readBlobAsText(this._bodyBlob)
-      } else if (this._bodyArrayBuffer) {
-        return Promise.resolve(readArrayBufferAsText(this._bodyArrayBuffer))
-      } else if (this._bodyFormData) {
-        throw new Error('could not read FormData body as text')
-      } else {
-        return Promise.resolve(this._bodyText)
-      }
-    };
-
-    if (support.formData) {
-      this.formData = function() {
-        return this.text().then(decode)
-      };
-    }
-
-    this.json = function() {
-      return this.text().then(JSON.parse)
-    };
-
-    return this
-  }
-
-  // HTTP methods whose capitalization should be normalized
-  var methods = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'];
-
-  function normalizeMethod(method) {
-    var upcased = method.toUpperCase();
-    return (methods.indexOf(upcased) > -1) ? upcased : method
-  }
-
-  function Request(input, options) {
-    options = options || {};
-    var body = options.body;
-
-    if (input instanceof Request) {
-      if (input.bodyUsed) {
-        throw new TypeError('Already read')
-      }
-      this.url = input.url;
-      this.credentials = input.credentials;
-      if (!options.headers) {
-        this.headers = new Headers(input.headers);
-      }
-      this.method = input.method;
-      this.mode = input.mode;
-      if (!body && input._bodyInit != null) {
-        body = input._bodyInit;
-        input.bodyUsed = true;
-      }
-    } else {
-      this.url = String(input);
-    }
-
-    this.credentials = options.credentials || this.credentials || 'omit';
-    if (options.headers || !this.headers) {
-      this.headers = new Headers(options.headers);
-    }
-    this.method = normalizeMethod(options.method || this.method || 'GET');
-    this.mode = options.mode || this.mode || null;
-    this.referrer = null;
-
-    if ((this.method === 'GET' || this.method === 'HEAD') && body) {
-      throw new TypeError('Body not allowed for GET or HEAD requests')
-    }
-    this._initBody(body);
-  }
-
-  Request.prototype.clone = function() {
-    return new Request(this, { body: this._bodyInit })
-  };
-
-  function decode(body) {
-    var form = new FormData();
-    body.trim().split('&').forEach(function(bytes) {
-      if (bytes) {
-        var split = bytes.split('=');
-        var name = split.shift().replace(/\+/g, ' ');
-        var value = split.join('=').replace(/\+/g, ' ');
-        form.append(decodeURIComponent(name), decodeURIComponent(value));
-      }
-    });
-    return form
-  }
-
-  function parseHeaders(rawHeaders) {
-    var headers = new Headers();
-    rawHeaders.split(/\r?\n/).forEach(function(line) {
-      var parts = line.split(':');
-      var key = parts.shift().trim();
-      if (key) {
-        var value = parts.join(':').trim();
-        headers.append(key, value);
-      }
-    });
-    return headers
-  }
-
-  Body.call(Request.prototype);
-
-  function Response(bodyInit, options) {
-    if (!options) {
-      options = {};
-    }
-
-    this.type = 'default';
-    this.status = 'status' in options ? options.status : 200;
-    this.ok = this.status >= 200 && this.status < 300;
-    this.statusText = 'statusText' in options ? options.statusText : 'OK';
-    this.headers = new Headers(options.headers);
-    this.url = options.url || '';
-    this._initBody(bodyInit);
-  }
-
-  Body.call(Response.prototype);
-
-  Response.prototype.clone = function() {
-    return new Response(this._bodyInit, {
-      status: this.status,
-      statusText: this.statusText,
-      headers: new Headers(this.headers),
-      url: this.url
-    })
-  };
-
-  Response.error = function() {
-    var response = new Response(null, {status: 0, statusText: ''});
-    response.type = 'error';
-    return response
-  };
-
-  var redirectStatuses = [301, 302, 303, 307, 308];
-
-  Response.redirect = function(url, status) {
-    if (redirectStatuses.indexOf(status) === -1) {
-      throw new RangeError('Invalid status code')
-    }
-
-    return new Response(null, {status: status, headers: {location: url}})
-  };
-
-  self.Headers = Headers;
-  self.Request = Request;
-  self.Response = Response;
-
-  self.fetch = function(input, init) {
-    return new Promise(function(resolve, reject) {
-      var request = new Request(input, init);
-      var xhr = new XMLHttpRequest();
-
-      xhr.onload = function() {
-        var options = {
-          status: xhr.status,
-          statusText: xhr.statusText,
-          headers: parseHeaders(xhr.getAllResponseHeaders() || '')
-        };
-        options.url = 'responseURL' in xhr ? xhr.responseURL : options.headers.get('X-Request-URL');
-        var body = 'response' in xhr ? xhr.response : xhr.responseText;
-        resolve(new Response(body, options));
-      };
-
-      xhr.onerror = function() {
-        reject(new TypeError('Network request failed'));
-      };
-
-      xhr.ontimeout = function() {
-        reject(new TypeError('Network request failed'));
-      };
-
-      xhr.open(request.method, request.url, true);
-
-      if (request.credentials === 'include') {
-        xhr.withCredentials = true;
-      }
-
-      if ('responseType' in xhr && support.blob) {
-        xhr.responseType = 'blob';
-      }
-
-      request.headers.forEach(function(value, name) {
-        xhr.setRequestHeader(name, value);
-      });
-
-      xhr.send(typeof request._bodyInit === 'undefined' ? null : request._bodyInit);
-    })
-  };
-  self.fetch.polyfill = true;
-})(typeof self !== 'undefined' ? self : undefined);
-
-var read = function (buffer, offset, isLE, mLen, nBytes) {
-  var e, m;
-  var eLen = nBytes * 8 - mLen - 1;
-  var eMax = (1 << eLen) - 1;
-  var eBias = eMax >> 1;
-  var nBits = -7;
-  var i = isLE ? (nBytes - 1) : 0;
-  var d = isLE ? -1 : 1;
-  var s = buffer[offset + i];
-
-  i += d;
-
-  e = s & ((1 << (-nBits)) - 1);
-  s >>= (-nBits);
-  nBits += eLen;
-  for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
-
-  m = e & ((1 << (-nBits)) - 1);
-  e >>= (-nBits);
-  nBits += mLen;
-  for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
-
-  if (e === 0) {
-    e = 1 - eBias;
-  } else if (e === eMax) {
-    return m ? NaN : ((s ? -1 : 1) * Infinity)
-  } else {
-    m = m + Math.pow(2, mLen);
-    e = e - eBias;
-  }
-  return (s ? -1 : 1) * m * Math.pow(2, e - mLen)
-};
-
-var write = function (buffer, value, offset, isLE, mLen, nBytes) {
-  var e, m, c;
-  var eLen = nBytes * 8 - mLen - 1;
-  var eMax = (1 << eLen) - 1;
-  var eBias = eMax >> 1;
-  var rt = (mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0);
-  var i = isLE ? 0 : (nBytes - 1);
-  var d = isLE ? 1 : -1;
-  var s = value < 0 || (value === 0 && 1 / value < 0) ? 1 : 0;
-
-  value = Math.abs(value);
-
-  if (isNaN(value) || value === Infinity) {
-    m = isNaN(value) ? 1 : 0;
-    e = eMax;
-  } else {
-    e = Math.floor(Math.log(value) / Math.LN2);
-    if (value * (c = Math.pow(2, -e)) < 1) {
-      e--;
-      c *= 2;
-    }
-    if (e + eBias >= 1) {
-      value += rt / c;
-    } else {
-      value += rt * Math.pow(2, 1 - eBias);
-    }
-    if (value * c >= 2) {
-      e++;
-      c /= 2;
-    }
-
-    if (e + eBias >= eMax) {
-      m = 0;
-      e = eMax;
-    } else if (e + eBias >= 1) {
-      m = (value * c - 1) * Math.pow(2, mLen);
-      e = e + eBias;
-    } else {
-      m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen);
-      e = 0;
-    }
-  }
-
-  for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
-
-  e = (e << mLen) | m;
-  eLen += mLen;
-  for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
-
-  buffer[offset + i - d] |= s * 128;
-};
-
-var index$1 = {
-	read: read,
-	write: write
-};
-
-var index = Pbf;
-
-var ieee754 = index$1;
-
-function Pbf(buf) {
-    this.buf = ArrayBuffer.isView && ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf || 0);
-    this.pos = 0;
-    this.type = 0;
-    this.length = this.buf.length;
-}
-
-Pbf.Varint  = 0; // varint: int32, int64, uint32, uint64, sint32, sint64, bool, enum
-Pbf.Fixed64 = 1; // 64-bit: double, fixed64, sfixed64
-Pbf.Bytes   = 2; // length-delimited: string, bytes, embedded messages, packed repeated fields
-Pbf.Fixed32 = 5; // 32-bit: float, fixed32, sfixed32
-
-var SHIFT_LEFT_32 = (1 << 16) * (1 << 16);
-var SHIFT_RIGHT_32 = 1 / SHIFT_LEFT_32;
-
-Pbf.prototype = {
-
-    destroy: function() {
-        this.buf = null;
-    },
-
-    // === READING =================================================================
-
-    readFields: function(readField, result, end) {
-        var this$1 = this;
-
-        end = end || this.length;
-
-        while (this.pos < end) {
-            var val = this$1.readVarint(),
-                tag = val >> 3,
-                startPos = this$1.pos;
-
-            this$1.type = val & 0x7;
-            readField(tag, result, this$1);
-
-            if (this$1.pos === startPos) { this$1.skip(val); }
-        }
-        return result;
-    },
-
-    readMessage: function(readField, result) {
-        return this.readFields(readField, result, this.readVarint() + this.pos);
-    },
-
-    readFixed32: function() {
-        var val = readUInt32(this.buf, this.pos);
-        this.pos += 4;
-        return val;
-    },
-
-    readSFixed32: function() {
-        var val = readInt32(this.buf, this.pos);
-        this.pos += 4;
-        return val;
-    },
-
-    // 64-bit int handling is based on github.com/dpw/node-buffer-more-ints (MIT-licensed)
-
-    readFixed64: function() {
-        var val = readUInt32(this.buf, this.pos) + readUInt32(this.buf, this.pos + 4) * SHIFT_LEFT_32;
-        this.pos += 8;
-        return val;
-    },
-
-    readSFixed64: function() {
-        var val = readUInt32(this.buf, this.pos) + readInt32(this.buf, this.pos + 4) * SHIFT_LEFT_32;
-        this.pos += 8;
-        return val;
-    },
-
-    readFloat: function() {
-        var val = ieee754.read(this.buf, this.pos, true, 23, 4);
-        this.pos += 4;
-        return val;
-    },
-
-    readDouble: function() {
-        var val = ieee754.read(this.buf, this.pos, true, 52, 8);
-        this.pos += 8;
-        return val;
-    },
-
-    readVarint: function(isSigned) {
-        var buf = this.buf,
-            val, b;
-
-        b = buf[this.pos++]; val  =  b & 0x7f;        if (b < 0x80) { return val; }
-        b = buf[this.pos++]; val |= (b & 0x7f) << 7;  if (b < 0x80) { return val; }
-        b = buf[this.pos++]; val |= (b & 0x7f) << 14; if (b < 0x80) { return val; }
-        b = buf[this.pos++]; val |= (b & 0x7f) << 21; if (b < 0x80) { return val; }
-        b = buf[this.pos];   val |= (b & 0x0f) << 28;
-
-        return readVarintRemainder(val, isSigned, this);
-    },
-
-    readVarint64: function() { // for compatibility with v2.0.1
-        return this.readVarint(true);
-    },
-
-    readSVarint: function() {
-        var num = this.readVarint();
-        return num % 2 === 1 ? (num + 1) / -2 : num / 2; // zigzag encoding
-    },
-
-    readBoolean: function() {
-        return Boolean(this.readVarint());
-    },
-
-    readString: function() {
-        var end = this.readVarint() + this.pos,
-            str = readUtf8(this.buf, this.pos, end);
-        this.pos = end;
-        return str;
-    },
-
-    readBytes: function() {
-        var end = this.readVarint() + this.pos,
-            buffer = this.buf.subarray(this.pos, end);
-        this.pos = end;
-        return buffer;
-    },
-
-    // verbose for performance reasons; doesn't affect gzipped size
-
-    readPackedVarint: function(arr, isSigned) {
-        var this$1 = this;
-
-        var end = readPackedEnd(this);
-        arr = arr || [];
-        while (this.pos < end) { arr.push(this$1.readVarint(isSigned)); }
-        return arr;
-    },
-    readPackedSVarint: function(arr) {
-        var this$1 = this;
-
-        var end = readPackedEnd(this);
-        arr = arr || [];
-        while (this.pos < end) { arr.push(this$1.readSVarint()); }
-        return arr;
-    },
-    readPackedBoolean: function(arr) {
-        var this$1 = this;
-
-        var end = readPackedEnd(this);
-        arr = arr || [];
-        while (this.pos < end) { arr.push(this$1.readBoolean()); }
-        return arr;
-    },
-    readPackedFloat: function(arr) {
-        var this$1 = this;
-
-        var end = readPackedEnd(this);
-        arr = arr || [];
-        while (this.pos < end) { arr.push(this$1.readFloat()); }
-        return arr;
-    },
-    readPackedDouble: function(arr) {
-        var this$1 = this;
-
-        var end = readPackedEnd(this);
-        arr = arr || [];
-        while (this.pos < end) { arr.push(this$1.readDouble()); }
-        return arr;
-    },
-    readPackedFixed32: function(arr) {
-        var this$1 = this;
-
-        var end = readPackedEnd(this);
-        arr = arr || [];
-        while (this.pos < end) { arr.push(this$1.readFixed32()); }
-        return arr;
-    },
-    readPackedSFixed32: function(arr) {
-        var this$1 = this;
-
-        var end = readPackedEnd(this);
-        arr = arr || [];
-        while (this.pos < end) { arr.push(this$1.readSFixed32()); }
-        return arr;
-    },
-    readPackedFixed64: function(arr) {
-        var this$1 = this;
-
-        var end = readPackedEnd(this);
-        arr = arr || [];
-        while (this.pos < end) { arr.push(this$1.readFixed64()); }
-        return arr;
-    },
-    readPackedSFixed64: function(arr) {
-        var this$1 = this;
-
-        var end = readPackedEnd(this);
-        arr = arr || [];
-        while (this.pos < end) { arr.push(this$1.readSFixed64()); }
-        return arr;
-    },
-
-    skip: function(val) {
-        var type = val & 0x7;
-        if (type === Pbf.Varint) { while (this.buf[this.pos++] > 0x7f) {} }
-        else if (type === Pbf.Bytes) { this.pos = this.readVarint() + this.pos; }
-        else if (type === Pbf.Fixed32) { this.pos += 4; }
-        else if (type === Pbf.Fixed64) { this.pos += 8; }
-        else { throw new Error('Unimplemented type: ' + type); }
-    },
-
-    // === WRITING =================================================================
-
-    writeTag: function(tag, type) {
-        this.writeVarint((tag << 3) | type);
-    },
-
-    realloc: function(min) {
-        var length = this.length || 16;
-
-        while (length < this.pos + min) { length *= 2; }
-
-        if (length !== this.length) {
-            var buf = new Uint8Array(length);
-            buf.set(this.buf);
-            this.buf = buf;
-            this.length = length;
-        }
-    },
-
-    finish: function() {
-        this.length = this.pos;
-        this.pos = 0;
-        return this.buf.subarray(0, this.length);
-    },
-
-    writeFixed32: function(val) {
-        this.realloc(4);
-        writeInt32(this.buf, val, this.pos);
-        this.pos += 4;
-    },
-
-    writeSFixed32: function(val) {
-        this.realloc(4);
-        writeInt32(this.buf, val, this.pos);
-        this.pos += 4;
-    },
-
-    writeFixed64: function(val) {
-        this.realloc(8);
-        writeInt32(this.buf, val & -1, this.pos);
-        writeInt32(this.buf, Math.floor(val * SHIFT_RIGHT_32), this.pos + 4);
-        this.pos += 8;
-    },
-
-    writeSFixed64: function(val) {
-        this.realloc(8);
-        writeInt32(this.buf, val & -1, this.pos);
-        writeInt32(this.buf, Math.floor(val * SHIFT_RIGHT_32), this.pos + 4);
-        this.pos += 8;
-    },
-
-    writeVarint: function(val) {
-        val = +val || 0;
-
-        if (val > 0xfffffff || val < 0) {
-            writeBigVarint(val, this);
+        if (self.fetch) {
             return;
         }
 
-        this.realloc(4);
+        var support = {
+            searchParams: 'URLSearchParams' in self,
+            iterable: 'Symbol' in self && 'iterator' in Symbol,
+            blob: 'FileReader' in self && 'Blob' in self && function () {
+                try {
+                    new Blob();
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }(),
+            formData: 'FormData' in self,
+            arrayBuffer: 'ArrayBuffer' in self
+        };
 
-        this.buf[this.pos++] =           val & 0x7f  | (val > 0x7f ? 0x80 : 0); if (val <= 0x7f) { return; }
-        this.buf[this.pos++] = ((val >>>= 7) & 0x7f) | (val > 0x7f ? 0x80 : 0); if (val <= 0x7f) { return; }
-        this.buf[this.pos++] = ((val >>>= 7) & 0x7f) | (val > 0x7f ? 0x80 : 0); if (val <= 0x7f) { return; }
-        this.buf[this.pos++] =   (val >>> 7) & 0x7f;
-    },
+        if (support.arrayBuffer) {
+            var viewClasses = ['[object Int8Array]', '[object Uint8Array]', '[object Uint8ClampedArray]', '[object Int16Array]', '[object Uint16Array]', '[object Int32Array]', '[object Uint32Array]', '[object Float32Array]', '[object Float64Array]'];
 
-    writeSVarint: function(val) {
-        this.writeVarint(val < 0 ? -val * 2 - 1 : val * 2);
-    },
+            var isDataView = function (obj) {
+                return obj && DataView.prototype.isPrototypeOf(obj);
+            };
 
-    writeBoolean: function(val) {
-        this.writeVarint(Boolean(val));
-    },
-
-    writeString: function(str) {
-        str = String(str);
-        this.realloc(str.length * 4);
-
-        this.pos++; // reserve 1 byte for short string length
-
-        var startPos = this.pos;
-        // write the string directly to the buffer and see how much was written
-        this.pos = writeUtf8(this.buf, str, this.pos);
-        var len = this.pos - startPos;
-
-        if (len >= 0x80) { makeRoomForExtraLength(startPos, len, this); }
-
-        // finally, write the message length in the reserved place and restore the position
-        this.pos = startPos - 1;
-        this.writeVarint(len);
-        this.pos += len;
-    },
-
-    writeFloat: function(val) {
-        this.realloc(4);
-        ieee754.write(this.buf, val, this.pos, true, 23, 4);
-        this.pos += 4;
-    },
-
-    writeDouble: function(val) {
-        this.realloc(8);
-        ieee754.write(this.buf, val, this.pos, true, 52, 8);
-        this.pos += 8;
-    },
-
-    writeBytes: function(buffer) {
-        var this$1 = this;
-
-        var len = buffer.length;
-        this.writeVarint(len);
-        this.realloc(len);
-        for (var i = 0; i < len; i++) { this$1.buf[this$1.pos++] = buffer[i]; }
-    },
-
-    writeRawMessage: function(fn, obj) {
-        this.pos++; // reserve 1 byte for short message length
-
-        // write the message directly to the buffer and see how much was written
-        var startPos = this.pos;
-        fn(obj, this);
-        var len = this.pos - startPos;
-
-        if (len >= 0x80) { makeRoomForExtraLength(startPos, len, this); }
-
-        // finally, write the message length in the reserved place and restore the position
-        this.pos = startPos - 1;
-        this.writeVarint(len);
-        this.pos += len;
-    },
-
-    writeMessage: function(tag, fn, obj) {
-        this.writeTag(tag, Pbf.Bytes);
-        this.writeRawMessage(fn, obj);
-    },
-
-    writePackedVarint:   function(tag, arr) { this.writeMessage(tag, writePackedVarint, arr);   },
-    writePackedSVarint:  function(tag, arr) { this.writeMessage(tag, writePackedSVarint, arr);  },
-    writePackedBoolean:  function(tag, arr) { this.writeMessage(tag, writePackedBoolean, arr);  },
-    writePackedFloat:    function(tag, arr) { this.writeMessage(tag, writePackedFloat, arr);    },
-    writePackedDouble:   function(tag, arr) { this.writeMessage(tag, writePackedDouble, arr);   },
-    writePackedFixed32:  function(tag, arr) { this.writeMessage(tag, writePackedFixed32, arr);  },
-    writePackedSFixed32: function(tag, arr) { this.writeMessage(tag, writePackedSFixed32, arr); },
-    writePackedFixed64:  function(tag, arr) { this.writeMessage(tag, writePackedFixed64, arr);  },
-    writePackedSFixed64: function(tag, arr) { this.writeMessage(tag, writePackedSFixed64, arr); },
-
-    writeBytesField: function(tag, buffer) {
-        this.writeTag(tag, Pbf.Bytes);
-        this.writeBytes(buffer);
-    },
-    writeFixed32Field: function(tag, val) {
-        this.writeTag(tag, Pbf.Fixed32);
-        this.writeFixed32(val);
-    },
-    writeSFixed32Field: function(tag, val) {
-        this.writeTag(tag, Pbf.Fixed32);
-        this.writeSFixed32(val);
-    },
-    writeFixed64Field: function(tag, val) {
-        this.writeTag(tag, Pbf.Fixed64);
-        this.writeFixed64(val);
-    },
-    writeSFixed64Field: function(tag, val) {
-        this.writeTag(tag, Pbf.Fixed64);
-        this.writeSFixed64(val);
-    },
-    writeVarintField: function(tag, val) {
-        this.writeTag(tag, Pbf.Varint);
-        this.writeVarint(val);
-    },
-    writeSVarintField: function(tag, val) {
-        this.writeTag(tag, Pbf.Varint);
-        this.writeSVarint(val);
-    },
-    writeStringField: function(tag, str) {
-        this.writeTag(tag, Pbf.Bytes);
-        this.writeString(str);
-    },
-    writeFloatField: function(tag, val) {
-        this.writeTag(tag, Pbf.Fixed32);
-        this.writeFloat(val);
-    },
-    writeDoubleField: function(tag, val) {
-        this.writeTag(tag, Pbf.Fixed64);
-        this.writeDouble(val);
-    },
-    writeBooleanField: function(tag, val) {
-        this.writeVarintField(tag, Boolean(val));
-    }
-};
-
-function readVarintRemainder(l, s, p) {
-    var buf = p.buf,
-        h, b;
-
-    b = buf[p.pos++]; h  = (b & 0x70) >> 4;  if (b < 0x80) { return toNum(l, h, s); }
-    b = buf[p.pos++]; h |= (b & 0x7f) << 3;  if (b < 0x80) { return toNum(l, h, s); }
-    b = buf[p.pos++]; h |= (b & 0x7f) << 10; if (b < 0x80) { return toNum(l, h, s); }
-    b = buf[p.pos++]; h |= (b & 0x7f) << 17; if (b < 0x80) { return toNum(l, h, s); }
-    b = buf[p.pos++]; h |= (b & 0x7f) << 24; if (b < 0x80) { return toNum(l, h, s); }
-    b = buf[p.pos++]; h |= (b & 0x01) << 31; if (b < 0x80) { return toNum(l, h, s); }
-
-    throw new Error('Expected varint not more than 10 bytes');
-}
-
-function readPackedEnd(pbf) {
-    return pbf.type === Pbf.Bytes ?
-        pbf.readVarint() + pbf.pos : pbf.pos + 1;
-}
-
-function toNum(low, high, isSigned) {
-    if (isSigned) {
-        return high * 0x100000000 + (low >>> 0);
-    }
-
-    return ((high >>> 0) * 0x100000000) + (low >>> 0);
-}
-
-function writeBigVarint(val, pbf) {
-    var low, high;
-
-    if (val >= 0) {
-        low  = (val % 0x100000000) | 0;
-        high = (val / 0x100000000) | 0;
-    } else {
-        low  = ~(-val % 0x100000000);
-        high = ~(-val / 0x100000000);
-
-        if (low ^ 0xffffffff) {
-            low = (low + 1) | 0;
-        } else {
-            low = 0;
-            high = (high + 1) | 0;
+            var isArrayBufferView = ArrayBuffer.isView || function (obj) {
+                return obj && viewClasses.indexOf(Object.prototype.toString.call(obj)) > -1;
+            };
         }
-    }
 
-    if (val >= 0x10000000000000000 || val < -0x10000000000000000) {
-        throw new Error('Given varint doesn\'t fit into 10 bytes');
-    }
-
-    pbf.realloc(10);
-
-    writeBigVarintLow(low, high, pbf);
-    writeBigVarintHigh(high, pbf);
-}
-
-function writeBigVarintLow(low, high, pbf) {
-    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
-    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
-    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
-    pbf.buf[pbf.pos++] = low & 0x7f | 0x80; low >>>= 7;
-    pbf.buf[pbf.pos]   = low & 0x7f;
-}
-
-function writeBigVarintHigh(high, pbf) {
-    var lsb = (high & 0x07) << 4;
-
-    pbf.buf[pbf.pos++] |= lsb         | ((high >>>= 3) ? 0x80 : 0); if (!high) { return; }
-    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) { return; }
-    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) { return; }
-    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) { return; }
-    pbf.buf[pbf.pos++]  = high & 0x7f | ((high >>>= 7) ? 0x80 : 0); if (!high) { return; }
-    pbf.buf[pbf.pos++]  = high & 0x7f;
-}
-
-function makeRoomForExtraLength(startPos, len, pbf) {
-    var extraLen =
-        len <= 0x3fff ? 1 :
-        len <= 0x1fffff ? 2 :
-        len <= 0xfffffff ? 3 : Math.ceil(Math.log(len) / (Math.LN2 * 7));
-
-    // if 1 byte isn't enough for encoding message length, shift the data to the right
-    pbf.realloc(extraLen);
-    for (var i = pbf.pos - 1; i >= startPos; i--) { pbf.buf[i + extraLen] = pbf.buf[i]; }
-}
-
-function writePackedVarint(arr, pbf)   { for (var i = 0; i < arr.length; i++) { pbf.writeVarint(arr[i]); }   }
-function writePackedSVarint(arr, pbf)  { for (var i = 0; i < arr.length; i++) { pbf.writeSVarint(arr[i]); }  }
-function writePackedFloat(arr, pbf)    { for (var i = 0; i < arr.length; i++) { pbf.writeFloat(arr[i]); }    }
-function writePackedDouble(arr, pbf)   { for (var i = 0; i < arr.length; i++) { pbf.writeDouble(arr[i]); }   }
-function writePackedBoolean(arr, pbf)  { for (var i = 0; i < arr.length; i++) { pbf.writeBoolean(arr[i]); }  }
-function writePackedFixed32(arr, pbf)  { for (var i = 0; i < arr.length; i++) { pbf.writeFixed32(arr[i]); }  }
-function writePackedSFixed32(arr, pbf) { for (var i = 0; i < arr.length; i++) { pbf.writeSFixed32(arr[i]); } }
-function writePackedFixed64(arr, pbf)  { for (var i = 0; i < arr.length; i++) { pbf.writeFixed64(arr[i]); }  }
-function writePackedSFixed64(arr, pbf) { for (var i = 0; i < arr.length; i++) { pbf.writeSFixed64(arr[i]); } }
-
-// Buffer code below from https://github.com/feross/buffer, MIT-licensed
-
-function readUInt32(buf, pos) {
-    return ((buf[pos]) |
-        (buf[pos + 1] << 8) |
-        (buf[pos + 2] << 16)) +
-        (buf[pos + 3] * 0x1000000);
-}
-
-function writeInt32(buf, val, pos) {
-    buf[pos] = val;
-    buf[pos + 1] = (val >>> 8);
-    buf[pos + 2] = (val >>> 16);
-    buf[pos + 3] = (val >>> 24);
-}
-
-function readInt32(buf, pos) {
-    return ((buf[pos]) |
-        (buf[pos + 1] << 8) |
-        (buf[pos + 2] << 16)) +
-        (buf[pos + 3] << 24);
-}
-
-function readUtf8(buf, pos, end) {
-    var str = '';
-    var i = pos;
-
-    while (i < end) {
-        var b0 = buf[i];
-        var c = null; // codepoint
-        var bytesPerSequence =
-            b0 > 0xEF ? 4 :
-            b0 > 0xDF ? 3 :
-            b0 > 0xBF ? 2 : 1;
-
-        if (i + bytesPerSequence > end) { break; }
-
-        var b1, b2, b3;
-
-        if (bytesPerSequence === 1) {
-            if (b0 < 0x80) {
-                c = b0;
+        function normalizeName(name) {
+            if (typeof name !== 'string') {
+                name = String(name);
             }
-        } else if (bytesPerSequence === 2) {
-            b1 = buf[i + 1];
-            if ((b1 & 0xC0) === 0x80) {
-                c = (b0 & 0x1F) << 0x6 | (b1 & 0x3F);
-                if (c <= 0x7F) {
-                    c = null;
-                }
+            if (/[^a-z0-9\-#$%&'*+.\^_`|~]/i.test(name)) {
+                throw new TypeError('Invalid character in header field name');
             }
-        } else if (bytesPerSequence === 3) {
-            b1 = buf[i + 1];
-            b2 = buf[i + 2];
-            if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80) {
-                c = (b0 & 0xF) << 0xC | (b1 & 0x3F) << 0x6 | (b2 & 0x3F);
-                if (c <= 0x7FF || (c >= 0xD800 && c <= 0xDFFF)) {
-                    c = null;
-                }
+            return name.toLowerCase();
+        }
+
+        function normalizeValue(value) {
+            if (typeof value !== 'string') {
+                value = String(value);
             }
-        } else if (bytesPerSequence === 4) {
-            b1 = buf[i + 1];
-            b2 = buf[i + 2];
-            b3 = buf[i + 3];
-            if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80 && (b3 & 0xC0) === 0x80) {
-                c = (b0 & 0xF) << 0x12 | (b1 & 0x3F) << 0xC | (b2 & 0x3F) << 0x6 | (b3 & 0x3F);
-                if (c <= 0xFFFF || c >= 0x110000) {
-                    c = null;
+            return value;
+        }
+
+        // Build a destructive iterator for the value list
+        function iteratorFor(items) {
+            var iterator = {
+                next: function () {
+                    var value = items.shift();
+                    return { done: value === undefined, value: value };
                 }
+            };
+
+            if (support.iterable) {
+                iterator[Symbol.iterator] = function () {
+                    return iterator;
+                };
+            }
+
+            return iterator;
+        }
+
+        function Headers(headers) {
+            this.map = {};
+
+            if (headers instanceof Headers) {
+                headers.forEach(function (value, name) {
+                    this.append(name, value);
+                }, this);
+            } else if (Array.isArray(headers)) {
+                headers.forEach(function (header) {
+                    this.append(header[0], header[1]);
+                }, this);
+            } else if (headers) {
+                Object.getOwnPropertyNames(headers).forEach(function (name) {
+                    this.append(name, headers[name]);
+                }, this);
             }
         }
 
-        if (c === null) {
-            c = 0xFFFD;
-            bytesPerSequence = 1;
+        Headers.prototype.append = function (name, value) {
+            name = normalizeName(name);
+            value = normalizeValue(value);
+            var oldValue = this.map[name];
+            this.map[name] = oldValue ? oldValue + ',' + value : value;
+        };
 
-        } else if (c > 0xFFFF) {
-            c -= 0x10000;
-            str += String.fromCharCode(c >>> 10 & 0x3FF | 0xD800);
-            c = 0xDC00 | c & 0x3FF;
+        Headers.prototype['delete'] = function (name) {
+            delete this.map[normalizeName(name)];
+        };
+
+        Headers.prototype.get = function (name) {
+            name = normalizeName(name);
+            return this.has(name) ? this.map[name] : null;
+        };
+
+        Headers.prototype.has = function (name) {
+            return this.map.hasOwnProperty(normalizeName(name));
+        };
+
+        Headers.prototype.set = function (name, value) {
+            this.map[normalizeName(name)] = normalizeValue(value);
+        };
+
+        Headers.prototype.forEach = function (callback, thisArg) {
+            var this$1 = this;
+
+            for (var name in this.map) {
+                if (this$1.map.hasOwnProperty(name)) {
+                    callback.call(thisArg, this$1.map[name], name, this$1);
+                }
+            }
+        };
+
+        Headers.prototype.keys = function () {
+            var items = [];
+            this.forEach(function (value, name) {
+                items.push(name);
+            });
+            return iteratorFor(items);
+        };
+
+        Headers.prototype.values = function () {
+            var items = [];
+            this.forEach(function (value) {
+                items.push(value);
+            });
+            return iteratorFor(items);
+        };
+
+        Headers.prototype.entries = function () {
+            var items = [];
+            this.forEach(function (value, name) {
+                items.push([name, value]);
+            });
+            return iteratorFor(items);
+        };
+
+        if (support.iterable) {
+            Headers.prototype[Symbol.iterator] = Headers.prototype.entries;
         }
 
-        str += String.fromCharCode(c);
-        i += bytesPerSequence;
-    }
+        function consumed(body) {
+            if (body.bodyUsed) {
+                return Promise.reject(new TypeError('Already read'));
+            }
+            body.bodyUsed = true;
+        }
 
-    return str;
-}
+        function fileReaderReady(reader) {
+            return new Promise(function (resolve, reject) {
+                reader.onload = function () {
+                    resolve(reader.result);
+                };
+                reader.onerror = function () {
+                    reject(reader.error);
+                };
+            });
+        }
 
-function writeUtf8(buf, str, pos) {
-    for (var i = 0, c, lead; i < str.length; i++) {
-        c = str.charCodeAt(i); // code point
+        function readBlobAsArrayBuffer(blob) {
+            var reader = new FileReader();
+            var promise = fileReaderReady(reader);
+            reader.readAsArrayBuffer(blob);
+            return promise;
+        }
 
-        if (c > 0xD7FF && c < 0xE000) {
-            if (lead) {
-                if (c < 0xDC00) {
-                    buf[pos++] = 0xEF;
-                    buf[pos++] = 0xBF;
-                    buf[pos++] = 0xBD;
-                    lead = c;
-                    continue;
+        function readBlobAsText(blob) {
+            var reader = new FileReader();
+            var promise = fileReaderReady(reader);
+            reader.readAsText(blob);
+            return promise;
+        }
+
+        function readArrayBufferAsText(buf) {
+            var view = new Uint8Array(buf);
+            var chars = new Array(view.length);
+
+            for (var i = 0; i < view.length; i++) {
+                chars[i] = String.fromCharCode(view[i]);
+            }
+            return chars.join('');
+        }
+
+        function bufferClone(buf) {
+            if (buf.slice) {
+                return buf.slice(0);
+            } else {
+                var view = new Uint8Array(buf.byteLength);
+                view.set(new Uint8Array(buf));
+                return view.buffer;
+            }
+        }
+
+        function Body() {
+            this.bodyUsed = false;
+
+            this._initBody = function (body) {
+                this._bodyInit = body;
+                if (!body) {
+                    this._bodyText = '';
+                } else if (typeof body === 'string') {
+                    this._bodyText = body;
+                } else if (support.blob && Blob.prototype.isPrototypeOf(body)) {
+                    this._bodyBlob = body;
+                } else if (support.formData && FormData.prototype.isPrototypeOf(body)) {
+                    this._bodyFormData = body;
+                } else if (support.searchParams && URLSearchParams.prototype.isPrototypeOf(body)) {
+                    this._bodyText = body.toString();
+                } else if (support.arrayBuffer && support.blob && isDataView(body)) {
+                    this._bodyArrayBuffer = bufferClone(body.buffer);
+                    // IE 10-11 can't handle a DataView body.
+                    this._bodyInit = new Blob([this._bodyArrayBuffer]);
+                } else if (support.arrayBuffer && (ArrayBuffer.prototype.isPrototypeOf(body) || isArrayBufferView(body))) {
+                    this._bodyArrayBuffer = bufferClone(body);
                 } else {
-                    c = lead - 0xD800 << 10 | c - 0xDC00 | 0x10000;
-                    lead = null;
+                    throw new Error('unsupported BodyInit type');
+                }
+
+                if (!this.headers.get('content-type')) {
+                    if (typeof body === 'string') {
+                        this.headers.set('content-type', 'text/plain;charset=UTF-8');
+                    } else if (this._bodyBlob && this._bodyBlob.type) {
+                        this.headers.set('content-type', this._bodyBlob.type);
+                    } else if (support.searchParams && URLSearchParams.prototype.isPrototypeOf(body)) {
+                        this.headers.set('content-type', 'application/x-www-form-urlencoded;charset=UTF-8');
+                    }
+                }
+            };
+
+            if (support.blob) {
+                this.blob = function () {
+                    var rejected = consumed(this);
+                    if (rejected) {
+                        return rejected;
+                    }
+
+                    if (this._bodyBlob) {
+                        return Promise.resolve(this._bodyBlob);
+                    } else if (this._bodyArrayBuffer) {
+                        return Promise.resolve(new Blob([this._bodyArrayBuffer]));
+                    } else if (this._bodyFormData) {
+                        throw new Error('could not read FormData body as blob');
+                    } else {
+                        return Promise.resolve(new Blob([this._bodyText]));
+                    }
+                };
+
+                this.arrayBuffer = function () {
+                    if (this._bodyArrayBuffer) {
+                        return consumed(this) || Promise.resolve(this._bodyArrayBuffer);
+                    } else {
+                        return this.blob().then(readBlobAsArrayBuffer);
+                    }
+                };
+            }
+
+            this.text = function () {
+                var rejected = consumed(this);
+                if (rejected) {
+                    return rejected;
+                }
+
+                if (this._bodyBlob) {
+                    return readBlobAsText(this._bodyBlob);
+                } else if (this._bodyArrayBuffer) {
+                    return Promise.resolve(readArrayBufferAsText(this._bodyArrayBuffer));
+                } else if (this._bodyFormData) {
+                    throw new Error('could not read FormData body as text');
+                } else {
+                    return Promise.resolve(this._bodyText);
+                }
+            };
+
+            if (support.formData) {
+                this.formData = function () {
+                    return this.text().then(decode);
+                };
+            }
+
+            this.json = function () {
+                return this.text().then(JSON.parse);
+            };
+
+            return this;
+        }
+
+        // HTTP methods whose capitalization should be normalized
+        var methods = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'];
+
+        function normalizeMethod(method) {
+            var upcased = method.toUpperCase();
+            return methods.indexOf(upcased) > -1 ? upcased : method;
+        }
+
+        function Request(input, options) {
+            options = options || {};
+            var body = options.body;
+
+            if (input instanceof Request) {
+                if (input.bodyUsed) {
+                    throw new TypeError('Already read');
+                }
+                this.url = input.url;
+                this.credentials = input.credentials;
+                if (!options.headers) {
+                    this.headers = new Headers(input.headers);
+                }
+                this.method = input.method;
+                this.mode = input.mode;
+                if (!body && input._bodyInit != null) {
+                    body = input._bodyInit;
+                    input.bodyUsed = true;
                 }
             } else {
-                if (c > 0xDBFF || (i + 1 === str.length)) {
-                    buf[pos++] = 0xEF;
-                    buf[pos++] = 0xBF;
-                    buf[pos++] = 0xBD;
-                } else {
-                    lead = c;
+                this.url = String(input);
+            }
+
+            this.credentials = options.credentials || this.credentials || 'omit';
+            if (options.headers || !this.headers) {
+                this.headers = new Headers(options.headers);
+            }
+            this.method = normalizeMethod(options.method || this.method || 'GET');
+            this.mode = options.mode || this.mode || null;
+            this.referrer = null;
+
+            if ((this.method === 'GET' || this.method === 'HEAD') && body) {
+                throw new TypeError('Body not allowed for GET or HEAD requests');
+            }
+            this._initBody(body);
+        }
+
+        Request.prototype.clone = function () {
+            return new Request(this, { body: this._bodyInit });
+        };
+
+        function decode(body) {
+            var form = new FormData();
+            body.trim().split('&').forEach(function (bytes) {
+                if (bytes) {
+                    var split = bytes.split('=');
+                    var name = split.shift().replace(/\+/g, ' ');
+                    var value = split.join('=').replace(/\+/g, ' ');
+                    form.append(decodeURIComponent(name), decodeURIComponent(value));
                 }
-                continue;
-            }
-        } else if (lead) {
-            buf[pos++] = 0xEF;
-            buf[pos++] = 0xBF;
-            buf[pos++] = 0xBD;
-            lead = null;
+            });
+            return form;
         }
 
-        if (c < 0x80) {
-            buf[pos++] = c;
-        } else {
-            if (c < 0x800) {
-                buf[pos++] = c >> 0x6 | 0xC0;
-            } else {
-                if (c < 0x10000) {
-                    buf[pos++] = c >> 0xC | 0xE0;
-                } else {
-                    buf[pos++] = c >> 0x12 | 0xF0;
-                    buf[pos++] = c >> 0xC & 0x3F | 0x80;
+        function parseHeaders(rawHeaders) {
+            var headers = new Headers();
+            rawHeaders.split(/\r?\n/).forEach(function (line) {
+                var parts = line.split(':');
+                var key = parts.shift().trim();
+                if (key) {
+                    var value = parts.join(':').trim();
+                    headers.append(key, value);
                 }
-                buf[pos++] = c >> 0x6 & 0x3F | 0x80;
-            }
-            buf[pos++] = c & 0x3F | 0x80;
-        }
-    }
-    return pos;
-}
-
-var index$5 = Point$1;
-
-function Point$1(x, y) {
-    this.x = x;
-    this.y = y;
-}
-
-Point$1.prototype = {
-    clone: function() { return new Point$1(this.x, this.y); },
-
-    add:     function(p) { return this.clone()._add(p);     },
-    sub:     function(p) { return this.clone()._sub(p);     },
-    mult:    function(k) { return this.clone()._mult(k);    },
-    div:     function(k) { return this.clone()._div(k);     },
-    rotate:  function(a) { return this.clone()._rotate(a);  },
-    matMult: function(m) { return this.clone()._matMult(m); },
-    unit:    function() { return this.clone()._unit(); },
-    perp:    function() { return this.clone()._perp(); },
-    round:   function() { return this.clone()._round(); },
-
-    mag: function() {
-        return Math.sqrt(this.x * this.x + this.y * this.y);
-    },
-
-    equals: function(p) {
-        return this.x === p.x &&
-               this.y === p.y;
-    },
-
-    dist: function(p) {
-        return Math.sqrt(this.distSqr(p));
-    },
-
-    distSqr: function(p) {
-        var dx = p.x - this.x,
-            dy = p.y - this.y;
-        return dx * dx + dy * dy;
-    },
-
-    angle: function() {
-        return Math.atan2(this.y, this.x);
-    },
-
-    angleTo: function(b) {
-        return Math.atan2(this.y - b.y, this.x - b.x);
-    },
-
-    angleWith: function(b) {
-        return this.angleWithSep(b.x, b.y);
-    },
-
-    // Find the angle of the two vectors, solving the formula for the cross product a x b = |a||b|sin(θ) for θ.
-    angleWithSep: function(x, y) {
-        return Math.atan2(
-            this.x * y - this.y * x,
-            this.x * x + this.y * y);
-    },
-
-    _matMult: function(m) {
-        var x = m[0] * this.x + m[1] * this.y,
-            y = m[2] * this.x + m[3] * this.y;
-        this.x = x;
-        this.y = y;
-        return this;
-    },
-
-    _add: function(p) {
-        this.x += p.x;
-        this.y += p.y;
-        return this;
-    },
-
-    _sub: function(p) {
-        this.x -= p.x;
-        this.y -= p.y;
-        return this;
-    },
-
-    _mult: function(k) {
-        this.x *= k;
-        this.y *= k;
-        return this;
-    },
-
-    _div: function(k) {
-        this.x /= k;
-        this.y /= k;
-        return this;
-    },
-
-    _unit: function() {
-        this._div(this.mag());
-        return this;
-    },
-
-    _perp: function() {
-        var y = this.y;
-        this.y = this.x;
-        this.x = -y;
-        return this;
-    },
-
-    _rotate: function(angle) {
-        var cos = Math.cos(angle),
-            sin = Math.sin(angle),
-            x = cos * this.x - sin * this.y,
-            y = sin * this.x + cos * this.y;
-        this.x = x;
-        this.y = y;
-        return this;
-    },
-
-    _round: function() {
-        this.x = Math.round(this.x);
-        this.y = Math.round(this.y);
-        return this;
-    }
-};
-
-// constructs Point from an array if necessary
-Point$1.convert = function (a) {
-    if (a instanceof Point$1) {
-        return a;
-    }
-    if (Array.isArray(a)) {
-        return new Point$1(a[0], a[1]);
-    }
-    return a;
-};
-
-var Point = index$5;
-
-var vectortilefeature = VectorTileFeature$2;
-
-function VectorTileFeature$2(pbf, end, extent, keys, values) {
-    // Public
-    this.properties = {};
-    this.extent = extent;
-    this.type = 0;
-
-    // Private
-    this._pbf = pbf;
-    this._geometry = -1;
-    this._keys = keys;
-    this._values = values;
-
-    pbf.readFields(readFeature, this, end);
-}
-
-function readFeature(tag, feature, pbf) {
-    if (tag == 1) { feature.id = pbf.readVarint(); }
-    else if (tag == 2) { readTag(pbf, feature); }
-    else if (tag == 3) { feature.type = pbf.readVarint(); }
-    else if (tag == 4) { feature._geometry = pbf.pos; }
-}
-
-function readTag(pbf, feature) {
-    var end = pbf.readVarint() + pbf.pos;
-
-    while (pbf.pos < end) {
-        var key = feature._keys[pbf.readVarint()],
-            value = feature._values[pbf.readVarint()];
-        feature.properties[key] = value;
-    }
-}
-
-VectorTileFeature$2.types = ['Unknown', 'Point', 'LineString', 'Polygon'];
-
-VectorTileFeature$2.prototype.loadGeometry = function() {
-    var pbf = this._pbf;
-    pbf.pos = this._geometry;
-
-    var end = pbf.readVarint() + pbf.pos,
-        cmd = 1,
-        length = 0,
-        x = 0,
-        y = 0,
-        lines = [],
-        line;
-
-    while (pbf.pos < end) {
-        if (!length) {
-            var cmdLen = pbf.readVarint();
-            cmd = cmdLen & 0x7;
-            length = cmdLen >> 3;
+            });
+            return headers;
         }
 
-        length--;
+        Body.call(Request.prototype);
 
-        if (cmd === 1 || cmd === 2) {
-            x += pbf.readSVarint();
-            y += pbf.readSVarint();
-
-            if (cmd === 1) { // moveTo
-                if (line) { lines.push(line); }
-                line = [];
+        function Response(bodyInit, options) {
+            if (!options) {
+                options = {};
             }
 
-            line.push(new Point(x, y));
+            this.type = 'default';
+            this.status = 'status' in options ? options.status : 200;
+            this.ok = this.status >= 200 && this.status < 300;
+            this.statusText = 'statusText' in options ? options.statusText : 'OK';
+            this.headers = new Headers(options.headers);
+            this.url = options.url || '';
+            this._initBody(bodyInit);
+        }
 
-        } else if (cmd === 7) {
+        Body.call(Response.prototype);
 
-            // Workaround for https://github.com/mapbox/mapnik-vector-tile/issues/90
-            if (line) {
-                line.push(line[0].clone()); // closePolygon
+        Response.prototype.clone = function () {
+            return new Response(this._bodyInit, {
+                status: this.status,
+                statusText: this.statusText,
+                headers: new Headers(this.headers),
+                url: this.url
+            });
+        };
+
+        Response.error = function () {
+            var response = new Response(null, { status: 0, statusText: '' });
+            response.type = 'error';
+            return response;
+        };
+
+        var redirectStatuses = [301, 302, 303, 307, 308];
+
+        Response.redirect = function (url, status) {
+            if (redirectStatuses.indexOf(status) === -1) {
+                throw new RangeError('Invalid status code');
             }
 
+            return new Response(null, { status: status, headers: { location: url } });
+        };
+
+        self.Headers = Headers;
+        self.Request = Request;
+        self.Response = Response;
+
+        self.fetch = function (input, init) {
+            return new Promise(function (resolve, reject) {
+                var request = new Request(input, init);
+                var xhr = new XMLHttpRequest();
+
+                xhr.onload = function () {
+                    var options = {
+                        status: xhr.status,
+                        statusText: xhr.statusText,
+                        headers: parseHeaders(xhr.getAllResponseHeaders() || '')
+                    };
+                    options.url = 'responseURL' in xhr ? xhr.responseURL : options.headers.get('X-Request-URL');
+                    var body = 'response' in xhr ? xhr.response : xhr.responseText;
+                    resolve(new Response(body, options));
+                };
+
+                xhr.onerror = function () {
+                    reject(new TypeError('Network request failed'));
+                };
+
+                xhr.ontimeout = function () {
+                    reject(new TypeError('Network request failed'));
+                };
+
+                xhr.open(request.method, request.url, true);
+
+                if (request.credentials === 'include') {
+                    xhr.withCredentials = true;
+                }
+
+                if ('responseType' in xhr && support.blob) {
+                    xhr.responseType = 'blob';
+                }
+
+                request.headers.forEach(function (value, name) {
+                    xhr.setRequestHeader(name, value);
+                });
+
+                xhr.send(typeof request._bodyInit === 'undefined' ? null : request._bodyInit);
+            });
+        };
+        self.fetch.polyfill = true;
+    })(typeof self !== 'undefined' ? self : undefined);
+
+    var read = function (buffer, offset, isLE, mLen, nBytes) {
+        var e, m;
+        var eLen = nBytes * 8 - mLen - 1;
+        var eMax = (1 << eLen) - 1;
+        var eBias = eMax >> 1;
+        var nBits = -7;
+        var i = isLE ? nBytes - 1 : 0;
+        var d = isLE ? -1 : 1;
+        var s = buffer[offset + i];
+
+        i += d;
+
+        e = s & (1 << -nBits) - 1;
+        s >>= -nBits;
+        nBits += eLen;
+        for (; nBits > 0; e = e * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+
+        m = e & (1 << -nBits) - 1;
+        e >>= -nBits;
+        nBits += mLen;
+        for (; nBits > 0; m = m * 256 + buffer[offset + i], i += d, nBits -= 8) {}
+
+        if (e === 0) {
+            e = 1 - eBias;
+        } else if (e === eMax) {
+            return m ? NaN : (s ? -1 : 1) * Infinity;
         } else {
-            throw new Error('unknown command ' + cmd);
+            m = m + Math.pow(2, mLen);
+            e = e - eBias;
         }
-    }
-
-    if (line) { lines.push(line); }
-
-    return lines;
-};
-
-VectorTileFeature$2.prototype.bbox = function() {
-    var pbf = this._pbf;
-    pbf.pos = this._geometry;
-
-    var end = pbf.readVarint() + pbf.pos,
-        cmd = 1,
-        length = 0,
-        x = 0,
-        y = 0,
-        x1 = Infinity,
-        x2 = -Infinity,
-        y1 = Infinity,
-        y2 = -Infinity;
-
-    while (pbf.pos < end) {
-        if (!length) {
-            var cmdLen = pbf.readVarint();
-            cmd = cmdLen & 0x7;
-            length = cmdLen >> 3;
-        }
-
-        length--;
-
-        if (cmd === 1 || cmd === 2) {
-            x += pbf.readSVarint();
-            y += pbf.readSVarint();
-            if (x < x1) { x1 = x; }
-            if (x > x2) { x2 = x; }
-            if (y < y1) { y1 = y; }
-            if (y > y2) { y2 = y; }
-
-        } else if (cmd !== 7) {
-            throw new Error('unknown command ' + cmd);
-        }
-    }
-
-    return [x1, y1, x2, y2];
-};
-
-VectorTileFeature$2.prototype.toGeoJSON = function(x, y, z) {
-    var size = this.extent * Math.pow(2, z),
-        x0 = this.extent * x,
-        y0 = this.extent * y,
-        coords = this.loadGeometry(),
-        type = VectorTileFeature$2.types[this.type],
-        i, j;
-
-    function project(line) {
-        for (var j = 0; j < line.length; j++) {
-            var p = line[j], y2 = 180 - (p.y + y0) * 360 / size;
-            line[j] = [
-                (p.x + x0) * 360 / size - 180,
-                360 / Math.PI * Math.atan(Math.exp(y2 * Math.PI / 180)) - 90
-            ];
-        }
-    }
-
-    switch (this.type) {
-    case 1:
-        var points = [];
-        for (i = 0; i < coords.length; i++) {
-            points[i] = coords[i][0];
-        }
-        coords = points;
-        project(coords);
-        break;
-
-    case 2:
-        for (i = 0; i < coords.length; i++) {
-            project(coords[i]);
-        }
-        break;
-
-    case 3:
-        coords = classifyRings(coords);
-        for (i = 0; i < coords.length; i++) {
-            for (j = 0; j < coords[i].length; j++) {
-                project(coords[i][j]);
-            }
-        }
-        break;
-    }
-
-    if (coords.length === 1) {
-        coords = coords[0];
-    } else {
-        type = 'Multi' + type;
-    }
-
-    var result = {
-        type: "Feature",
-        geometry: {
-            type: type,
-            coordinates: coords
-        },
-        properties: this.properties
+        return (s ? -1 : 1) * m * Math.pow(2, e - mLen);
     };
 
-    if ('id' in this) {
-        result.id = this.id;
-    }
+    var write = function (buffer, value, offset, isLE, mLen, nBytes) {
+        var e, m, c;
+        var eLen = nBytes * 8 - mLen - 1;
+        var eMax = (1 << eLen) - 1;
+        var eBias = eMax >> 1;
+        var rt = mLen === 23 ? Math.pow(2, -24) - Math.pow(2, -77) : 0;
+        var i = isLE ? 0 : nBytes - 1;
+        var d = isLE ? 1 : -1;
+        var s = value < 0 || value === 0 && 1 / value < 0 ? 1 : 0;
 
-    return result;
-};
+        value = Math.abs(value);
 
-// classifies an array of rings into polygons with outer rings and holes
-
-function classifyRings(rings) {
-    var len = rings.length;
-
-    if (len <= 1) { return [rings]; }
-
-    var polygons = [],
-        polygon,
-        ccw;
-
-    for (var i = 0; i < len; i++) {
-        var area = signedArea(rings[i]);
-        if (area === 0) { continue; }
-
-        if (ccw === undefined) { ccw = area < 0; }
-
-        if (ccw === area < 0) {
-            if (polygon) { polygons.push(polygon); }
-            polygon = [rings[i]];
-
+        if (isNaN(value) || value === Infinity) {
+            m = isNaN(value) ? 1 : 0;
+            e = eMax;
         } else {
-            polygon.push(rings[i]);
-        }
-    }
-    if (polygon) { polygons.push(polygon); }
-
-    return polygons;
-}
-
-function signedArea(ring) {
-    var sum = 0;
-    for (var i = 0, len = ring.length, j = len - 1, p1, p2; i < len; j = i++) {
-        p1 = ring[i];
-        p2 = ring[j];
-        sum += (p2.x - p1.x) * (p1.y + p2.y);
-    }
-    return sum;
-}
-
-var VectorTileFeature$1 = vectortilefeature;
-
-var vectortilelayer = VectorTileLayer$2;
-
-function VectorTileLayer$2(pbf, end) {
-    // Public
-    this.version = 1;
-    this.name = null;
-    this.extent = 4096;
-    this.length = 0;
-
-    // Private
-    this._pbf = pbf;
-    this._keys = [];
-    this._values = [];
-    this._features = [];
-
-    pbf.readFields(readLayer, this, end);
-
-    this.length = this._features.length;
-}
-
-function readLayer(tag, layer, pbf) {
-    if (tag === 15) { layer.version = pbf.readVarint(); }
-    else if (tag === 1) { layer.name = pbf.readString(); }
-    else if (tag === 5) { layer.extent = pbf.readVarint(); }
-    else if (tag === 2) { layer._features.push(pbf.pos); }
-    else if (tag === 3) { layer._keys.push(pbf.readString()); }
-    else if (tag === 4) { layer._values.push(readValueMessage(pbf)); }
-}
-
-function readValueMessage(pbf) {
-    var value = null,
-        end = pbf.readVarint() + pbf.pos;
-
-    while (pbf.pos < end) {
-        var tag = pbf.readVarint() >> 3;
-
-        value = tag === 1 ? pbf.readString() :
-            tag === 2 ? pbf.readFloat() :
-            tag === 3 ? pbf.readDouble() :
-            tag === 4 ? pbf.readVarint64() :
-            tag === 5 ? pbf.readVarint() :
-            tag === 6 ? pbf.readSVarint() :
-            tag === 7 ? pbf.readBoolean() : null;
-    }
-
-    return value;
-}
-
-// return feature `i` from this layer as a `VectorTileFeature`
-VectorTileLayer$2.prototype.feature = function(i) {
-    if (i < 0 || i >= this._features.length) { throw new Error('feature index out of bounds'); }
-
-    this._pbf.pos = this._features[i];
-
-    var end = this._pbf.readVarint() + this._pbf.pos;
-    return new VectorTileFeature$1(this._pbf, end, this.extent, this._keys, this._values);
-};
-
-var VectorTileLayer$1 = vectortilelayer;
-
-var vectortile = VectorTile$1;
-
-function VectorTile$1(pbf, end) {
-    this.layers = pbf.readFields(readTile, {}, end);
-}
-
-function readTile(tag, layers, pbf) {
-    if (tag === 3) {
-        var layer = new VectorTileLayer$1(pbf, pbf.readVarint() + pbf.pos);
-        if (layer.length) { layers[layer.name] = layer; }
-    }
-}
-
-var VectorTile = vectortile;
-
-L.SVG.Tile = L.SVG.extend({
-
-	initialize: function (tileCoord, tileSize, options) {
-		L.SVG.prototype.initialize.call(this, options);
-		this._tileCoord = tileCoord;
-		this._size = tileSize;
-
-		this._initContainer();
-		this._container.setAttribute('width', this._size.x);
-		this._container.setAttribute('height', this._size.y);
-		this._container.setAttribute('viewBox', [0, 0, this._size.x, this._size.y].join(' '));
-
-		this._layers = {};
-	},
-
-	getCoord: function() {
-		return this._tileCoord;
-	},
-
-	getContainer: function() {
-		return this._container;
-	},
-
-	onAdd: L.Util.falseFn,
-
-	addTo: function(map) {
-		this._map = map;
-		if (this.options.interactive) {
-			for (var i in this._layers) {
-				var layer = this._layers[i];
-				// By default, Leaflet tiles do not have pointer events.
-				layer._path.style.pointerEvents = 'auto';
-				this._map._targets[L.stamp(layer._path)] = layer;
-			}
-		}
-	},
-
-	removeFrom: function (map) {
-		if (this.options.interactive) {
-			for (var i in this._layers) {
-				var layer = this._layers[i];
-				delete this._map._targets[L.stamp(layer._path)];
-			}
-		}
-		delete this._map;
-	},
-
-	_initContainer: function() {
-		L.SVG.prototype._initContainer.call(this);
-		var rect =  L.SVG.create('rect');
-	},
-
-	/// TODO: Modify _initPath to include an extra parameter, a group name
-	/// to order symbolizers by z-index
-
-	_addPath: function (layer) {
-		this._rootGroup.appendChild(layer._path);
-		this._layers[L.stamp(layer)] = layer;
-	},
-
-	_updateIcon: function (layer) {
-		var path = layer._path = L.SVG.create('image'),
-		    icon = layer.options.icon,
-		    options = icon.options,
-		    size = L.point(options.iconSize),
-		    anchor = options.iconAnchor ||
-		        	 size && size.divideBy(2, true),
-		    p = layer._point.subtract(anchor);
-		path.setAttribute('x', p.x);
-		path.setAttribute('y', p.y);
-		path.setAttribute('width', size.x + 'px');
-		path.setAttribute('height', size.y + 'px');
-		path.setAttribute('href', options.iconUrl);
-	}
-});
-
-
-L.svg.tile = function(tileCoord, tileSize, opts){
-	return new L.SVG.Tile(tileCoord, tileSize, opts);
-};
-
-// 🍂class Symbolizer
-// 🍂inherits Class
-// The abstract Symbolizer class is mostly equivalent in concept to a `L.Path` - it's an interface for
-// polylines, polygons and circles. But instead of representing leaflet Layers,
-// it represents things that have to be drawn inside a vector tile.
-
-// A vector tile *data layer* might have zero, one, or more *symbolizer definitions*
-// A vector tile *feature* might have zero, one, or more *symbolizers*.
-// The actual symbolizers applied will depend on filters and the symbolizer functions.
-
-var Symbolizer = L.Class.extend({
-	// 🍂method initialize(feature: GeoJSON, pxPerExtent: Number)
-	// Initializes a new Line Symbolizer given a GeoJSON feature and the
-	// pixel-to-coordinate-units ratio. Internal use only.
-
-	// 🍂method render(renderer, style)
-	// Renders this symbolizer in the given tiled renderer, with the given
-	// `L.Path` options.  Internal use only.
-	render: function(renderer, style) {
-		this._renderer = renderer;
-		this.options = style;
-		renderer._initPath(this);
-		renderer._updateStyle(this);
-	},
-
-	// 🍂method render(renderer, style)
-	// Updates the `L.Path` options used to style this symbolizer, and re-renders it.
-	// Internal use only.
-	updateStyle: function(renderer, style) {
-		this.options = style;
-		renderer._updateStyle(this);
-	},
-
-	_getPixelBounds: function() {
-		var parts = this._parts;
-		var bounds = L.bounds([]);
-		for (var i = 0; i < parts.length; i++) {
-			var part = parts[i];
-			for (var j = 0; j < part.length; j++) {
-				bounds.extend(part[j]);
-			}
-		}
-
-		var w = this._clickTolerance(),
-		    p = new L.Point(w, w);
-
-		bounds.min._subtract(p);
-		bounds.max._add(p);
-
-		return bounds;
-	},
-	_clickTolerance: L.Path.prototype._clickTolerance,
-});
-
-// Contains mixins which are common to the Line Symbolizer and the Fill Symbolizer.
-
-var PolyBase = {
-	_makeFeatureParts: function(feat, pxPerExtent) {
-		var rings = feat.geometry;
-		var coord;
-
-		this._parts = [];
-		for (var i = 0; i < rings.length; i++) {
-			var ring = rings[i];
-			var part = [];
-			for (var j = 0; j < ring.length; j++) {
-				coord = ring[j];
-				// Protobuf vector tiles return {x: , y:}
-				// Geojson-vt returns [,]
-				part.push(L.point(coord).scaleBy(pxPerExtent));
-			}
-			this._parts.push(part);
-		}
-	},
-
-	makeInteractive: function() {
-		this._pxBounds = this._getPixelBounds();
-	}
-};
-
-// 🍂class PointSymbolizer
-// 🍂inherits CircleMarker
-// A symbolizer for points.
-
-var PointSymbolizer = L.CircleMarker.extend({
-	includes: Symbolizer.prototype,
-
-	statics: {
-		iconCache: {}
-	},
-
-	initialize: function(feature, pxPerExtent) {
-		this.properties = feature.properties;
-		this._makeFeatureParts(feature, pxPerExtent);
-	},
-
-	render: function(renderer, style) {
-		Symbolizer.prototype.render.call(this, renderer, style);
-		this._radius = style.radius || L.CircleMarker.prototype.options.radius;
-		this._updatePath();
-	},
-
-	_makeFeatureParts: function(feat, pxPerExtent) {
-		var coord = feat.geometry[0];
-		if (typeof coord[0] === 'object' && 'x' in coord[0]) {
-			// Protobuf vector tiles return [{x: , y:}]
-			this._point = L.point(coord[0]).scaleBy(pxPerExtent);
-			this._empty = L.Util.falseFn;
-		} else {
-			// Geojson-vt returns [,]
-			this._point = L.point(coord).scaleBy(pxPerExtent);
-			this._empty = L.Util.falseFn;
-		}
-	},
-
-	makeInteractive: function() {
-		this._updateBounds();
-	},
-
-	updateStyle: function(renderer, style) {
-		this._radius = style.radius || this._radius;
-		this._updateBounds();
-		return Symbolizer.prototype.updateStyle.call(this, renderer, style);
-	},
-
-	_updateBounds: function() {
-		var icon = this.options.icon;
-		if (icon) {
-			var size = L.point(icon.options.iconSize),
-			    anchor = icon.options.iconAnchor ||
-			             size && size.divideBy(2, true),
-			    p = this._point.subtract(anchor);
-			this._pxBounds = new L.Bounds(p, p.add(icon.options.iconSize));
-		} else {
-			L.CircleMarker.prototype._updateBounds.call(this);
-		}
-	},
-
-	_updatePath: function() {
-		if (this.options.icon) {
-			this._renderer._updateIcon(this);
-		} else {
-			L.CircleMarker.prototype._updatePath.call(this);
-		}
-	},
-
-	_getImage: function () {
-		if (this.options.icon) {
-			var url = this.options.icon.options.iconUrl,
-			    img = PointLayer.iconCache[url];
-			if (!img) {
-				var icon = this.options.icon;
-				img = PointLayer.iconCache[url] = icon.createIcon();
-			}
-			return img;
-		} else {
-			return null;
-		}
-
-	},
-
-	_containsPoint: function(p) {
-		var icon = this.options.icon;
-		if (icon) {
-			return this._pxBounds.contains(p);
-		} else {
-			return L.CircleMarker.prototype._containsPoint.call(this, p);
-		}
-	}
-});
-
-// 🍂class LineSymbolizer
-// 🍂inherits Polyline
-// A symbolizer for lines. Can be applied to line and polygon features.
-
-var LineSymbolizer = L.Polyline.extend({
-	includes: [Symbolizer.prototype, PolyBase],
-
-	initialize: function(feature, pxPerExtent) {
-		this.properties = feature.properties;
-		this._makeFeatureParts(feature, pxPerExtent);
-	},
-
-	render: function(renderer, style) {
-		style.fill = false;
-		Symbolizer.prototype.render.call(this, renderer, style);
-		this._updatePath();
-	},
-
-	updateStyle: function(renderer, style) {
-		style.fill = false;
-		Symbolizer.prototype.updateStyle.call(this, renderer, style);
-	},
-});
-
-// 🍂class FillSymbolizer
-// 🍂inherits Polyline
-// A symbolizer for filled areas. Applies only to polygon features.
-
-var FillSymbolizer = L.Polygon.extend({
-	includes: [Symbolizer.prototype, PolyBase],
-
-	initialize: function(feature, pxPerExtent) {
-		this.properties = feature.properties;
-		this._makeFeatureParts(feature, pxPerExtent);
-	},
-
-	render: function(renderer, style) {
-		Symbolizer.prototype.render.call(this, renderer, style);
-		this._updatePath();
-	}
-});
-
-/* 🍂class VectorGrid
- * 🍂inherits GridLayer
- *
- * A `VectorGrid` is a generic, abstract class for displaying tiled vector data.
- * it provides facilities for symbolizing and rendering the data in the vector
- * tiles, but lacks the functionality to fetch the vector tiles from wherever
- * they are.
- *
- * Extends Leaflet's `L.GridLayer`.
- */
-
-L.VectorGrid = L.GridLayer.extend({
-
-	options: {
-		// 🍂option rendererFactory = L.svg.tile
-		// A factory method which will be used to instantiate the per-tile renderers.
-		rendererFactory: L.svg.tile,
-
-		// 🍂option vectorTileLayerStyles: Object = {}
-		// A data structure holding initial symbolizer definitions for the vector features.
-		vectorTileLayerStyles: {},
-
-		// 🍂option interactive: Boolean = false
-		// Whether this `VectorGrid` fires `Interactive Layer` events.
-		interactive: false,
-
-		// 🍂option getFeatureId: Function = undefined
-		// A function that, given a vector feature, returns an unique identifier for it, e.g.
-		// `function(feat) { return feat.properties.uniqueIdField; }`.
-		// Must be defined for `setFeatureStyle` to work.
-
-        // 🍂option layersOrdering: Function = undefined
-        // A function that, given an array of keys (layers of vector tile) returns an ordered array of keys, e.g.
-        // `function(layers) { return layers.sort(function(a,b){return b-a}); }`.
-        // It can be used to filter out layers.
-	},
-
-	initialize: function(options) {
-		L.setOptions(this, options);
-		L.GridLayer.prototype.initialize.apply(this, arguments);
-		if (this.options.getFeatureId) {
-			this._vectorTiles = {};
-			this._overriddenStyles = {};
-			this.on('tileunload', function(e) {
-				var key = this._tileCoordsToKey(e.coords),
-				    tile = this._vectorTiles[key];
-
-				if (tile && this._map) {
-					tile.removeFrom(this._map);
-				}
-				delete this._vectorTiles[key];
-			}, this);
-		}
-		this._dataLayerNames = {};
-	},
-
-	createTile: function(coords, done) {
-		var storeFeatures = this.options.getFeatureId;
-
-		var tileSize = this.getTileSize();
-		var renderer = this.options.rendererFactory(coords, tileSize, this.options);
-
-		var vectorTilePromise = this._getVectorTilePromise(coords);
-
-
-		var zoom_level = coords.z;
-
-		if (storeFeatures) {
-			this._vectorTiles[this._tileCoordsToKey(coords)] = renderer;
-			renderer._features = {};
-		}
-
-		vectorTilePromise.then( function renderTile(vectorTile) {
-            var layersKeys = Object.keys(vectorTile.layers);
-            // console.log("layers:",layersKeys);
-            if(this.options.layersOrdering){
-                layersKeys = this.options.layersOrdering(vectorTile.layers,zoom_level);
+            e = Math.floor(Math.log(value) / Math.LN2);
+            if (value * (c = Math.pow(2, -e)) < 1) {
+                e--;
+                c *= 2;
+            }
+            if (e + eBias >= 1) {
+                value += rt / c;
+            } else {
+                value += rt * Math.pow(2, 1 - eBias);
+            }
+            if (value * c >= 2) {
+                e++;
+                c /= 2;
             }
 
-            for (var index in layersKeys) {
-              var layerName = layersKeys[index];
-              // console.log('check',layerName,vectorTile.layers, (vectorTile.layers[layerName]))
-              if(vectorTile.layers[layerName]) {
-                  this._dataLayerNames[layerName] = true;
-                  var layer = vectorTile.layers[layerName];
-
-                  var pxPerExtent = this.getTileSize().divideBy(layer.extent);
-
-                  var layerStyle = this.options.vectorTileLayerStyles[layerName] ||
-                      L.Path.prototype.options;
-
-                  for (var i = 0; i < layer.features.length; i++) {
-                      var feat = layer.features[i];
-                      var id;
-
-                      var styleOptions = layerStyle;
-                      if (storeFeatures) {
-                          id = this.options.getFeatureId(feat);
-                          var styleOverride = this._overriddenStyles[id];
-                          if (styleOverride) {
-                              if (styleOverride[layerName]) {
-                                  styleOptions = styleOverride[layerName];
-                              } else {
-                                  styleOptions = styleOverride;
-                              }
-                          }
-                      }
-
-                      if (styleOptions instanceof Function) {
-                          styleOptions = styleOptions(feat.properties, coords.z);
-                      }
-
-                      if (!(styleOptions instanceof Array)) {
-                          styleOptions = [styleOptions];
-                      }
-
-                      if (!styleOptions.length) {
-                          continue;
-                      }
-
-                      var featureLayer = this._createLayer(feat, pxPerExtent);
-
-                      for (var j = 0; j < styleOptions.length; j++) {
-                          var style = L.extend({}, L.Path.prototype.options, styleOptions[j]);
-                          featureLayer.render(renderer, style);
-                          renderer._addPath(featureLayer);
-                      }
-
-                      if (this.options.interactive) {
-                          featureLayer.makeInteractive();
-                      }
-
-                      if (storeFeatures) {
-                          renderer._features[id] = {
-                              layerName: layerName,
-                              feature: featureLayer
-                          };
-                      }
-                  }
-              }
-			}
-			if (this._map != null) {
-				renderer.addTo(this._map);
-			}
-			L.Util.requestAnimFrame(done.bind(coords, null, null));
-		}.bind(this));
-
-		return renderer.getContainer();
-	},
-
-	// 🍂method setFeatureStyle(id: Number, layerStyle: L.Path Options): this
-	// Given the unique ID for a vector features (as per the `getFeatureId` option),
-	// re-symbolizes that feature across all tiles it appears in.
-	setFeatureStyle: function(id, layerStyle) {
-		this._overriddenStyles[id] = layerStyle;
-
-		for (var tileKey in this._vectorTiles) {
-			var tile = this._vectorTiles[tileKey];
-			var features = tile._features;
-			var data = features[id];
-			if (data) {
-				var feat = data.feature;
-
-				var styleOptions = layerStyle;
-				if (layerStyle[data.layerName]) {
-					styleOptions = layerStyle[data.layerName];
-				}
-
-				this._updateStyles(feat, tile, styleOptions);
-			}
-		}
-		return this;
-	},
-
-	// 🍂method setFeatureStyle(id: Number): this
-	// Reverts the effects of a previous `setFeatureStyle` call.
-	resetFeatureStyle: function(id) {
-		delete this._overriddenStyles[id];
-
-		for (var tileKey in this._vectorTiles) {
-			var tile = this._vectorTiles[tileKey];
-			var features = tile._features;
-			var data = features[id];
-			if (data) {
-				var feat = data.feature;
-				var styleOptions = this.options.vectorTileLayerStyles[ data.layerName ] ||
-				L.Path.prototype.options;
-				this._updateStyles(feat, tile, styleOptions);
-			}
-		}
-		return this;
-	},
-
-	// 🍂method getDataLayerNames(): Array
-	// Returns an array of strings, with all the known names of data layers in
-	// the vector tiles displayed. Useful for introspection.
-	getDataLayerNames: function() {
-		return Object.keys(this._dataLayerNames);
-	},
-
-	_updateStyles: function(feat, renderer, styleOptions) {
-		styleOptions = (styleOptions instanceof Function) ?
-			styleOptions(feat.properties, renderer.getCoord().z) :
-			styleOptions;
-
-		if (!(styleOptions instanceof Array)) {
-			styleOptions = [styleOptions];
-		}
-
-		for (var j = 0; j < styleOptions.length; j++) {
-			var style = L.extend({}, L.Path.prototype.options, styleOptions[j]);
-			feat.updateStyle(renderer, style);
-		}
-	},
-
-	_createLayer: function(feat, pxPerExtent, layerStyle) {
-		var layer;
-		switch (feat.type) {
-		case 1:
-			layer = new PointSymbolizer(feat, pxPerExtent);
-			break;
-		case 2:
-			layer = new LineSymbolizer(feat, pxPerExtent);
-			break;
-		case 3:
-			layer = new FillSymbolizer(feat, pxPerExtent);
-			break;
-		}
-
-		if (this.options.interactive) {
-			layer.addEventParent(this);
-		}
-
-		return layer;
-	},
-});
-
-/*
- * 🍂section Extension methods
- *
- * Classes inheriting from `VectorGrid` **must** define the `_getVectorTilePromise` private method.
- *
- * 🍂method getVectorTilePromise(coords: Object): Promise
- * Given a `coords` object in the form of `{x: Number, y: Number, z: Number}`,
- * this function must return a `Promise` for a vector tile.
- *
- */
-L.vectorGrid = function (options) {
-	return new L.VectorGrid(options);
-};
-
-/*
- * 🍂class VectorGrid.Protobuf
- * 🍂extends VectorGrid
- *
- * A `VectorGrid` for vector tiles fetched from the internet.
- * Tiles are supposed to be protobufs (AKA "protobuffer" or "Protocol Buffers"),
- * containing data which complies with the
- * [MapBox Vector Tile Specification](https://github.com/mapbox/vector-tile-spec/tree/master/2.1).
- *
- * This is the format used by:
- * - Mapbox Vector Tiles
- * - Mapzen Vector Tiles
- * - ESRI Vector Tiles
- * - [OpenMapTiles hosted Vector Tiles](https://openmaptiles.com/hosting/)
- *
- * 🍂example
- *
- * You must initialize a `VectorGrid.Protobuf` with a URL template, just like in
- * `L.TileLayer`s. The difference is that the template must point to vector tiles
- * (usually `.pbf` or `.mvt`) instead of raster (`.png` or `.jpg`) tiles, and that
- * you should define the styling for all the features.
- *
- * <br><br>
- *
- * For OpenMapTiles, with a key from [https://openmaptiles.org/docs/host/use-cdn/](https://openmaptiles.org/docs/host/use-cdn/),
- * initialization looks like this:
- *
- * ```
- * L.vectorGrid.protobuf("https://free-{s}.tilehosting.com/data/v3/{z}/{x}/{y}.pbf.pict?key={key}", {
- * 	vectorTileLayerStyles: { ... },
- * 	subdomains: "0123",
- * 	key: 'abcdefghi01234567890',
- * 	maxNativeZoom: 14
- * }).addTo(map);
- * ```
- *
- * And for Mapbox vector tiles, it looks like this:
- *
- * ```
- * L.vectorGrid.protobuf("https://{s}.tiles.mapbox.com/v4/mapbox.mapbox-streets-v6/{z}/{x}/{y}.vector.pbf?access_token={token}", {
- * 	vectorTileLayerStyles: { ... },
- * 	subdomains: "abcd",
- * 	token: "pk.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRTS.TUVWXTZ0123456789abcde"
- * }).addTo(map);
- * ```
- */
-L.VectorGrid.Protobuf = L.VectorGrid.extend({
-
-	options: {
-		// 🍂section
-		// As with `L.TileLayer`, the URL template might contain a reference to
-		// any option (see the example above and note the `{key}` or `token` in the URL
-		// template, and the corresponding option).
-		//
-		// 🍂option subdomains: String = 'abc'
-		// Akin to the `subdomains` option for `L.TileLayer`.
-		subdomains: 'abc',	// Like L.TileLayer
-		//
-		// 🍂option fetchOptions: Object = {}
-		// options passed to `fetch`, e.g. {credentials: 'same-origin'} to send cookie for the current domain
-		fetchOptions: {}
-	},
-
-	initialize: function(url, options) {
-		// Inherits options from geojson-vt!
-// 		this._slicer = geojsonvt(geojson, options);
-		this._url = url;
-		L.VectorGrid.prototype.initialize.call(this, options);
-	},
-
-	_getSubdomain: L.TileLayer.prototype._getSubdomain,
-
-	_getVectorTilePromise: function(coords) {
-		var data = {
-			s: this._getSubdomain(coords),
-			x: coords.x,
-			y: coords.y,
-			z: coords.z
-// 			z: this._getZoomForUrl()	/// TODO: Maybe replicate TileLayer's maxNativeZoom
-		};
-		var layersOrdering = this.layersOrdering;
-
-		if (this._map && !this._map.options.crs.infinite) {
-			var invertedY = this._globalTileRange.max.y - coords.y;
-			if (this.options.tms) { // Should this option be available in Leaflet.VectorGrid?
-				data['y'] = invertedY;
-			}
-			data['-y'] = invertedY;
-		}
-
-		var tileUrl = L.Util.template(this._url, L.extend(data, this.options));
-
-		return fetch(tileUrl, this.options.fetchOptions).then(function(response){
-
-			if (!response.ok) {
-				return {layers:[]};
-			}
-
-			return response.blob().then( function (blob) {
-// 				console.log(blob);
-
-				var reader = new FileReader();
-				return new Promise(function(resolve){
-					reader.addEventListener("loadend", function() {
-						// reader.result contains the contents of blob as a typed array
-
-						// blob.type === 'application/x-protobuf'
-						var pbf = new index( reader.result );
-// 						console.log(pbf);
-						return resolve(new VectorTile( pbf ));
-
-					});
-					reader.readAsArrayBuffer(blob);
-				});
-			});
-		}).then(function(json){
-
-// 			console.log('Vector tile:', json.layers);
-// 			console.log('Vector tile water:', json.layers.water);	// Instance of VectorTileLayer
-
-			// Normalize feature getters into actual instanced features
-            for (var layerName in json.layers) {
-				var feats = [];
-				for (var i=0; i<json.layers[layerName].length; i++) {
-					var feat = json.layers[layerName].feature(i);
-					feat.geometry = feat.loadGeometry();
-					feats.push(feat);
-				}
-
-				json.layers[layerName].features = feats;
-			}
-
-			return json;
-		});
-	}
-});
-
-
-// 🍂factory L.vectorGrid.protobuf(url: String, options)
-// Instantiates a new protobuf VectorGrid with the given URL template and options
-L.vectorGrid.protobuf = function (url, options) {
-	return new L.VectorGrid.Protobuf(url, options);
-};
-
-var workerCode = __$strToBlobUri("'use strict';\n\nvar simplify_1 = simplify$1;\n\n// calculate simplification data using optimized Douglas-Peucker algorithm\n\nfunction simplify$1(points, tolerance) {\n\n    var sqTolerance = tolerance * tolerance,\n        len = points.length,\n        first = 0,\n        last = len - 1,\n        stack = [],\n        i, maxSqDist, sqDist, index;\n\n    // always retain the endpoints (1 is the max value)\n    points[first][2] = 1;\n    points[last][2] = 1;\n\n    // avoid recursion by using a stack\n    while (last) {\n\n        maxSqDist = 0;\n\n        for (i = first + 1; i < last; i++) {\n            sqDist = getSqSegDist(points[i], points[first], points[last]);\n\n            if (sqDist > maxSqDist) {\n                index = i;\n                maxSqDist = sqDist;\n            }\n        }\n\n        if (maxSqDist > sqTolerance) {\n            points[index][2] = maxSqDist; // save the point importance in squared pixels as a z coordinate\n            stack.push(first);\n            stack.push(index);\n            first = index;\n\n        } else {\n            last = stack.pop();\n            first = stack.pop();\n        }\n    }\n}\n\n// square distance from a point to a segment\nfunction getSqSegDist(p, a, b) {\n\n    var x = a[0], y = a[1],\n        bx = b[0], by = b[1],\n        px = p[0], py = p[1],\n        dx = bx - x,\n        dy = by - y;\n\n    if (dx !== 0 || dy !== 0) {\n\n        var t = ((px - x) * dx + (py - y) * dy) / (dx * dx + dy * dy);\n\n        if (t > 1) {\n            x = bx;\n            y = by;\n\n        } else if (t > 0) {\n            x += dx * t;\n            y += dy * t;\n        }\n    }\n\n    dx = px - x;\n    dy = py - y;\n\n    return dx * dx + dy * dy;\n}\n\nvar feature = createFeature$1;\n\nfunction createFeature$1(tags, type, geom, id) {\n    var feature = {\n        id: id || null,\n        type: type,\n        geometry: geom,\n        tags: tags || null,\n        min: [Infinity, Infinity], // initial bbox values\n        max: [-Infinity, -Infinity]\n    };\n    calcBBox(feature);\n    return feature;\n}\n\n// calculate the feature bounding box for faster clipping later\nfunction calcBBox(feature) {\n    var geometry = feature.geometry,\n        min = feature.min,\n        max = feature.max;\n\n    if (feature.type === 1) {\n        calcRingBBox(min, max, geometry);\n    } else {\n        for (var i = 0; i < geometry.length; i++) {\n            calcRingBBox(min, max, geometry[i]);\n        }\n    }\n\n    return feature;\n}\n\nfunction calcRingBBox(min, max, points) {\n    for (var i = 0, p; i < points.length; i++) {\n        p = points[i];\n        min[0] = Math.min(p[0], min[0]);\n        max[0] = Math.max(p[0], max[0]);\n        min[1] = Math.min(p[1], min[1]);\n        max[1] = Math.max(p[1], max[1]);\n    }\n}\n\nvar convert_1 = convert$1;\n\nvar simplify = simplify_1;\nvar createFeature = feature;\n\n// converts GeoJSON feature into an intermediate projected JSON vector format with simplification data\n\nfunction convert$1(data, tolerance) {\n    var features = [];\n\n    if (data.type === 'FeatureCollection') {\n        for (var i = 0; i < data.features.length; i++) {\n            convertFeature(features, data.features[i], tolerance);\n        }\n    } else if (data.type === 'Feature') {\n        convertFeature(features, data, tolerance);\n\n    } else {\n        // single geometry or a geometry collection\n        convertFeature(features, {geometry: data}, tolerance);\n    }\n    return features;\n}\n\nfunction convertFeature(features, feature$$1, tolerance) {\n    if (feature$$1.geometry === null) {\n        // ignore features with null geometry\n        return;\n    }\n\n    var geom = feature$$1.geometry,\n        type = geom.type,\n        coords = geom.coordinates,\n        tags = feature$$1.properties,\n        id = feature$$1.id,\n        i, j, rings, projectedRing;\n\n    if (type === 'Point') {\n        features.push(createFeature(tags, 1, [projectPoint(coords)], id));\n\n    } else if (type === 'MultiPoint') {\n        features.push(createFeature(tags, 1, project(coords), id));\n\n    } else if (type === 'LineString') {\n        features.push(createFeature(tags, 2, [project(coords, tolerance)], id));\n\n    } else if (type === 'MultiLineString' || type === 'Polygon') {\n        rings = [];\n        for (i = 0; i < coords.length; i++) {\n            projectedRing = project(coords[i], tolerance);\n            if (type === 'Polygon') { projectedRing.outer = (i === 0); }\n            rings.push(projectedRing);\n        }\n        features.push(createFeature(tags, type === 'Polygon' ? 3 : 2, rings, id));\n\n    } else if (type === 'MultiPolygon') {\n        rings = [];\n        for (i = 0; i < coords.length; i++) {\n            for (j = 0; j < coords[i].length; j++) {\n                projectedRing = project(coords[i][j], tolerance);\n                projectedRing.outer = (j === 0);\n                rings.push(projectedRing);\n            }\n        }\n        features.push(createFeature(tags, 3, rings, id));\n\n    } else if (type === 'GeometryCollection') {\n        for (i = 0; i < geom.geometries.length; i++) {\n            convertFeature(features, {\n                geometry: geom.geometries[i],\n                properties: tags\n            }, tolerance);\n        }\n\n    } else {\n        throw new Error('Input data is not a valid GeoJSON object.');\n    }\n}\n\nfunction project(lonlats, tolerance) {\n    var projected = [];\n    for (var i = 0; i < lonlats.length; i++) {\n        projected.push(projectPoint(lonlats[i]));\n    }\n    if (tolerance) {\n        simplify(projected, tolerance);\n        calcSize(projected);\n    }\n    return projected;\n}\n\nfunction projectPoint(p) {\n    var sin = Math.sin(p[1] * Math.PI / 180),\n        x = (p[0] / 360 + 0.5),\n        y = (0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI);\n\n    y = y < 0 ? 0 :\n        y > 1 ? 1 : y;\n\n    return [x, y, 0];\n}\n\n// calculate area and length of the poly\nfunction calcSize(points) {\n    var area = 0,\n        dist = 0;\n\n    for (var i = 0, a, b; i < points.length - 1; i++) {\n        a = b || points[i];\n        b = points[i + 1];\n\n        area += a[0] * b[1] - b[0] * a[1];\n\n        // use Manhattan distance instead of Euclidian one to avoid expensive square root computation\n        dist += Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]);\n    }\n    points.area = Math.abs(area / 2);\n    points.dist = dist;\n}\n\nvar tile = transformTile;\nvar point = transformPoint;\n\n// Transforms the coordinates of each feature in the given tile from\n// mercator-projected space into (extent x extent) tile space.\nfunction transformTile(tile, extent) {\n    if (tile.transformed) { return tile; }\n\n    var z2 = tile.z2,\n        tx = tile.x,\n        ty = tile.y,\n        i, j, k;\n\n    for (i = 0; i < tile.features.length; i++) {\n        var feature = tile.features[i],\n            geom = feature.geometry,\n            type = feature.type;\n\n        if (type === 1) {\n            for (j = 0; j < geom.length; j++) { geom[j] = transformPoint(geom[j], extent, z2, tx, ty); }\n\n        } else {\n            for (j = 0; j < geom.length; j++) {\n                var ring = geom[j];\n                for (k = 0; k < ring.length; k++) { ring[k] = transformPoint(ring[k], extent, z2, tx, ty); }\n            }\n        }\n    }\n\n    tile.transformed = true;\n\n    return tile;\n}\n\nfunction transformPoint(p, extent, z2, tx, ty) {\n    var x = Math.round(extent * (p[0] * z2 - tx)),\n        y = Math.round(extent * (p[1] * z2 - ty));\n    return [x, y];\n}\n\nvar transform$1 = {\n	tile: tile,\n	point: point\n};\n\nvar clip_1 = clip$1;\n\nvar createFeature$2 = feature;\n\n/* clip features between two axis-parallel lines:\n *     |        |\n *  ___|___     |     /\n * /   |   \____|____/\n *     |        |\n */\n\nfunction clip$1(features, scale, k1, k2, axis, intersect, minAll, maxAll) {\n\n    k1 /= scale;\n    k2 /= scale;\n\n    if (minAll >= k1 && maxAll <= k2) { return features; } // trivial accept\n    else if (minAll > k2 || maxAll < k1) { return null; } // trivial reject\n\n    var clipped = [];\n\n    for (var i = 0; i < features.length; i++) {\n\n        var feature$$1 = features[i],\n            geometry = feature$$1.geometry,\n            type = feature$$1.type,\n            min, max;\n\n        min = feature$$1.min[axis];\n        max = feature$$1.max[axis];\n\n        if (min >= k1 && max <= k2) { // trivial accept\n            clipped.push(feature$$1);\n            continue;\n        } else if (min > k2 || max < k1) { continue; } // trivial reject\n\n        var slices = type === 1 ?\n                clipPoints(geometry, k1, k2, axis) :\n                clipGeometry(geometry, k1, k2, axis, intersect, type === 3);\n\n        if (slices.length) {\n            // if a feature got clipped, it will likely get clipped on the next zoom level as well,\n            // so there's no need to recalculate bboxes\n            clipped.push(createFeature$2(feature$$1.tags, type, slices, feature$$1.id));\n        }\n    }\n\n    return clipped.length ? clipped : null;\n}\n\nfunction clipPoints(geometry, k1, k2, axis) {\n    var slice = [];\n\n    for (var i = 0; i < geometry.length; i++) {\n        var a = geometry[i],\n            ak = a[axis];\n\n        if (ak >= k1 && ak <= k2) { slice.push(a); }\n    }\n    return slice;\n}\n\nfunction clipGeometry(geometry, k1, k2, axis, intersect, closed) {\n\n    var slices = [];\n\n    for (var i = 0; i < geometry.length; i++) {\n\n        var ak = 0,\n            bk = 0,\n            b = null,\n            points = geometry[i],\n            area = points.area,\n            dist = points.dist,\n            outer = points.outer,\n            len = points.length,\n            a, j, last;\n\n        var slice = [];\n\n        for (j = 0; j < len - 1; j++) {\n            a = b || points[j];\n            b = points[j + 1];\n            ak = bk || a[axis];\n            bk = b[axis];\n\n            if (ak < k1) {\n\n                if ((bk > k2)) { // ---|-----|-->\n                    slice.push(intersect(a, b, k1), intersect(a, b, k2));\n                    if (!closed) { slice = newSlice(slices, slice, area, dist, outer); }\n\n                } else if (bk >= k1) { slice.push(intersect(a, b, k1)); } // ---|-->  |\n\n            } else if (ak > k2) {\n\n                if ((bk < k1)) { // <--|-----|---\n                    slice.push(intersect(a, b, k2), intersect(a, b, k1));\n                    if (!closed) { slice = newSlice(slices, slice, area, dist, outer); }\n\n                } else if (bk <= k2) { slice.push(intersect(a, b, k2)); } // |  <--|---\n\n            } else {\n\n                slice.push(a);\n\n                if (bk < k1) { // <--|---  |\n                    slice.push(intersect(a, b, k1));\n                    if (!closed) { slice = newSlice(slices, slice, area, dist, outer); }\n\n                } else if (bk > k2) { // |  ---|-->\n                    slice.push(intersect(a, b, k2));\n                    if (!closed) { slice = newSlice(slices, slice, area, dist, outer); }\n                }\n                // | --> |\n            }\n        }\n\n        // add the last point\n        a = points[len - 1];\n        ak = a[axis];\n        if (ak >= k1 && ak <= k2) { slice.push(a); }\n\n        // close the polygon if its endpoints are not the same after clipping\n\n        last = slice[slice.length - 1];\n        if (closed && last && (slice[0][0] !== last[0] || slice[0][1] !== last[1])) { slice.push(slice[0]); }\n\n        // add the final slice\n        newSlice(slices, slice, area, dist, outer);\n    }\n\n    return slices;\n}\n\nfunction newSlice(slices, slice, area, dist, outer) {\n    if (slice.length) {\n        // we don't recalculate the area/length of the unclipped geometry because the case where it goes\n        // below the visibility threshold as a result of clipping is rare, so we avoid doing unnecessary work\n        slice.area = area;\n        slice.dist = dist;\n        if (outer !== undefined) { slice.outer = outer; }\n\n        slices.push(slice);\n    }\n    return [];\n}\n\nvar clip$2 = clip_1;\nvar createFeature$3 = feature;\n\nvar wrap_1 = wrap$1;\n\nfunction wrap$1(features, buffer, intersectX) {\n    var merged = features,\n        left  = clip$2(features, 1, -1 - buffer, buffer,     0, intersectX, -1, 2), // left world copy\n        right = clip$2(features, 1,  1 - buffer, 2 + buffer, 0, intersectX, -1, 2); // right world copy\n\n    if (left || right) {\n        merged = clip$2(features, 1, -buffer, 1 + buffer, 0, intersectX, -1, 2) || []; // center world copy\n\n        if (left) { merged = shiftFeatureCoords(left, 1).concat(merged); } // merge left into center\n        if (right) { merged = merged.concat(shiftFeatureCoords(right, -1)); } // merge right into center\n    }\n\n    return merged;\n}\n\nfunction shiftFeatureCoords(features, offset) {\n    var newFeatures = [];\n\n    for (var i = 0; i < features.length; i++) {\n        var feature$$1 = features[i],\n            type = feature$$1.type;\n\n        var newGeometry;\n\n        if (type === 1) {\n            newGeometry = shiftCoords(feature$$1.geometry, offset);\n        } else {\n            newGeometry = [];\n            for (var j = 0; j < feature$$1.geometry.length; j++) {\n                newGeometry.push(shiftCoords(feature$$1.geometry[j], offset));\n            }\n        }\n\n        newFeatures.push(createFeature$3(feature$$1.tags, type, newGeometry, feature$$1.id));\n    }\n\n    return newFeatures;\n}\n\nfunction shiftCoords(points, offset) {\n    var newPoints = [];\n    newPoints.area = points.area;\n    newPoints.dist = points.dist;\n\n    for (var i = 0; i < points.length; i++) {\n        newPoints.push([points[i][0] + offset, points[i][1], points[i][2]]);\n    }\n    return newPoints;\n}\n\nvar tile$1 = createTile$1;\n\nfunction createTile$1(features, z2, tx, ty, tolerance, noSimplify) {\n    var tile = {\n        features: [],\n        numPoints: 0,\n        numSimplified: 0,\n        numFeatures: 0,\n        source: null,\n        x: tx,\n        y: ty,\n        z2: z2,\n        transformed: false,\n        min: [2, 1],\n        max: [-1, 0]\n    };\n    for (var i = 0; i < features.length; i++) {\n        tile.numFeatures++;\n        addFeature(tile, features[i], tolerance, noSimplify);\n\n        var min = features[i].min,\n            max = features[i].max;\n\n        if (min[0] < tile.min[0]) { tile.min[0] = min[0]; }\n        if (min[1] < tile.min[1]) { tile.min[1] = min[1]; }\n        if (max[0] > tile.max[0]) { tile.max[0] = max[0]; }\n        if (max[1] > tile.max[1]) { tile.max[1] = max[1]; }\n    }\n    return tile;\n}\n\nfunction addFeature(tile, feature, tolerance, noSimplify) {\n\n    var geom = feature.geometry,\n        type = feature.type,\n        simplified = [],\n        sqTolerance = tolerance * tolerance,\n        i, j, ring, p;\n\n    if (type === 1) {\n        for (i = 0; i < geom.length; i++) {\n            simplified.push(geom[i]);\n            tile.numPoints++;\n            tile.numSimplified++;\n        }\n\n    } else {\n\n        // simplify and transform projected coordinates for tile geometry\n        for (i = 0; i < geom.length; i++) {\n            ring = geom[i];\n\n            // filter out tiny polylines & polygons\n            if (!noSimplify && ((type === 2 && ring.dist < tolerance) ||\n                                (type === 3 && ring.area < sqTolerance))) {\n                tile.numPoints += ring.length;\n                continue;\n            }\n\n            var simplifiedRing = [];\n\n            for (j = 0; j < ring.length; j++) {\n                p = ring[j];\n                // keep points with importance > tolerance\n                if (noSimplify || p[2] > sqTolerance) {\n                    simplifiedRing.push(p);\n                    tile.numSimplified++;\n                }\n                tile.numPoints++;\n            }\n\n            if (type === 3) { rewind(simplifiedRing, ring.outer); }\n\n            simplified.push(simplifiedRing);\n        }\n    }\n\n    if (simplified.length) {\n        var tileFeature = {\n            geometry: simplified,\n            type: type,\n            tags: feature.tags || null\n        };\n        if (feature.id !== null) {\n            tileFeature.id = feature.id;\n        }\n        tile.features.push(tileFeature);\n    }\n}\n\nfunction rewind(ring, clockwise) {\n    var area = signedArea(ring);\n    if (area < 0 === clockwise) { ring.reverse(); }\n}\n\nfunction signedArea(ring) {\n    var sum = 0;\n    for (var i = 0, len = ring.length, j = len - 1, p1, p2; i < len; j = i++) {\n        p1 = ring[i];\n        p2 = ring[j];\n        sum += (p2[0] - p1[0]) * (p1[1] + p2[1]);\n    }\n    return sum;\n}\n\nvar index = geojsonvt;\n\nvar convert = convert_1;\nvar transform = transform$1;\nvar clip = clip_1;\nvar wrap = wrap_1;\nvar createTile = tile$1;     // final simplified tile generation\n\n\nfunction geojsonvt(data, options) {\n    return new GeoJSONVT(data, options);\n}\n\nfunction GeoJSONVT(data, options) {\n    options = this.options = extend(Object.create(this.options), options);\n\n    var debug = options.debug;\n\n    if (debug) { console.time('preprocess data'); }\n\n    var z2 = 1 << options.maxZoom, // 2^z\n        features = convert(data, options.tolerance / (z2 * options.extent));\n\n    this.tiles = {};\n    this.tileCoords = [];\n\n    if (debug) {\n        console.timeEnd('preprocess data');\n        console.log('index: maxZoom: %d, maxPoints: %d', options.indexMaxZoom, options.indexMaxPoints);\n        console.time('generate tiles');\n        this.stats = {};\n        this.total = 0;\n    }\n\n    features = wrap(features, options.buffer / options.extent, intersectX);\n\n    // start slicing from the top tile down\n    if (features.length) { this.splitTile(features, 0, 0, 0); }\n\n    if (debug) {\n        if (features.length) { console.log('features: %d, points: %d', this.tiles[0].numFeatures, this.tiles[0].numPoints); }\n        console.timeEnd('generate tiles');\n        console.log('tiles generated:', this.total, JSON.stringify(this.stats));\n    }\n}\n\nGeoJSONVT.prototype.options = {\n    maxZoom: 14,            // max zoom to preserve detail on\n    indexMaxZoom: 5,        // max zoom in the tile index\n    indexMaxPoints: 100000, // max number of points per tile in the tile index\n    solidChildren: false,   // whether to tile solid square tiles further\n    tolerance: 3,           // simplification tolerance (higher means simpler)\n    extent: 4096,           // tile extent\n    buffer: 64,             // tile buffer on each side\n    debug: 0                // logging level (0, 1 or 2)\n};\n\nGeoJSONVT.prototype.splitTile = function (features, z, x, y, cz, cx, cy) {\n    var this$1 = this;\n\n\n    var stack = [features, z, x, y],\n        options = this.options,\n        debug = options.debug,\n        solid = null;\n\n    // avoid recursion by using a processing queue\n    while (stack.length) {\n        y = stack.pop();\n        x = stack.pop();\n        z = stack.pop();\n        features = stack.pop();\n\n        var z2 = 1 << z,\n            id = toID(z, x, y),\n            tile = this$1.tiles[id],\n            tileTolerance = z === options.maxZoom ? 0 : options.tolerance / (z2 * options.extent);\n\n        if (!tile) {\n            if (debug > 1) { console.time('creation'); }\n\n            tile = this$1.tiles[id] = createTile(features, z2, x, y, tileTolerance, z === options.maxZoom);\n            this$1.tileCoords.push({z: z, x: x, y: y});\n\n            if (debug) {\n                if (debug > 1) {\n                    console.log('tile z%d-%d-%d (features: %d, points: %d, simplified: %d)',\n                        z, x, y, tile.numFeatures, tile.numPoints, tile.numSimplified);\n                    console.timeEnd('creation');\n                }\n                var key = 'z' + z;\n                this$1.stats[key] = (this$1.stats[key] || 0) + 1;\n                this$1.total++;\n            }\n        }\n\n        // save reference to original geometry in tile so that we can drill down later if we stop now\n        tile.source = features;\n\n        // if it's the first-pass tiling\n        if (!cz) {\n            // stop tiling if we reached max zoom, or if the tile is too simple\n            if (z === options.indexMaxZoom || tile.numPoints <= options.indexMaxPoints) { continue; }\n\n        // if a drilldown to a specific tile\n        } else {\n            // stop tiling if we reached base zoom or our target tile zoom\n            if (z === options.maxZoom || z === cz) { continue; }\n\n            // stop tiling if it's not an ancestor of the target tile\n            var m = 1 << (cz - z);\n            if (x !== Math.floor(cx / m) || y !== Math.floor(cy / m)) { continue; }\n        }\n\n        // stop tiling if the tile is solid clipped square\n        if (!options.solidChildren && isClippedSquare(tile, options.extent, options.buffer)) {\n            if (cz) { solid = z; } // and remember the zoom if we're drilling down\n            continue;\n        }\n\n        // if we slice further down, no need to keep source geometry\n        tile.source = null;\n\n        if (debug > 1) { console.time('clipping'); }\n\n        // values we'll use for clipping\n        var k1 = 0.5 * options.buffer / options.extent,\n            k2 = 0.5 - k1,\n            k3 = 0.5 + k1,\n            k4 = 1 + k1,\n            tl, bl, tr, br, left, right;\n\n        tl = bl = tr = br = null;\n\n        left  = clip(features, z2, x - k1, x + k3, 0, intersectX, tile.min[0], tile.max[0]);\n        right = clip(features, z2, x + k2, x + k4, 0, intersectX, tile.min[0], tile.max[0]);\n\n        if (left) {\n            tl = clip(left, z2, y - k1, y + k3, 1, intersectY, tile.min[1], tile.max[1]);\n            bl = clip(left, z2, y + k2, y + k4, 1, intersectY, tile.min[1], tile.max[1]);\n        }\n\n        if (right) {\n            tr = clip(right, z2, y - k1, y + k3, 1, intersectY, tile.min[1], tile.max[1]);\n            br = clip(right, z2, y + k2, y + k4, 1, intersectY, tile.min[1], tile.max[1]);\n        }\n\n        if (debug > 1) { console.timeEnd('clipping'); }\n\n        if (features.length) {\n            stack.push(tl || [], z + 1, x * 2,     y * 2);\n            stack.push(bl || [], z + 1, x * 2,     y * 2 + 1);\n            stack.push(tr || [], z + 1, x * 2 + 1, y * 2);\n            stack.push(br || [], z + 1, x * 2 + 1, y * 2 + 1);\n        }\n    }\n\n    return solid;\n};\n\nGeoJSONVT.prototype.getTile = function (z, x, y) {\n    var this$1 = this;\n\n    var options = this.options,\n        extent = options.extent,\n        debug = options.debug;\n\n    var z2 = 1 << z;\n    x = ((x % z2) + z2) % z2; // wrap tile x coordinate\n\n    var id = toID(z, x, y);\n    if (this.tiles[id]) { return transform.tile(this.tiles[id], extent); }\n\n    if (debug > 1) { console.log('drilling down to z%d-%d-%d', z, x, y); }\n\n    var z0 = z,\n        x0 = x,\n        y0 = y,\n        parent;\n\n    while (!parent && z0 > 0) {\n        z0--;\n        x0 = Math.floor(x0 / 2);\n        y0 = Math.floor(y0 / 2);\n        parent = this$1.tiles[toID(z0, x0, y0)];\n    }\n\n    if (!parent || !parent.source) { return null; }\n\n    // if we found a parent tile containing the original geometry, we can drill down from it\n    if (debug > 1) { console.log('found parent tile z%d-%d-%d', z0, x0, y0); }\n\n    // it parent tile is a solid clipped square, return it instead since it's identical\n    if (isClippedSquare(parent, extent, options.buffer)) { return transform.tile(parent, extent); }\n\n    if (debug > 1) { console.time('drilling down'); }\n    var solid = this.splitTile(parent.source, z0, x0, y0, z, x, y);\n    if (debug > 1) { console.timeEnd('drilling down'); }\n\n    // one of the parent tiles was a solid clipped square\n    if (solid !== null) {\n        var m = 1 << (z - solid);\n        id = toID(solid, Math.floor(x / m), Math.floor(y / m));\n    }\n\n    return this.tiles[id] ? transform.tile(this.tiles[id], extent) : null;\n};\n\nfunction toID(z, x, y) {\n    return (((1 << z) * y + x) * 32) + z;\n}\n\nfunction intersectX(a, b, x) {\n    return [x, (x - a[0]) * (b[1] - a[1]) / (b[0] - a[0]) + a[1], 1];\n}\nfunction intersectY(a, b, y) {\n    return [(y - a[1]) * (b[0] - a[0]) / (b[1] - a[1]) + a[0], y, 1];\n}\n\nfunction extend(dest, src) {\n    for (var i in src) { dest[i] = src[i]; }\n    return dest;\n}\n\n// checks whether a tile is a whole-area fill after clipping; if it is, there's no sense slicing it further\nfunction isClippedSquare(tile, extent, buffer) {\n\n    var features = tile.source;\n    if (features.length !== 1) { return false; }\n\n    var feature = features[0];\n    if (feature.type !== 3 || feature.geometry.length > 1) { return false; }\n\n    var len = feature.geometry[0].length;\n    if (len !== 5) { return false; }\n\n    for (var i = 0; i < len; i++) {\n        var p = transform.point(feature.geometry[0][i], extent, tile.z2, tile.x, tile.y);\n        if ((p[0] !== -buffer && p[0] !== extent + buffer) ||\n            (p[1] !== -buffer && p[1] !== extent + buffer)) { return false; }\n    }\n\n    return true;\n}\n\nvar identity = function(x) {\n  return x;\n};\n\nvar transform$3 = function(topology) {\n  if ((transform = topology.transform) == null) { return identity; }\n  var transform,\n      x0,\n      y0,\n      kx = transform.scale[0],\n      ky = transform.scale[1],\n      dx = transform.translate[0],\n      dy = transform.translate[1];\n  return function(point, i) {\n    if (!i) { x0 = y0 = 0; }\n    point[0] = (x0 += point[0]) * kx + dx;\n    point[1] = (y0 += point[1]) * ky + dy;\n    return point;\n  };\n};\n\nvar bbox = function(topology) {\n  var bbox = topology.bbox;\n\n  function bboxPoint(p0) {\n    p1[0] = p0[0], p1[1] = p0[1], t(p1);\n    if (p1[0] < x0) { x0 = p1[0]; }\n    if (p1[0] > x1) { x1 = p1[0]; }\n    if (p1[1] < y0) { y0 = p1[1]; }\n    if (p1[1] > y1) { y1 = p1[1]; }\n  }\n\n  function bboxGeometry(o) {\n    switch (o.type) {\n      case \"GeometryCollection\": o.geometries.forEach(bboxGeometry); break;\n      case \"Point\": bboxPoint(o.coordinates); break;\n      case \"MultiPoint\": o.coordinates.forEach(bboxPoint); break;\n    }\n  }\n\n  if (!bbox) {\n    var t = transform$3(topology), p0, p1 = new Array(2), name,\n        x0 = Infinity, y0 = x0, x1 = -x0, y1 = -x0;\n\n    topology.arcs.forEach(function(arc) {\n      var i = -1, n = arc.length;\n      while (++i < n) {\n        p0 = arc[i], p1[0] = p0[0], p1[1] = p0[1], t(p1, i);\n        if (p1[0] < x0) { x0 = p1[0]; }\n        if (p1[0] > x1) { x1 = p1[0]; }\n        if (p1[1] < y0) { y0 = p1[1]; }\n        if (p1[1] > y1) { y1 = p1[1]; }\n      }\n    });\n\n    for (name in topology.objects) {\n      bboxGeometry(topology.objects[name]);\n    }\n\n    bbox = topology.bbox = [x0, y0, x1, y1];\n  }\n\n  return bbox;\n};\n\nvar reverse = function(array, n) {\n  var t, j = array.length, i = j - n;\n  while (i < --j) { t = array[i], array[i++] = array[j], array[j] = t; }\n};\n\nvar feature$2 = function(topology, o) {\n  return o.type === \"GeometryCollection\"\n      ? {type: \"FeatureCollection\", features: o.geometries.map(function(o) { return feature$3(topology, o); })}\n      : feature$3(topology, o);\n};\n\nfunction feature$3(topology, o) {\n  var id = o.id,\n      bbox = o.bbox,\n      properties = o.properties == null ? {} : o.properties,\n      geometry = object(topology, o);\n  return id == null && bbox == null ? {type: \"Feature\", properties: properties, geometry: geometry}\n      : bbox == null ? {type: \"Feature\", id: id, properties: properties, geometry: geometry}\n      : {type: \"Feature\", id: id, bbox: bbox, properties: properties, geometry: geometry};\n}\n\nfunction object(topology, o) {\n  var transformPoint = transform$3(topology),\n      arcs = topology.arcs;\n\n  function arc(i, points) {\n    if (points.length) { points.pop(); }\n    for (var a = arcs[i < 0 ? ~i : i], k = 0, n = a.length; k < n; ++k) {\n      points.push(transformPoint(a[k].slice(), k));\n    }\n    if (i < 0) { reverse(points, n); }\n  }\n\n  function point(p) {\n    return transformPoint(p.slice());\n  }\n\n  function line(arcs) {\n    var points = [];\n    for (var i = 0, n = arcs.length; i < n; ++i) { arc(arcs[i], points); }\n    if (points.length < 2) { points.push(points[0].slice()); }\n    return points;\n  }\n\n  function ring(arcs) {\n    var points = line(arcs);\n    while (points.length < 4) { points.push(points[0].slice()); }\n    return points;\n  }\n\n  function polygon(arcs) {\n    return arcs.map(ring);\n  }\n\n  function geometry(o) {\n    var type = o.type, coordinates;\n    switch (type) {\n      case \"GeometryCollection\": return {type: type, geometries: o.geometries.map(geometry)};\n      case \"Point\": coordinates = point(o.coordinates); break;\n      case \"MultiPoint\": coordinates = o.coordinates.map(point); break;\n      case \"LineString\": coordinates = line(o.arcs); break;\n      case \"MultiLineString\": coordinates = o.arcs.map(line); break;\n      case \"Polygon\": coordinates = polygon(o.arcs); break;\n      case \"MultiPolygon\": coordinates = o.arcs.map(polygon); break;\n      default: return null;\n    }\n    return {type: type, coordinates: coordinates};\n  }\n\n  return geometry(o);\n}\n\nvar stitch = function(topology, arcs) {\n  var stitchedArcs = {},\n      fragmentByStart = {},\n      fragmentByEnd = {},\n      fragments = [],\n      emptyIndex = -1;\n\n  // Stitch empty arcs first, since they may be subsumed by other arcs.\n  arcs.forEach(function(i, j) {\n    var arc = topology.arcs[i < 0 ? ~i : i], t;\n    if (arc.length < 3 && !arc[1][0] && !arc[1][1]) {\n      t = arcs[++emptyIndex], arcs[emptyIndex] = i, arcs[j] = t;\n    }\n  });\n\n  arcs.forEach(function(i) {\n    var e = ends(i),\n        start = e[0],\n        end = e[1],\n        f, g;\n\n    if (f = fragmentByEnd[start]) {\n      delete fragmentByEnd[f.end];\n      f.push(i);\n      f.end = end;\n      if (g = fragmentByStart[end]) {\n        delete fragmentByStart[g.start];\n        var fg = g === f ? f : f.concat(g);\n        fragmentByStart[fg.start = f.start] = fragmentByEnd[fg.end = g.end] = fg;\n      } else {\n        fragmentByStart[f.start] = fragmentByEnd[f.end] = f;\n      }\n    } else if (f = fragmentByStart[end]) {\n      delete fragmentByStart[f.start];\n      f.unshift(i);\n      f.start = start;\n      if (g = fragmentByEnd[start]) {\n        delete fragmentByEnd[g.end];\n        var gf = g === f ? f : g.concat(f);\n        fragmentByStart[gf.start = g.start] = fragmentByEnd[gf.end = f.end] = gf;\n      } else {\n        fragmentByStart[f.start] = fragmentByEnd[f.end] = f;\n      }\n    } else {\n      f = [i];\n      fragmentByStart[f.start = start] = fragmentByEnd[f.end = end] = f;\n    }\n  });\n\n  function ends(i) {\n    var arc = topology.arcs[i < 0 ? ~i : i], p0 = arc[0], p1;\n    if (topology.transform) { p1 = [0, 0], arc.forEach(function(dp) { p1[0] += dp[0], p1[1] += dp[1]; }); }\n    else { p1 = arc[arc.length - 1]; }\n    return i < 0 ? [p1, p0] : [p0, p1];\n  }\n\n  function flush(fragmentByEnd, fragmentByStart) {\n    for (var k in fragmentByEnd) {\n      var f = fragmentByEnd[k];\n      delete fragmentByStart[f.start];\n      delete f.start;\n      delete f.end;\n      f.forEach(function(i) { stitchedArcs[i < 0 ? ~i : i] = 1; });\n      fragments.push(f);\n    }\n  }\n\n  flush(fragmentByEnd, fragmentByStart);\n  flush(fragmentByStart, fragmentByEnd);\n  arcs.forEach(function(i) { if (!stitchedArcs[i < 0 ? ~i : i]) { fragments.push([i]); } });\n\n  return fragments;\n};\n\nfunction extractArcs(topology, object$$1, filter) {\n  var arcs = [],\n      geomsByArc = [],\n      geom;\n\n  function extract0(i) {\n    var j = i < 0 ? ~i : i;\n    (geomsByArc[j] || (geomsByArc[j] = [])).push({i: i, g: geom});\n  }\n\n  function extract1(arcs) {\n    arcs.forEach(extract0);\n  }\n\n  function extract2(arcs) {\n    arcs.forEach(extract1);\n  }\n\n  function extract3(arcs) {\n    arcs.forEach(extract2);\n  }\n\n  function geometry(o) {\n    switch (geom = o, o.type) {\n      case \"GeometryCollection\": o.geometries.forEach(geometry); break;\n      case \"LineString\": extract1(o.arcs); break;\n      case \"MultiLineString\": case \"Polygon\": extract2(o.arcs); break;\n      case \"MultiPolygon\": extract3(o.arcs); break;\n    }\n  }\n\n  geometry(object$$1);\n\n  geomsByArc.forEach(filter == null\n      ? function(geoms) { arcs.push(geoms[0].i); }\n      : function(geoms) { if (filter(geoms[0].g, geoms[geoms.length - 1].g)) { arcs.push(geoms[0].i); } });\n\n  return arcs;\n}\n\nfunction planarRingArea(ring) {\n  var i = -1, n = ring.length, a, b = ring[n - 1], area = 0;\n  while (++i < n) { a = b, b = ring[i], area += a[0] * b[1] - a[1] * b[0]; }\n  return Math.abs(area); // Note: doubled area!\n}\n\nvar bisect = function(a, x) {\n  var lo = 0, hi = a.length;\n  while (lo < hi) {\n    var mid = lo + hi >>> 1;\n    if (a[mid] < x) { lo = mid + 1; }\n    else { hi = mid; }\n  }\n  return lo;\n};\n\nvar slicers = {};\nvar options;\n\nonmessage = function (e) {\n	if (e.data[0] === 'slice') {\n		// Given a blob of GeoJSON and some topojson/geojson-vt options, do the slicing.\n		var geojson = e.data[1];\n		options     = e.data[2];\n\n		if (geojson.type && geojson.type === 'Topology') {\n			for (var layerName in geojson.objects) {\n				slicers[layerName] = index(\n					feature$2(geojson, geojson.objects[layerName])\n				, options);\n			}\n		} else {\n			slicers[options.vectorTileLayerName] = index(geojson, options);\n		}\n\n	} else if (e.data[0] === 'get') {\n		// Gets the vector tile for the given coordinates, sends it back as a message\n		var coords = e.data[1];\n\n		var tileLayers = {};\n		for (var layerName in slicers) {\n			var slicedTileLayer = slicers[layerName].getTile(coords.z, coords.x, coords.y);\n\n			if (slicedTileLayer) {\n				var vectorTileLayer = {\n					features: [],\n					extent: options.extent,\n					name: options.vectorTileLayerName,\n					length: slicedTileLayer.features.length\n				};\n\n				for (var i in slicedTileLayer.features) {\n					var feat = {\n						geometry: slicedTileLayer.features[i].geometry,\n						properties: slicedTileLayer.features[i].tags,\n						type: slicedTileLayer.features[i].type	// 1 = point, 2 = line, 3 = polygon\n					};\n					vectorTileLayer.features.push(feat);\n				}\n				tileLayers[layerName] = vectorTileLayer;\n			}\n		}\n		postMessage({ layers: tileLayers, coords: coords });\n	}\n};\n//# sourceMap" + "pingURL=slicerWebWorker.js.worker.map\n", "text/plain; charset=us-ascii", false);
-
-// The geojson/topojson is sliced into tiles via a web worker.
-// This import statement depends on rollup-file-as-blob, so that the
-// variable 'workerCode' is a blob URL.
-
-/*
- * 🍂class VectorGrid.Slicer
- * 🍂extends VectorGrid
- *
- * A `VectorGrid` for slicing up big GeoJSON or TopoJSON documents in vector
- * tiles, leveraging [`geojson-vt`](https://github.com/mapbox/geojson-vt).
- *
- * 🍂example
- *
- * ```
- * var geoJsonDocument = {
- * 	type: 'FeatureCollection',
- * 	features: [ ... ]
- * };
- *
- * L.vectorGrid.slicer(geoJsonDocument, {
- * 	vectorTileLayerStyles: {
- * 		sliced: { ... }
- * 	}
- * }).addTo(map);
- *
- * ```
- *
- * `VectorGrid.Slicer` can also handle [TopoJSON](https://github.com/mbostock/topojson) transparently:
- * ```js
- * var layer = L.vectorGrid.slicer(topojson, options);
- * ```
- *
- * The TopoJSON format [implicitly groups features into "objects"](https://github.com/mbostock/topojson-specification/blob/master/README.md#215-objects).
- * These will be transformed into vector tile layer names when styling (the
- * `vectorTileLayerName` option is ignored when using TopoJSON).
- *
- */
-
-L.VectorGrid.Slicer = L.VectorGrid.extend({
-
-	options: {
-		// 🍂section
-		// Additionally to these options, `VectorGrid.Slicer` can take in any
-		// of the [`geojson-vt` options](https://github.com/mapbox/geojson-vt#options).
-
-		// 🍂option vectorTileLayerName: String = 'sliced'
-		// Vector tiles contain a set of *data layers*, and those data layers
-		// contain features. Thus, the slicer creates one data layer, with
-		// the name given in this option. This is important for symbolizing the data.
-		vectorTileLayerName: 'sliced',
-
-		extent: 4096,	// Default for geojson-vt
-		maxZoom: 14  	// Default for geojson-vt
-	},
-
-	initialize: function(geojson, options) {
-		L.VectorGrid.prototype.initialize.call(this, options);
-
-		// Create a shallow copy of this.options, excluding things that might
-		// be functions - we only care about topojson/geojsonvt options
-		var options = {};
-		for (var i in this.options) {
-			if (i !== 'rendererFactory' &&
-				i !== 'vectorTileLayerStyles' &&
-				typeof (this.options[i]) !== 'function'
-			) {
-				options[i] = this.options[i];
-			}
-		}
-
-// 		this._worker = new Worker(window.URL.createObjectURL(new Blob([workerCode])));
-		this._worker = new Worker(workerCode);
-
-		// Send initial data to worker.
-		this._worker.postMessage(['slice', geojson, options]);
-
-	},
-
-
-	_getVectorTilePromise: function(coords) {
-
-		var _this = this;
-
-		var p = new Promise( function waitForWorker(res) {
-			_this._worker.addEventListener('message', function recv(m) {
-				if (m.data.coords &&
-				    m.data.coords.x === coords.x &&
-				    m.data.coords.y === coords.y &&
-				    m.data.coords.z === coords.z ) {
-
-					res(m.data);
-					_this._worker.removeEventListener('message', recv);
-				}
-			});
-		});
-
-		this._worker.postMessage(['get', coords]);
-
-		return p;
-	},
-
-});
-
-
-L.vectorGrid.slicer = function (geojson, options) {
-	return new L.VectorGrid.Slicer(geojson, options);
-};
-
-L.Canvas.Tile = L.Canvas.extend({
-
-	initialize: function (tileCoord, tileSize, options) {
-		L.Canvas.prototype.initialize.call(this, options);
-		this._tileCoord = tileCoord;
-		this._size = tileSize;
-
-		this._initContainer();
-		this._container.setAttribute('width', this._size.x);
-		this._container.setAttribute('height', this._size.y);
-		this._layers = {};
-		this._drawnLayers = {};
-		this._drawing = true;
-
-		if (options.interactive) {
-			// By default, Leaflet tiles do not have pointer events
-			this._container.style.pointerEvents = 'auto';
-		}
-	},
-
-	getCoord: function() {
-		return this._tileCoord;
-	},
-
-	getContainer: function() {
-		return this._container;
-	},
-
-	getOffset: function() {
-		return this._tileCoord.scaleBy(this._size).subtract(this._map.getPixelOrigin());
-	},
-
-	onAdd: L.Util.falseFn,
-
-	addTo: function(map) {
-		this._map = map;
-	},
-
-	removeFrom: function (map) {
-		delete this._map;
-	},
-
-	_onClick: function (e) {
-		var point = this._map.mouseEventToLayerPoint(e).subtract(this.getOffset()), layer, clickedLayer;
-
-		for (var id in this._layers) {
-			layer = this._layers[id];
-			if (layer.options.interactive && layer._containsPoint(point) && !this._map._draggableMoved(layer)) {
-				clickedLayer = layer;
-			}
-		}
-		if (clickedLayer)  {
-			L.DomEvent.fakeStop(e);
-			this._fireEvent([clickedLayer], e);
-		}
-	},
-
-	_onMouseMove: function (e) {
-		if (!this._map || this._map.dragging.moving() || this._map._animatingZoom) { return; }
-
-		var point = this._map.mouseEventToLayerPoint(e).subtract(this.getOffset());
-		this._handleMouseHover(e, point);
-	},
-
-	/// TODO: Modify _initPath to include an extra parameter, a group name
-	/// to order symbolizers by z-index
-
-	_updateIcon: function (layer) {
-		if (!this._drawing) { return; }
-
-		var icon = layer.options.icon,
-		    options = icon.options,
-		    size = L.point(options.iconSize),
-		    anchor = options.iconAnchor ||
-		        	 size && size.divideBy(2, true),
-		    p = layer._point.subtract(anchor),
-		    ctx = this._ctx,
-		    img = layer._getImage();
-
-		if (img.complete) {
-			ctx.drawImage(img, p.x, p.y, size.x, size.y);
-		} else {
-			L.DomEvent.on(img, 'load', function() {
-				ctx.drawImage(img, p.x, p.y, size.x, size.y);
-			});
-		}
-
-		this._drawnLayers[layer._leaflet_id] = layer;
-	}
-});
-
-
-L.canvas.tile = function(tileCoord, tileSize, opts){
-	return new L.Canvas.Tile(tileCoord, tileSize, opts);
-};
-
-// Aux file to bundle everything together, including the optional dependencies
-// for protobuf tiles
-
-}());
+            if (e + eBias >= eMax) {
+                m = 0;
+                e = eMax;
+            } else if (e + eBias >= 1) {
+                m = (value * c - 1) * Math.pow(2, mLen);
+                e = e + eBias;
+            } else {
+                m = value * Math.pow(2, eBias - 1) * Math.pow(2, mLen);
+                e = 0;
+            }
+        }
+
+        for (; mLen >= 8; buffer[offset + i] = m & 0xff, i += d, m /= 256, mLen -= 8) {}
+
+        e = e << mLen | m;
+        eLen += mLen;
+        for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
+
+        buffer[offset + i - d] |= s * 128;
+    };
+
+    var index$1 = {
+        read: read,
+        write: write
+    };
+
+    var index = Pbf;
+
+    var ieee754 = index$1;
+
+    function Pbf(buf) {
+        this.buf = ArrayBuffer.isView && ArrayBuffer.isView(buf) ? buf : new Uint8Array(buf || 0);
+        this.pos = 0;
+        this.type = 0;
+        this.length = this.buf.length;
+    }
+
+    Pbf.Varint = 0; // varint: int32, int64, uint32, uint64, sint32, sint64, bool, enum
+    Pbf.Fixed64 = 1; // 64-bit: double, fixed64, sfixed64
+    Pbf.Bytes = 2; // length-delimited: string, bytes, embedded messages, packed repeated fields
+    Pbf.Fixed32 = 5; // 32-bit: float, fixed32, sfixed32
+
+    var SHIFT_LEFT_32 = (1 << 16) * (1 << 16);
+    var SHIFT_RIGHT_32 = 1 / SHIFT_LEFT_32;
+
+    Pbf.prototype = {
+
+        destroy: function () {
+            this.buf = null;
+        },
+
+        // === READING =================================================================
+
+        readFields: function (readField, result, end) {
+            var this$1 = this;
+
+            end = end || this.length;
+
+            while (this.pos < end) {
+                var val = this$1.readVarint(),
+                    tag = val >> 3,
+                    startPos = this$1.pos;
+
+                this$1.type = val & 0x7;
+                readField(tag, result, this$1);
+
+                if (this$1.pos === startPos) {
+                    this$1.skip(val);
+                }
+            }
+            return result;
+        },
+
+        readMessage: function (readField, result) {
+            return this.readFields(readField, result, this.readVarint() + this.pos);
+        },
+
+        readFixed32: function () {
+            var val = readUInt32(this.buf, this.pos);
+            this.pos += 4;
+            return val;
+        },
+
+        readSFixed32: function () {
+            var val = readInt32(this.buf, this.pos);
+            this.pos += 4;
+            return val;
+        },
+
+        // 64-bit int handling is based on github.com/dpw/node-buffer-more-ints (MIT-licensed)
+
+        readFixed64: function () {
+            var val = readUInt32(this.buf, this.pos) + readUInt32(this.buf, this.pos + 4) * SHIFT_LEFT_32;
+            this.pos += 8;
+            return val;
+        },
+
+        readSFixed64: function () {
+            var val = readUInt32(this.buf, this.pos) + readInt32(this.buf, this.pos + 4) * SHIFT_LEFT_32;
+            this.pos += 8;
+            return val;
+        },
+
+        readFloat: function () {
+            var val = ieee754.read(this.buf, this.pos, true, 23, 4);
+            this.pos += 4;
+            return val;
+        },
+
+        readDouble: function () {
+            var val = ieee754.read(this.buf, this.pos, true, 52, 8);
+            this.pos += 8;
+            return val;
+        },
+
+        readVarint: function (isSigned) {
+            var buf = this.buf,
+                val,
+                b;
+
+            b = buf[this.pos++];val = b & 0x7f;if (b < 0x80) {
+                return val;
+            }
+            b = buf[this.pos++];val |= (b & 0x7f) << 7;if (b < 0x80) {
+                return val;
+            }
+            b = buf[this.pos++];val |= (b & 0x7f) << 14;if (b < 0x80) {
+                return val;
+            }
+            b = buf[this.pos++];val |= (b & 0x7f) << 21;if (b < 0x80) {
+                return val;
+            }
+            b = buf[this.pos];val |= (b & 0x0f) << 28;
+
+            return readVarintRemainder(val, isSigned, this);
+        },
+
+        readVarint64: function () {
+            // for compatibility with v2.0.1
+            return this.readVarint(true);
+        },
+
+        readSVarint: function () {
+            var num = this.readVarint();
+            return num % 2 === 1 ? (num + 1) / -2 : num / 2; // zigzag encoding
+        },
+
+        readBoolean: function () {
+            return Boolean(this.readVarint());
+        },
+
+        readString: function () {
+            var end = this.readVarint() + this.pos,
+                str = readUtf8(this.buf, this.pos, end);
+            this.pos = end;
+            return str;
+        },
+
+        readBytes: function () {
+            var end = this.readVarint() + this.pos,
+                buffer = this.buf.subarray(this.pos, end);
+            this.pos = end;
+            return buffer;
+        },
+
+        // verbose for performance reasons; doesn't affect gzipped size
+
+        readPackedVarint: function (arr, isSigned) {
+            var this$1 = this;
+
+            var end = readPackedEnd(this);
+            arr = arr || [];
+            while (this.pos < end) {
+                arr.push(this$1.readVarint(isSigned));
+            }
+            return arr;
+        },
+        readPackedSVarint: function (arr) {
+            var this$1 = this;
+
+            var end = readPackedEnd(this);
+            arr = arr || [];
+            while (this.pos < end) {
+                arr.push(this$1.readSVarint());
+            }
+            return arr;
+        },
+        readPackedBoolean: function (arr) {
+            var this$1 = this;
+
+            var end = readPackedEnd(this);
+            arr = arr || [];
+            while (this.pos < end) {
+                arr.push(this$1.readBoolean());
+            }
+            return arr;
+        },
+        readPackedFloat: function (arr) {
+            var this$1 = this;
+
+            var end = readPackedEnd(this);
+            arr = arr || [];
+            while (this.pos < end) {
+                arr.push(this$1.readFloat());
+            }
+            return arr;
+        },
+        readPackedDouble: function (arr) {
+            var this$1 = this;
+
+            var end = readPackedEnd(this);
+            arr = arr || [];
+            while (this.pos < end) {
+                arr.push(this$1.readDouble());
+            }
+            return arr;
+        },
+        readPackedFixed32: function (arr) {
+            var this$1 = this;
+
+            var end = readPackedEnd(this);
+            arr = arr || [];
+            while (this.pos < end) {
+                arr.push(this$1.readFixed32());
+            }
+            return arr;
+        },
+        readPackedSFixed32: function (arr) {
+            var this$1 = this;
+
+            var end = readPackedEnd(this);
+            arr = arr || [];
+            while (this.pos < end) {
+                arr.push(this$1.readSFixed32());
+            }
+            return arr;
+        },
+        readPackedFixed64: function (arr) {
+            var this$1 = this;
+
+            var end = readPackedEnd(this);
+            arr = arr || [];
+            while (this.pos < end) {
+                arr.push(this$1.readFixed64());
+            }
+            return arr;
+        },
+        readPackedSFixed64: function (arr) {
+            var this$1 = this;
+
+            var end = readPackedEnd(this);
+            arr = arr || [];
+            while (this.pos < end) {
+                arr.push(this$1.readSFixed64());
+            }
+            return arr;
+        },
+
+        skip: function (val) {
+            var type = val & 0x7;
+            if (type === Pbf.Varint) {
+                while (this.buf[this.pos++] > 0x7f) {}
+            } else if (type === Pbf.Bytes) {
+                this.pos = this.readVarint() + this.pos;
+            } else if (type === Pbf.Fixed32) {
+                this.pos += 4;
+            } else if (type === Pbf.Fixed64) {
+                this.pos += 8;
+            } else {
+                throw new Error('Unimplemented type: ' + type);
+            }
+        },
+
+        // === WRITING =================================================================
+
+        writeTag: function (tag, type) {
+            this.writeVarint(tag << 3 | type);
+        },
+
+        realloc: function (min) {
+            var length = this.length || 16;
+
+            while (length < this.pos + min) {
+                length *= 2;
+            }
+
+            if (length !== this.length) {
+                var buf = new Uint8Array(length);
+                buf.set(this.buf);
+                this.buf = buf;
+                this.length = length;
+            }
+        },
+
+        finish: function () {
+            this.length = this.pos;
+            this.pos = 0;
+            return this.buf.subarray(0, this.length);
+        },
+
+        writeFixed32: function (val) {
+            this.realloc(4);
+            writeInt32(this.buf, val, this.pos);
+            this.pos += 4;
+        },
+
+        writeSFixed32: function (val) {
+            this.realloc(4);
+            writeInt32(this.buf, val, this.pos);
+            this.pos += 4;
+        },
+
+        writeFixed64: function (val) {
+            this.realloc(8);
+            writeInt32(this.buf, val & -1, this.pos);
+            writeInt32(this.buf, Math.floor(val * SHIFT_RIGHT_32), this.pos + 4);
+            this.pos += 8;
+        },
+
+        writeSFixed64: function (val) {
+            this.realloc(8);
+            writeInt32(this.buf, val & -1, this.pos);
+            writeInt32(this.buf, Math.floor(val * SHIFT_RIGHT_32), this.pos + 4);
+            this.pos += 8;
+        },
+
+        writeVarint: function (val) {
+            val = +val || 0;
+
+            if (val > 0xfffffff || val < 0) {
+                writeBigVarint(val, this);
+                return;
+            }
+
+            this.realloc(4);
+
+            this.buf[this.pos++] = val & 0x7f | (val > 0x7f ? 0x80 : 0);if (val <= 0x7f) {
+                return;
+            }
+            this.buf[this.pos++] = (val >>>= 7) & 0x7f | (val > 0x7f ? 0x80 : 0);if (val <= 0x7f) {
+                return;
+            }
+            this.buf[this.pos++] = (val >>>= 7) & 0x7f | (val > 0x7f ? 0x80 : 0);if (val <= 0x7f) {
+                return;
+            }
+            this.buf[this.pos++] = val >>> 7 & 0x7f;
+        },
+
+        writeSVarint: function (val) {
+            this.writeVarint(val < 0 ? -val * 2 - 1 : val * 2);
+        },
+
+        writeBoolean: function (val) {
+            this.writeVarint(Boolean(val));
+        },
+
+        writeString: function (str) {
+            str = String(str);
+            this.realloc(str.length * 4);
+
+            this.pos++; // reserve 1 byte for short string length
+
+            var startPos = this.pos;
+            // write the string directly to the buffer and see how much was written
+            this.pos = writeUtf8(this.buf, str, this.pos);
+            var len = this.pos - startPos;
+
+            if (len >= 0x80) {
+                makeRoomForExtraLength(startPos, len, this);
+            }
+
+            // finally, write the message length in the reserved place and restore the position
+            this.pos = startPos - 1;
+            this.writeVarint(len);
+            this.pos += len;
+        },
+
+        writeFloat: function (val) {
+            this.realloc(4);
+            ieee754.write(this.buf, val, this.pos, true, 23, 4);
+            this.pos += 4;
+        },
+
+        writeDouble: function (val) {
+            this.realloc(8);
+            ieee754.write(this.buf, val, this.pos, true, 52, 8);
+            this.pos += 8;
+        },
+
+        writeBytes: function (buffer) {
+            var this$1 = this;
+
+            var len = buffer.length;
+            this.writeVarint(len);
+            this.realloc(len);
+            for (var i = 0; i < len; i++) {
+                this$1.buf[this$1.pos++] = buffer[i];
+            }
+        },
+
+        writeRawMessage: function (fn, obj) {
+            this.pos++; // reserve 1 byte for short message length
+
+            // write the message directly to the buffer and see how much was written
+            var startPos = this.pos;
+            fn(obj, this);
+            var len = this.pos - startPos;
+
+            if (len >= 0x80) {
+                makeRoomForExtraLength(startPos, len, this);
+            }
+
+            // finally, write the message length in the reserved place and restore the position
+            this.pos = startPos - 1;
+            this.writeVarint(len);
+            this.pos += len;
+        },
+
+        writeMessage: function (tag, fn, obj) {
+            this.writeTag(tag, Pbf.Bytes);
+            this.writeRawMessage(fn, obj);
+        },
+
+        writePackedVarint: function (tag, arr) {
+            this.writeMessage(tag, writePackedVarint, arr);
+        },
+        writePackedSVarint: function (tag, arr) {
+            this.writeMessage(tag, writePackedSVarint, arr);
+        },
+        writePackedBoolean: function (tag, arr) {
+            this.writeMessage(tag, writePackedBoolean, arr);
+        },
+        writePackedFloat: function (tag, arr) {
+            this.writeMessage(tag, writePackedFloat, arr);
+        },
+        writePackedDouble: function (tag, arr) {
+            this.writeMessage(tag, writePackedDouble, arr);
+        },
+        writePackedFixed32: function (tag, arr) {
+            this.writeMessage(tag, writePackedFixed32, arr);
+        },
+        writePackedSFixed32: function (tag, arr) {
+            this.writeMessage(tag, writePackedSFixed32, arr);
+        },
+        writePackedFixed64: function (tag, arr) {
+            this.writeMessage(tag, writePackedFixed64, arr);
+        },
+        writePackedSFixed64: function (tag, arr) {
+            this.writeMessage(tag, writePackedSFixed64, arr);
+        },
+
+        writeBytesField: function (tag, buffer) {
+            this.writeTag(tag, Pbf.Bytes);
+            this.writeBytes(buffer);
+        },
+        writeFixed32Field: function (tag, val) {
+            this.writeTag(tag, Pbf.Fixed32);
+            this.writeFixed32(val);
+        },
+        writeSFixed32Field: function (tag, val) {
+            this.writeTag(tag, Pbf.Fixed32);
+            this.writeSFixed32(val);
+        },
+        writeFixed64Field: function (tag, val) {
+            this.writeTag(tag, Pbf.Fixed64);
+            this.writeFixed64(val);
+        },
+        writeSFixed64Field: function (tag, val) {
+            this.writeTag(tag, Pbf.Fixed64);
+            this.writeSFixed64(val);
+        },
+        writeVarintField: function (tag, val) {
+            this.writeTag(tag, Pbf.Varint);
+            this.writeVarint(val);
+        },
+        writeSVarintField: function (tag, val) {
+            this.writeTag(tag, Pbf.Varint);
+            this.writeSVarint(val);
+        },
+        writeStringField: function (tag, str) {
+            this.writeTag(tag, Pbf.Bytes);
+            this.writeString(str);
+        },
+        writeFloatField: function (tag, val) {
+            this.writeTag(tag, Pbf.Fixed32);
+            this.writeFloat(val);
+        },
+        writeDoubleField: function (tag, val) {
+            this.writeTag(tag, Pbf.Fixed64);
+            this.writeDouble(val);
+        },
+        writeBooleanField: function (tag, val) {
+            this.writeVarintField(tag, Boolean(val));
+        }
+    };
+
+    function readVarintRemainder(l, s, p) {
+        var buf = p.buf,
+            h,
+            b;
+
+        b = buf[p.pos++];h = (b & 0x70) >> 4;if (b < 0x80) {
+            return toNum(l, h, s);
+        }
+        b = buf[p.pos++];h |= (b & 0x7f) << 3;if (b < 0x80) {
+            return toNum(l, h, s);
+        }
+        b = buf[p.pos++];h |= (b & 0x7f) << 10;if (b < 0x80) {
+            return toNum(l, h, s);
+        }
+        b = buf[p.pos++];h |= (b & 0x7f) << 17;if (b < 0x80) {
+            return toNum(l, h, s);
+        }
+        b = buf[p.pos++];h |= (b & 0x7f) << 24;if (b < 0x80) {
+            return toNum(l, h, s);
+        }
+        b = buf[p.pos++];h |= (b & 0x01) << 31;if (b < 0x80) {
+            return toNum(l, h, s);
+        }
+
+        throw new Error('Expected varint not more than 10 bytes');
+    }
+
+    function readPackedEnd(pbf) {
+        return pbf.type === Pbf.Bytes ? pbf.readVarint() + pbf.pos : pbf.pos + 1;
+    }
+
+    function toNum(low, high, isSigned) {
+        if (isSigned) {
+            return high * 0x100000000 + (low >>> 0);
+        }
+
+        return (high >>> 0) * 0x100000000 + (low >>> 0);
+    }
+
+    function writeBigVarint(val, pbf) {
+        var low, high;
+
+        if (val >= 0) {
+            low = val % 0x100000000 | 0;
+            high = val / 0x100000000 | 0;
+        } else {
+            low = ~(-val % 0x100000000);
+            high = ~(-val / 0x100000000);
+
+            if (low ^ 0xffffffff) {
+                low = low + 1 | 0;
+            } else {
+                low = 0;
+                high = high + 1 | 0;
+            }
+        }
+
+        if (val >= 0x10000000000000000 || val < -0x10000000000000000) {
+            throw new Error('Given varint doesn\'t fit into 10 bytes');
+        }
+
+        pbf.realloc(10);
+
+        writeBigVarintLow(low, high, pbf);
+        writeBigVarintHigh(high, pbf);
+    }
+
+    function writeBigVarintLow(low, high, pbf) {
+        pbf.buf[pbf.pos++] = low & 0x7f | 0x80;low >>>= 7;
+        pbf.buf[pbf.pos++] = low & 0x7f | 0x80;low >>>= 7;
+        pbf.buf[pbf.pos++] = low & 0x7f | 0x80;low >>>= 7;
+        pbf.buf[pbf.pos++] = low & 0x7f | 0x80;low >>>= 7;
+        pbf.buf[pbf.pos] = low & 0x7f;
+    }
+
+    function writeBigVarintHigh(high, pbf) {
+        var lsb = (high & 0x07) << 4;
+
+        pbf.buf[pbf.pos++] |= lsb | ((high >>>= 3) ? 0x80 : 0);if (!high) {
+            return;
+        }
+        pbf.buf[pbf.pos++] = high & 0x7f | ((high >>>= 7) ? 0x80 : 0);if (!high) {
+            return;
+        }
+        pbf.buf[pbf.pos++] = high & 0x7f | ((high >>>= 7) ? 0x80 : 0);if (!high) {
+            return;
+        }
+        pbf.buf[pbf.pos++] = high & 0x7f | ((high >>>= 7) ? 0x80 : 0);if (!high) {
+            return;
+        }
+        pbf.buf[pbf.pos++] = high & 0x7f | ((high >>>= 7) ? 0x80 : 0);if (!high) {
+            return;
+        }
+        pbf.buf[pbf.pos++] = high & 0x7f;
+    }
+
+    function makeRoomForExtraLength(startPos, len, pbf) {
+        var extraLen = len <= 0x3fff ? 1 : len <= 0x1fffff ? 2 : len <= 0xfffffff ? 3 : Math.ceil(Math.log(len) / (Math.LN2 * 7));
+
+        // if 1 byte isn't enough for encoding message length, shift the data to the right
+        pbf.realloc(extraLen);
+        for (var i = pbf.pos - 1; i >= startPos; i--) {
+            pbf.buf[i + extraLen] = pbf.buf[i];
+        }
+    }
+
+    function writePackedVarint(arr, pbf) {
+        for (var i = 0; i < arr.length; i++) {
+            pbf.writeVarint(arr[i]);
+        }
+    }
+    function writePackedSVarint(arr, pbf) {
+        for (var i = 0; i < arr.length; i++) {
+            pbf.writeSVarint(arr[i]);
+        }
+    }
+    function writePackedFloat(arr, pbf) {
+        for (var i = 0; i < arr.length; i++) {
+            pbf.writeFloat(arr[i]);
+        }
+    }
+    function writePackedDouble(arr, pbf) {
+        for (var i = 0; i < arr.length; i++) {
+            pbf.writeDouble(arr[i]);
+        }
+    }
+    function writePackedBoolean(arr, pbf) {
+        for (var i = 0; i < arr.length; i++) {
+            pbf.writeBoolean(arr[i]);
+        }
+    }
+    function writePackedFixed32(arr, pbf) {
+        for (var i = 0; i < arr.length; i++) {
+            pbf.writeFixed32(arr[i]);
+        }
+    }
+    function writePackedSFixed32(arr, pbf) {
+        for (var i = 0; i < arr.length; i++) {
+            pbf.writeSFixed32(arr[i]);
+        }
+    }
+    function writePackedFixed64(arr, pbf) {
+        for (var i = 0; i < arr.length; i++) {
+            pbf.writeFixed64(arr[i]);
+        }
+    }
+    function writePackedSFixed64(arr, pbf) {
+        for (var i = 0; i < arr.length; i++) {
+            pbf.writeSFixed64(arr[i]);
+        }
+    }
+
+    // Buffer code below from https://github.com/feross/buffer, MIT-licensed
+
+    function readUInt32(buf, pos) {
+        return (buf[pos] | buf[pos + 1] << 8 | buf[pos + 2] << 16) + buf[pos + 3] * 0x1000000;
+    }
+
+    function writeInt32(buf, val, pos) {
+        buf[pos] = val;
+        buf[pos + 1] = val >>> 8;
+        buf[pos + 2] = val >>> 16;
+        buf[pos + 3] = val >>> 24;
+    }
+
+    function readInt32(buf, pos) {
+        return (buf[pos] | buf[pos + 1] << 8 | buf[pos + 2] << 16) + (buf[pos + 3] << 24);
+    }
+
+    function readUtf8(buf, pos, end) {
+        var str = '';
+        var i = pos;
+
+        while (i < end) {
+            var b0 = buf[i];
+            var c = null; // codepoint
+            var bytesPerSequence = b0 > 0xEF ? 4 : b0 > 0xDF ? 3 : b0 > 0xBF ? 2 : 1;
+
+            if (i + bytesPerSequence > end) {
+                break;
+            }
+
+            var b1, b2, b3;
+
+            if (bytesPerSequence === 1) {
+                if (b0 < 0x80) {
+                    c = b0;
+                }
+            } else if (bytesPerSequence === 2) {
+                b1 = buf[i + 1];
+                if ((b1 & 0xC0) === 0x80) {
+                    c = (b0 & 0x1F) << 0x6 | b1 & 0x3F;
+                    if (c <= 0x7F) {
+                        c = null;
+                    }
+                }
+            } else if (bytesPerSequence === 3) {
+                b1 = buf[i + 1];
+                b2 = buf[i + 2];
+                if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80) {
+                    c = (b0 & 0xF) << 0xC | (b1 & 0x3F) << 0x6 | b2 & 0x3F;
+                    if (c <= 0x7FF || c >= 0xD800 && c <= 0xDFFF) {
+                        c = null;
+                    }
+                }
+            } else if (bytesPerSequence === 4) {
+                b1 = buf[i + 1];
+                b2 = buf[i + 2];
+                b3 = buf[i + 3];
+                if ((b1 & 0xC0) === 0x80 && (b2 & 0xC0) === 0x80 && (b3 & 0xC0) === 0x80) {
+                    c = (b0 & 0xF) << 0x12 | (b1 & 0x3F) << 0xC | (b2 & 0x3F) << 0x6 | b3 & 0x3F;
+                    if (c <= 0xFFFF || c >= 0x110000) {
+                        c = null;
+                    }
+                }
+            }
+
+            if (c === null) {
+                c = 0xFFFD;
+                bytesPerSequence = 1;
+            } else if (c > 0xFFFF) {
+                c -= 0x10000;
+                str += String.fromCharCode(c >>> 10 & 0x3FF | 0xD800);
+                c = 0xDC00 | c & 0x3FF;
+            }
+
+            str += String.fromCharCode(c);
+            i += bytesPerSequence;
+        }
+
+        return str;
+    }
+
+    function writeUtf8(buf, str, pos) {
+        for (var i = 0, c, lead; i < str.length; i++) {
+            c = str.charCodeAt(i); // code point
+
+            if (c > 0xD7FF && c < 0xE000) {
+                if (lead) {
+                    if (c < 0xDC00) {
+                        buf[pos++] = 0xEF;
+                        buf[pos++] = 0xBF;
+                        buf[pos++] = 0xBD;
+                        lead = c;
+                        continue;
+                    } else {
+                        c = lead - 0xD800 << 10 | c - 0xDC00 | 0x10000;
+                        lead = null;
+                    }
+                } else {
+                    if (c > 0xDBFF || i + 1 === str.length) {
+                        buf[pos++] = 0xEF;
+                        buf[pos++] = 0xBF;
+                        buf[pos++] = 0xBD;
+                    } else {
+                        lead = c;
+                    }
+                    continue;
+                }
+            } else if (lead) {
+                buf[pos++] = 0xEF;
+                buf[pos++] = 0xBF;
+                buf[pos++] = 0xBD;
+                lead = null;
+            }
+
+            if (c < 0x80) {
+                buf[pos++] = c;
+            } else {
+                if (c < 0x800) {
+                    buf[pos++] = c >> 0x6 | 0xC0;
+                } else {
+                    if (c < 0x10000) {
+                        buf[pos++] = c >> 0xC | 0xE0;
+                    } else {
+                        buf[pos++] = c >> 0x12 | 0xF0;
+                        buf[pos++] = c >> 0xC & 0x3F | 0x80;
+                    }
+                    buf[pos++] = c >> 0x6 & 0x3F | 0x80;
+                }
+                buf[pos++] = c & 0x3F | 0x80;
+            }
+        }
+        return pos;
+    }
+
+    var index$5 = Point$1;
+
+    function Point$1(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    Point$1.prototype = {
+        clone: function () {
+            return new Point$1(this.x, this.y);
+        },
+
+        add: function (p) {
+            return this.clone()._add(p);
+        },
+        sub: function (p) {
+            return this.clone()._sub(p);
+        },
+        mult: function (k) {
+            return this.clone()._mult(k);
+        },
+        div: function (k) {
+            return this.clone()._div(k);
+        },
+        rotate: function (a) {
+            return this.clone()._rotate(a);
+        },
+        matMult: function (m) {
+            return this.clone()._matMult(m);
+        },
+        unit: function () {
+            return this.clone()._unit();
+        },
+        perp: function () {
+            return this.clone()._perp();
+        },
+        round: function () {
+            return this.clone()._round();
+        },
+
+        mag: function () {
+            return Math.sqrt(this.x * this.x + this.y * this.y);
+        },
+
+        equals: function (p) {
+            return this.x === p.x && this.y === p.y;
+        },
+
+        dist: function (p) {
+            return Math.sqrt(this.distSqr(p));
+        },
+
+        distSqr: function (p) {
+            var dx = p.x - this.x,
+                dy = p.y - this.y;
+            return dx * dx + dy * dy;
+        },
+
+        angle: function () {
+            return Math.atan2(this.y, this.x);
+        },
+
+        angleTo: function (b) {
+            return Math.atan2(this.y - b.y, this.x - b.x);
+        },
+
+        angleWith: function (b) {
+            return this.angleWithSep(b.x, b.y);
+        },
+
+        // Find the angle of the two vectors, solving the formula for the cross product a x b = |a||b|sin(θ) for θ.
+        angleWithSep: function (x, y) {
+            return Math.atan2(this.x * y - this.y * x, this.x * x + this.y * y);
+        },
+
+        _matMult: function (m) {
+            var x = m[0] * this.x + m[1] * this.y,
+                y = m[2] * this.x + m[3] * this.y;
+            this.x = x;
+            this.y = y;
+            return this;
+        },
+
+        _add: function (p) {
+            this.x += p.x;
+            this.y += p.y;
+            return this;
+        },
+
+        _sub: function (p) {
+            this.x -= p.x;
+            this.y -= p.y;
+            return this;
+        },
+
+        _mult: function (k) {
+            this.x *= k;
+            this.y *= k;
+            return this;
+        },
+
+        _div: function (k) {
+            this.x /= k;
+            this.y /= k;
+            return this;
+        },
+
+        _unit: function () {
+            this._div(this.mag());
+            return this;
+        },
+
+        _perp: function () {
+            var y = this.y;
+            this.y = this.x;
+            this.x = -y;
+            return this;
+        },
+
+        _rotate: function (angle) {
+            var cos = Math.cos(angle),
+                sin = Math.sin(angle),
+                x = cos * this.x - sin * this.y,
+                y = sin * this.x + cos * this.y;
+            this.x = x;
+            this.y = y;
+            return this;
+        },
+
+        _round: function () {
+            this.x = Math.round(this.x);
+            this.y = Math.round(this.y);
+            return this;
+        }
+    };
+
+    // constructs Point from an array if necessary
+    Point$1.convert = function (a) {
+        if (a instanceof Point$1) {
+            return a;
+        }
+        if (Array.isArray(a)) {
+            return new Point$1(a[0], a[1]);
+        }
+        return a;
+    };
+
+    var Point = index$5;
+
+    var vectortilefeature = VectorTileFeature$2;
+
+    function VectorTileFeature$2(pbf, end, extent, keys, values) {
+        // Public
+        this.properties = {};
+        this.extent = extent;
+        this.type = 0;
+
+        // Private
+        this._pbf = pbf;
+        this._geometry = -1;
+        this._keys = keys;
+        this._values = values;
+
+        pbf.readFields(readFeature, this, end);
+    }
+
+    function readFeature(tag, feature, pbf) {
+        if (tag == 1) {
+            feature.id = pbf.readVarint();
+        } else if (tag == 2) {
+            readTag(pbf, feature);
+        } else if (tag == 3) {
+            feature.type = pbf.readVarint();
+        } else if (tag == 4) {
+            feature._geometry = pbf.pos;
+        }
+    }
+
+    function readTag(pbf, feature) {
+        var end = pbf.readVarint() + pbf.pos;
+
+        while (pbf.pos < end) {
+            var key = feature._keys[pbf.readVarint()],
+                value = feature._values[pbf.readVarint()];
+            feature.properties[key] = value;
+        }
+    }
+
+    VectorTileFeature$2.types = ['Unknown', 'Point', 'LineString', 'Polygon'];
+
+    VectorTileFeature$2.prototype.loadGeometry = function () {
+        var pbf = this._pbf;
+        pbf.pos = this._geometry;
+
+        var end = pbf.readVarint() + pbf.pos,
+            cmd = 1,
+            length = 0,
+            x = 0,
+            y = 0,
+            lines = [],
+            line;
+
+        while (pbf.pos < end) {
+            if (!length) {
+                var cmdLen = pbf.readVarint();
+                cmd = cmdLen & 0x7;
+                length = cmdLen >> 3;
+            }
+
+            length--;
+
+            if (cmd === 1 || cmd === 2) {
+                x += pbf.readSVarint();
+                y += pbf.readSVarint();
+
+                if (cmd === 1) {
+                    // moveTo
+                    if (line) {
+                        lines.push(line);
+                    }
+                    line = [];
+                }
+
+                line.push(new Point(x, y));
+            } else if (cmd === 7) {
+
+                // Workaround for https://github.com/mapbox/mapnik-vector-tile/issues/90
+                if (line) {
+                    line.push(line[0].clone()); // closePolygon
+                }
+            } else {
+                throw new Error('unknown command ' + cmd);
+            }
+        }
+
+        if (line) {
+            lines.push(line);
+        }
+
+        return lines;
+    };
+
+    VectorTileFeature$2.prototype.bbox = function () {
+        var pbf = this._pbf;
+        pbf.pos = this._geometry;
+
+        var end = pbf.readVarint() + pbf.pos,
+            cmd = 1,
+            length = 0,
+            x = 0,
+            y = 0,
+            x1 = Infinity,
+            x2 = -Infinity,
+            y1 = Infinity,
+            y2 = -Infinity;
+
+        while (pbf.pos < end) {
+            if (!length) {
+                var cmdLen = pbf.readVarint();
+                cmd = cmdLen & 0x7;
+                length = cmdLen >> 3;
+            }
+
+            length--;
+
+            if (cmd === 1 || cmd === 2) {
+                x += pbf.readSVarint();
+                y += pbf.readSVarint();
+                if (x < x1) {
+                    x1 = x;
+                }
+                if (x > x2) {
+                    x2 = x;
+                }
+                if (y < y1) {
+                    y1 = y;
+                }
+                if (y > y2) {
+                    y2 = y;
+                }
+            } else if (cmd !== 7) {
+                throw new Error('unknown command ' + cmd);
+            }
+        }
+
+        return [x1, y1, x2, y2];
+    };
+
+    VectorTileFeature$2.prototype.toGeoJSON = function (x, y, z) {
+        var size = this.extent * Math.pow(2, z),
+            x0 = this.extent * x,
+            y0 = this.extent * y,
+            coords = this.loadGeometry(),
+            type = VectorTileFeature$2.types[this.type],
+            i,
+            j;
+
+        function project(line) {
+            for (var j = 0; j < line.length; j++) {
+                var p = line[j],
+                    y2 = 180 - (p.y + y0) * 360 / size;
+                line[j] = [(p.x + x0) * 360 / size - 180, 360 / Math.PI * Math.atan(Math.exp(y2 * Math.PI / 180)) - 90];
+            }
+        }
+
+        switch (this.type) {
+            case 1:
+                var points = [];
+                for (i = 0; i < coords.length; i++) {
+                    points[i] = coords[i][0];
+                }
+                coords = points;
+                project(coords);
+                break;
+
+            case 2:
+                for (i = 0; i < coords.length; i++) {
+                    project(coords[i]);
+                }
+                break;
+
+            case 3:
+                coords = classifyRings(coords);
+                for (i = 0; i < coords.length; i++) {
+                    for (j = 0; j < coords[i].length; j++) {
+                        project(coords[i][j]);
+                    }
+                }
+                break;
+        }
+
+        if (coords.length === 1) {
+            coords = coords[0];
+        } else {
+            type = 'Multi' + type;
+        }
+
+        var result = {
+            type: "Feature",
+            geometry: {
+                type: type,
+                coordinates: coords
+            },
+            properties: this.properties
+        };
+
+        if ('id' in this) {
+            result.id = this.id;
+        }
+
+        return result;
+    };
+
+    // classifies an array of rings into polygons with outer rings and holes
+
+    function classifyRings(rings) {
+        var len = rings.length;
+
+        if (len <= 1) {
+            return [rings];
+        }
+
+        var polygons = [],
+            polygon,
+            ccw;
+
+        for (var i = 0; i < len; i++) {
+            var area = signedArea(rings[i]);
+            if (area === 0) {
+                continue;
+            }
+
+            if (ccw === undefined) {
+                ccw = area < 0;
+            }
+
+            if (ccw === area < 0) {
+                if (polygon) {
+                    polygons.push(polygon);
+                }
+                polygon = [rings[i]];
+            } else {
+                polygon.push(rings[i]);
+            }
+        }
+        if (polygon) {
+            polygons.push(polygon);
+        }
+
+        return polygons;
+    }
+
+    function signedArea(ring) {
+        var sum = 0;
+        for (var i = 0, len = ring.length, j = len - 1, p1, p2; i < len; j = i++) {
+            p1 = ring[i];
+            p2 = ring[j];
+            sum += (p2.x - p1.x) * (p1.y + p2.y);
+        }
+        return sum;
+    }
+
+    var VectorTileFeature$1 = vectortilefeature;
+
+    var vectortilelayer = VectorTileLayer$2;
+
+    function VectorTileLayer$2(pbf, end) {
+        // Public
+        this.version = 1;
+        this.name = null;
+        this.extent = 4096;
+        this.length = 0;
+
+        // Private
+        this._pbf = pbf;
+        this._keys = [];
+        this._values = [];
+        this._features = [];
+
+        pbf.readFields(readLayer, this, end);
+
+        this.length = this._features.length;
+    }
+
+    function readLayer(tag, layer, pbf) {
+        if (tag === 15) {
+            layer.version = pbf.readVarint();
+        } else if (tag === 1) {
+            layer.name = pbf.readString();
+        } else if (tag === 5) {
+            layer.extent = pbf.readVarint();
+        } else if (tag === 2) {
+            layer._features.push(pbf.pos);
+        } else if (tag === 3) {
+            layer._keys.push(pbf.readString());
+        } else if (tag === 4) {
+            layer._values.push(readValueMessage(pbf));
+        }
+    }
+
+    function readValueMessage(pbf) {
+        var value = null,
+            end = pbf.readVarint() + pbf.pos;
+
+        while (pbf.pos < end) {
+            var tag = pbf.readVarint() >> 3;
+
+            value = tag === 1 ? pbf.readString() : tag === 2 ? pbf.readFloat() : tag === 3 ? pbf.readDouble() : tag === 4 ? pbf.readVarint64() : tag === 5 ? pbf.readVarint() : tag === 6 ? pbf.readSVarint() : tag === 7 ? pbf.readBoolean() : null;
+        }
+
+        return value;
+    }
+
+    // return feature `i` from this layer as a `VectorTileFeature`
+    VectorTileLayer$2.prototype.feature = function (i) {
+        if (i < 0 || i >= this._features.length) {
+            throw new Error('feature index out of bounds');
+        }
+
+        this._pbf.pos = this._features[i];
+
+        var end = this._pbf.readVarint() + this._pbf.pos;
+        return new VectorTileFeature$1(this._pbf, end, this.extent, this._keys, this._values);
+    };
+
+    var VectorTileLayer$1 = vectortilelayer;
+
+    var vectortile = VectorTile$1;
+
+    function VectorTile$1(pbf, end) {
+        this.layers = pbf.readFields(readTile, {}, end);
+    }
+
+    function readTile(tag, layers, pbf) {
+        if (tag === 3) {
+            var layer = new VectorTileLayer$1(pbf, pbf.readVarint() + pbf.pos);
+            if (layer.length) {
+                layers[layer.name] = layer;
+            }
+        }
+    }
+
+    var VectorTile = vectortile;
+
+    L.SVG.Tile = L.SVG.extend({
+
+        initialize: function (tileCoord, tileSize, options) {
+            L.SVG.prototype.initialize.call(this, options);
+            this._tileCoord = tileCoord;
+            this._size = tileSize;
+
+            this._initContainer();
+            this._container.setAttribute('width', this._size.x);
+            this._container.setAttribute('height', this._size.y);
+            this._container.setAttribute('viewBox', [0, 0, this._size.x, this._size.y].join(' '));
+
+            this._layers = {};
+        },
+
+        getCoord: function () {
+            return this._tileCoord;
+        },
+
+        getContainer: function () {
+            return this._container;
+        },
+
+        onAdd: L.Util.falseFn,
+
+        addTo: function (map) {
+            this._map = map;
+            if (this.options.interactive) {
+                for (var i in this._layers) {
+                    var layer = this._layers[i];
+                    // By default, Leaflet tiles do not have pointer events.
+                    layer._path.style.pointerEvents = 'auto';
+                    this._map._targets[L.stamp(layer._path)] = layer;
+                }
+            }
+        },
+
+        removeFrom: function (map) {
+            if (this.options.interactive) {
+                for (var i in this._layers) {
+                    var layer = this._layers[i];
+                    delete this._map._targets[L.stamp(layer._path)];
+                }
+            }
+            delete this._map;
+        },
+
+        _initContainer: function () {
+            L.SVG.prototype._initContainer.call(this);
+            var rect = L.SVG.create('rect');
+        },
+
+        /// TODO: Modify _initPath to include an extra parameter, a group name
+        /// to order symbolizers by z-index
+
+        _addPath: function (layer) {
+            this._rootGroup.appendChild(layer._path);
+            this._layers[L.stamp(layer)] = layer;
+        },
+
+        _updateIcon: function (layer) {
+            var path = layer._path = L.SVG.create('image'),
+                icon = layer.options.icon,
+                options = icon.options,
+                size = L.point(options.iconSize),
+                anchor = options.iconAnchor || size && size.divideBy(2, true),
+                p = layer._point.subtract(anchor);
+            path.setAttribute('x', p.x);
+            path.setAttribute('y', p.y);
+            path.setAttribute('width', size.x + 'px');
+            path.setAttribute('height', size.y + 'px');
+            path.setAttribute('href', options.iconUrl);
+        }
+    });
+
+    L.svg.tile = function (tileCoord, tileSize, opts) {
+        return new L.SVG.Tile(tileCoord, tileSize, opts);
+    };
+
+    // 🍂class Symbolizer
+    // 🍂inherits Class
+    // The abstract Symbolizer class is mostly equivalent in concept to a `L.Path` - it's an interface for
+    // polylines, polygons and circles. But instead of representing leaflet Layers,
+    // it represents things that have to be drawn inside a vector tile.
+
+    // A vector tile *data layer* might have zero, one, or more *symbolizer definitions*
+    // A vector tile *feature* might have zero, one, or more *symbolizers*.
+    // The actual symbolizers applied will depend on filters and the symbolizer functions.
+
+    var Symbolizer = L.Class.extend({
+        // 🍂method initialize(feature: GeoJSON, pxPerExtent: Number)
+        // Initializes a new Line Symbolizer given a GeoJSON feature and the
+        // pixel-to-coordinate-units ratio. Internal use only.
+
+        // 🍂method render(renderer, style)
+        // Renders this symbolizer in the given tiled renderer, with the given
+        // `L.Path` options.  Internal use only.
+        render: function (renderer, style) {
+            this._renderer = renderer;
+            this.options = style;
+            renderer._initPath(this);
+            renderer._updateStyle(this);
+        },
+
+        // 🍂method render(renderer, style)
+        // Updates the `L.Path` options used to style this symbolizer, and re-renders it.
+        // Internal use only.
+        updateStyle: function (renderer, style) {
+            this.options = style;
+            renderer._updateStyle(this);
+        },
+
+        _getPixelBounds: function () {
+            var parts = this._parts;
+            var bounds = L.bounds([]);
+            for (var i = 0; i < parts.length; i++) {
+                var part = parts[i];
+                for (var j = 0; j < part.length; j++) {
+                    bounds.extend(part[j]);
+                }
+            }
+
+            var w = this._clickTolerance(),
+                p = new L.Point(w, w);
+
+            bounds.min._subtract(p);
+            bounds.max._add(p);
+
+            return bounds;
+        },
+        _clickTolerance: L.Path.prototype._clickTolerance
+    });
+
+    // Contains mixins which are common to the Line Symbolizer and the Fill Symbolizer.
+
+    var PolyBase = {
+        _makeFeatureParts: function (feat, pxPerExtent) {
+            var rings = feat.geometry;
+            var coord;
+
+            this._parts = [];
+            for (var i = 0; i < rings.length; i++) {
+                var ring = rings[i];
+                var part = [];
+                for (var j = 0; j < ring.length; j++) {
+                    coord = ring[j];
+                    // Protobuf vector tiles return {x: , y:}
+                    // Geojson-vt returns [,]
+                    part.push(L.point(coord).scaleBy(pxPerExtent));
+                }
+                this._parts.push(part);
+            }
+        },
+
+        makeInteractive: function () {
+            this._pxBounds = this._getPixelBounds();
+        }
+    };
+
+    // 🍂class PointSymbolizer
+    // 🍂inherits CircleMarker
+    // A symbolizer for points.
+
+    var PointSymbolizer = L.CircleMarker.extend({
+        includes: Symbolizer.prototype,
+
+        statics: {
+            iconCache: {}
+        },
+
+        initialize: function (feature, pxPerExtent) {
+            this.properties = feature.properties;
+            this._makeFeatureParts(feature, pxPerExtent);
+        },
+
+        render: function (renderer, style) {
+            Symbolizer.prototype.render.call(this, renderer, style);
+            this._radius = style.radius || L.CircleMarker.prototype.options.radius;
+            this._updatePath();
+        },
+
+        _makeFeatureParts: function (feat, pxPerExtent) {
+            var coord = feat.geometry[0];
+            if (typeof coord[0] === 'object' && 'x' in coord[0]) {
+                // Protobuf vector tiles return [{x: , y:}]
+                this._point = L.point(coord[0]).scaleBy(pxPerExtent);
+                this._empty = L.Util.falseFn;
+            } else {
+                // Geojson-vt returns [,]
+                this._point = L.point(coord).scaleBy(pxPerExtent);
+                this._empty = L.Util.falseFn;
+            }
+        },
+
+        makeInteractive: function () {
+            this._updateBounds();
+        },
+
+        updateStyle: function (renderer, style) {
+            this._radius = style.radius || this._radius;
+            this._updateBounds();
+            return Symbolizer.prototype.updateStyle.call(this, renderer, style);
+        },
+
+        _updateBounds: function () {
+            var icon = this.options.icon;
+            if (icon) {
+                var size = L.point(icon.options.iconSize),
+                    anchor = icon.options.iconAnchor || size && size.divideBy(2, true),
+                    p = this._point.subtract(anchor);
+                this._pxBounds = new L.Bounds(p, p.add(icon.options.iconSize));
+            } else {
+                L.CircleMarker.prototype._updateBounds.call(this);
+            }
+        },
+
+        _updatePath: function () {
+            if (this.options.icon) {
+                this._renderer._updateIcon(this);
+            } else {
+                L.CircleMarker.prototype._updatePath.call(this);
+            }
+        },
+
+        _getImage: function () {
+            if (this.options.icon) {
+                var url = this.options.icon.options.iconUrl,
+                    img = PointLayer.iconCache[url];
+                if (!img) {
+                    var icon = this.options.icon;
+                    img = PointLayer.iconCache[url] = icon.createIcon();
+                }
+                return img;
+            } else {
+                return null;
+            }
+        },
+
+        _containsPoint: function (p) {
+            var icon = this.options.icon;
+            if (icon) {
+                return this._pxBounds.contains(p);
+            } else {
+                return L.CircleMarker.prototype._containsPoint.call(this, p);
+            }
+        }
+    });
+
+    // 🍂class LineSymbolizer
+    // 🍂inherits Polyline
+    // A symbolizer for lines. Can be applied to line and polygon features.
+
+    var LineSymbolizer = L.Polyline.extend({
+        includes: [Symbolizer.prototype, PolyBase],
+
+        initialize: function (feature, pxPerExtent) {
+            this.properties = feature.properties;
+            this._makeFeatureParts(feature, pxPerExtent);
+        },
+
+        render: function (renderer, style) {
+            style.fill = false;
+            Symbolizer.prototype.render.call(this, renderer, style);
+            this._updatePath();
+        },
+
+        updateStyle: function (renderer, style) {
+            style.fill = false;
+            Symbolizer.prototype.updateStyle.call(this, renderer, style);
+        }
+    });
+
+    // 🍂class FillSymbolizer
+    // 🍂inherits Polyline
+    // A symbolizer for filled areas. Applies only to polygon features.
+
+    var FillSymbolizer = L.Polygon.extend({
+        includes: [Symbolizer.prototype, PolyBase],
+
+        initialize: function (feature, pxPerExtent) {
+            this.properties = feature.properties;
+            this._makeFeatureParts(feature, pxPerExtent);
+        },
+
+        render: function (renderer, style) {
+            Symbolizer.prototype.render.call(this, renderer, style);
+            this._updatePath();
+        }
+    });
+
+    /* 🍂class VectorGrid
+     * 🍂inherits GridLayer
+     *
+     * A `VectorGrid` is a generic, abstract class for displaying tiled vector data.
+     * it provides facilities for symbolizing and rendering the data in the vector
+     * tiles, but lacks the functionality to fetch the vector tiles from wherever
+     * they are.
+     *
+     * Extends Leaflet's `L.GridLayer`.
+     */
+
+    L.VectorGrid = L.GridLayer.extend({
+
+        options: {
+            // 🍂option rendererFactory = L.svg.tile
+            // A factory method which will be used to instantiate the per-tile renderers.
+            rendererFactory: L.svg.tile,
+
+            // 🍂option vectorTileLayerStyles: Object = {}
+            // A data structure holding initial symbolizer definitions for the vector features.
+            vectorTileLayerStyles: {},
+
+            // 🍂option interactive: Boolean = false
+            // Whether this `VectorGrid` fires `Interactive Layer` events.
+            interactive: false
+
+        },
+
+        initialize: function (options) {
+            L.setOptions(this, options);
+            L.GridLayer.prototype.initialize.apply(this, arguments);
+            if (this.options.getFeatureId) {
+                this._vectorTiles = {};
+                this._overriddenStyles = {};
+                this.on('tileunload', function (e) {
+                    var key = this._tileCoordsToKey(e.coords),
+                        tile = this._vectorTiles[key];
+
+                    if (tile && this._map) {
+                        tile.removeFrom(this._map);
+                    }
+                    delete this._vectorTiles[key];
+                }, this);
+            }
+            this._dataLayerNames = {};
+        },
+
+        createTile: function (coords, done) {
+            var storeFeatures = this.options.getFeatureId;
+
+            var tileSize = this.getTileSize();
+            var renderer = this.options.rendererFactory(coords, tileSize, this.options);
+
+            var vectorTilePromise = this._getVectorTilePromise(coords);
+
+            var zoom_level = coords.z;
+
+            if (storeFeatures) {
+                this._vectorTiles[this._tileCoordsToKey(coords)] = renderer;
+                renderer._features = {};
+            }
+
+            vectorTilePromise.then(function renderTile(vectorTile) {
+                var layersKeys = Object.keys(vectorTile.layers);
+                // console.log("layers:",layersKeys);
+                if (this.options.layersOrdering) {
+                    layersKeys = this.options.layersOrdering(vectorTile.layers, zoom_level);
+                }
+
+                for (var index in layersKeys) {
+                    var layerName = layersKeys[index];
+                    // console.log('check',layerName,vectorTile.layers, (vectorTile.layers[layerName]))
+                    if (vectorTile.layers[layerName]) {
+                        this._dataLayerNames[layerName] = true;
+                        var layer = vectorTile.layers[layerName];
+
+                        var pxPerExtent = this.getTileSize().divideBy(layer.extent);
+
+                        var layerStyle = this.options.vectorTileLayerStyles[layerName] || L.Path.prototype.options;
+
+                        for (var i = 0; i < layer.features.length; i++) {
+                            var feat = layer.features[i];
+                            var id;
+
+                            var styleOptions = layerStyle;
+                            if (storeFeatures) {
+                                id = this.options.getFeatureId(feat);
+                                var styleOverride = this._overriddenStyles[id];
+                                if (styleOverride) {
+                                    if (styleOverride[layerName]) {
+                                        styleOptions = styleOverride[layerName];
+                                    } else {
+                                        styleOptions = styleOverride;
+                                    }
+                                }
+                            }
+
+                            if (styleOptions instanceof Function) {
+                                styleOptions = styleOptions(feat.properties, coords.z);
+                            }
+
+                            if (!(styleOptions instanceof Array)) {
+                                styleOptions = [styleOptions];
+                            }
+
+                            if (!styleOptions.length) {
+                                continue;
+                            }
+
+                            var featureLayer = this._createLayer(feat, pxPerExtent);
+
+                            for (var j = 0; j < styleOptions.length; j++) {
+                                var style = L.extend({}, L.Path.prototype.options, styleOptions[j]);
+                                featureLayer.render(renderer, style);
+                                renderer._addPath(featureLayer);
+                            }
+
+                            if (this.options.interactive) {
+                                featureLayer.makeInteractive();
+                            }
+
+                            if (storeFeatures) {
+                                renderer._features[id] = {
+                                    layerName: layerName,
+                                    feature: featureLayer
+                                };
+                            }
+                        }
+                    }
+                }
+                if (this._map != null) {
+                    renderer.addTo(this._map);
+                }
+                L.Util.requestAnimFrame(done.bind(coords, null, null));
+            }.bind(this));
+
+            return renderer.getContainer();
+        },
+
+        // 🍂method setFeatureStyle(id: Number, layerStyle: L.Path Options): this
+        // Given the unique ID for a vector features (as per the `getFeatureId` option),
+        // re-symbolizes that feature across all tiles it appears in.
+        setFeatureStyle: function (id, layerStyle) {
+            this._overriddenStyles[id] = layerStyle;
+
+            for (var tileKey in this._vectorTiles) {
+                var tile = this._vectorTiles[tileKey];
+                var features = tile._features;
+                var data = features[id];
+                if (data) {
+                    var feat = data.feature;
+
+                    var styleOptions = layerStyle;
+                    if (layerStyle[data.layerName]) {
+                        styleOptions = layerStyle[data.layerName];
+                    }
+
+                    this._updateStyles(feat, tile, styleOptions);
+                }
+            }
+            return this;
+        },
+
+        // 🍂method setFeatureStyle(id: Number): this
+        // Reverts the effects of a previous `setFeatureStyle` call.
+        resetFeatureStyle: function (id) {
+            delete this._overriddenStyles[id];
+
+            for (var tileKey in this._vectorTiles) {
+                var tile = this._vectorTiles[tileKey];
+                var features = tile._features;
+                var data = features[id];
+                if (data) {
+                    var feat = data.feature;
+                    var styleOptions = this.options.vectorTileLayerStyles[data.layerName] || L.Path.prototype.options;
+                    this._updateStyles(feat, tile, styleOptions);
+                }
+            }
+            return this;
+        },
+
+        // 🍂method getDataLayerNames(): Array
+        // Returns an array of strings, with all the known names of data layers in
+        // the vector tiles displayed. Useful for introspection.
+        getDataLayerNames: function () {
+            return Object.keys(this._dataLayerNames);
+        },
+
+        _updateStyles: function (feat, renderer, styleOptions) {
+            styleOptions = styleOptions instanceof Function ? styleOptions(feat.properties, renderer.getCoord().z) : styleOptions;
+
+            if (!(styleOptions instanceof Array)) {
+                styleOptions = [styleOptions];
+            }
+
+            for (var j = 0; j < styleOptions.length; j++) {
+                var style = L.extend({}, L.Path.prototype.options, styleOptions[j]);
+                feat.updateStyle(renderer, style);
+            }
+        },
+
+        _createLayer: function (feat, pxPerExtent, layerStyle) {
+            var layer;
+            switch (feat.type) {
+                case 1:
+                    layer = new PointSymbolizer(feat, pxPerExtent);
+                    break;
+                case 2:
+                    layer = new LineSymbolizer(feat, pxPerExtent);
+                    break;
+                case 3:
+                    layer = new FillSymbolizer(feat, pxPerExtent);
+                    break;
+            }
+
+            if (this.options.interactive) {
+                layer.addEventParent(this);
+            }
+
+            return layer;
+        }
+    });
+
+    /*
+     * 🍂section Extension methods
+     *
+     * Classes inheriting from `VectorGrid` **must** define the `_getVectorTilePromise` private method.
+     *
+     * 🍂method getVectorTilePromise(coords: Object): Promise
+     * Given a `coords` object in the form of `{x: Number, y: Number, z: Number}`,
+     * this function must return a `Promise` for a vector tile.
+     *
+     */
+    L.vectorGrid = function (options) {
+        return new L.VectorGrid(options);
+    };
+
+    /*
+     * 🍂class VectorGrid.Protobuf
+     * 🍂extends VectorGrid
+     *
+     * A `VectorGrid` for vector tiles fetched from the internet.
+     * Tiles are supposed to be protobufs (AKA "protobuffer" or "Protocol Buffers"),
+     * containing data which complies with the
+     * [MapBox Vector Tile Specification](https://github.com/mapbox/vector-tile-spec/tree/master/2.1).
+     *
+     * This is the format used by:
+     * - Mapbox Vector Tiles
+     * - Mapzen Vector Tiles
+     * - ESRI Vector Tiles
+     * - [OpenMapTiles hosted Vector Tiles](https://openmaptiles.com/hosting/)
+     *
+     * 🍂example
+     *
+     * You must initialize a `VectorGrid.Protobuf` with a URL template, just like in
+     * `L.TileLayer`s. The difference is that the template must point to vector tiles
+     * (usually `.pbf` or `.mvt`) instead of raster (`.png` or `.jpg`) tiles, and that
+     * you should define the styling for all the features.
+     *
+     * <br><br>
+     *
+     * For OpenMapTiles, with a key from [https://openmaptiles.org/docs/host/use-cdn/](https://openmaptiles.org/docs/host/use-cdn/),
+     * initialization looks like this:
+     *
+     * ```
+     * L.vectorGrid.protobuf("https://free-{s}.tilehosting.com/data/v3/{z}/{x}/{y}.pbf.pict?key={key}", {
+     * 	vectorTileLayerStyles: { ... },
+     * 	subdomains: "0123",
+     * 	key: 'abcdefghi01234567890',
+     * 	maxNativeZoom: 14
+     * }).addTo(map);
+     * ```
+     *
+     * And for Mapbox vector tiles, it looks like this:
+     *
+     * ```
+     * L.vectorGrid.protobuf("https://{s}.tiles.mapbox.com/v4/mapbox.mapbox-streets-v6/{z}/{x}/{y}.vector.pbf?access_token={token}", {
+     * 	vectorTileLayerStyles: { ... },
+     * 	subdomains: "abcd",
+     * 	token: "pk.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRTS.TUVWXTZ0123456789abcde"
+     * }).addTo(map);
+     * ```
+     */
+    L.VectorGrid.Protobuf = L.VectorGrid.extend({
+
+        options: {
+            // 🍂section
+            // As with `L.TileLayer`, the URL template might contain a reference to
+            // any option (see the example above and note the `{key}` or `token` in the URL
+            // template, and the corresponding option).
+            //
+            // 🍂option subdomains: String = 'abc'
+            // Akin to the `subdomains` option for `L.TileLayer`.
+            subdomains: 'abc', // Like L.TileLayer
+            //
+            // 🍂option fetchOptions: Object = {}
+            // options passed to `fetch`, e.g. {credentials: 'same-origin'} to send cookie for the current domain
+            fetchOptions: {}
+        },
+
+        initialize: function (url, options) {
+            // Inherits options from geojson-vt!
+            // 		this._slicer = geojsonvt(geojson, options);
+            this._url = url;
+            L.VectorGrid.prototype.initialize.call(this, options);
+        },
+
+        _getSubdomain: L.TileLayer.prototype._getSubdomain,
+
+        _getVectorTilePromise: function (coords) {
+            var data = {
+                s: this._getSubdomain(coords),
+                x: coords.x,
+                y: coords.y,
+                z: coords.z
+                // 			z: this._getZoomForUrl()	/// TODO: Maybe replicate TileLayer's maxNativeZoom
+            };
+            var layersOrdering = this.layersOrdering;
+
+            if (this._map && !this._map.options.crs.infinite) {
+                var invertedY = this._globalTileRange.max.y - coords.y;
+                if (this.options.tms) {
+                    // Should this option be available in Leaflet.VectorGrid?
+                    data['y'] = invertedY;
+                }
+                data['-y'] = invertedY;
+            }
+
+            var tileUrl = L.Util.template(this._url, L.extend(data, this.options));
+
+            return fetch(tileUrl, this.options.fetchOptions).then(function (response) {
+
+                if (!response.ok) {
+                    return { layers: [] };
+                }
+
+                return response.blob().then(function (blob) {
+                    // 				console.log(blob);
+
+                    var reader = new FileReader();
+                    return new Promise(function (resolve) {
+                        reader.addEventListener("loadend", function () {
+                            // reader.result contains the contents of blob as a typed array
+
+                            // blob.type === 'application/x-protobuf'
+                            var pbf = new index(reader.result);
+                            // 						console.log(pbf);
+                            return resolve(new VectorTile(pbf));
+                        });
+                        reader.readAsArrayBuffer(blob);
+                    });
+                });
+            }).then(function (json) {
+
+                // 			console.log('Vector tile:', json.layers);
+                // 			console.log('Vector tile water:', json.layers.water);	// Instance of VectorTileLayer
+
+                // Normalize feature getters into actual instanced features
+                for (var layerName in json.layers) {
+                    var feats = [];
+                    for (var i = 0; i < json.layers[layerName].length; i++) {
+                        var feat = json.layers[layerName].feature(i);
+                        feat.geometry = feat.loadGeometry();
+                        feats.push(feat);
+                    }
+
+                    json.layers[layerName].features = feats;
+                }
+
+                return json;
+            });
+        }
+    });
+
+    // 🍂factory L.vectorGrid.protobuf(url: String, options)
+    // Instantiates a new protobuf VectorGrid with the given URL template and options
+    L.vectorGrid.protobuf = function (url, options) {
+        return new L.VectorGrid.Protobuf(url, options);
+    };
+
+    var workerCode = __$strToBlobUri("'use strict';\n\nvar simplify_1 = simplify$1;\n\n// calculate simplification data using optimized Douglas-Peucker algorithm\n\nfunction simplify$1(points, tolerance) {\n\n    var sqTolerance = tolerance * tolerance,\n        len = points.length,\n        first = 0,\n        last = len - 1,\n        stack = [],\n        i, maxSqDist, sqDist, index;\n\n    // always retain the endpoints (1 is the max value)\n    points[first][2] = 1;\n    points[last][2] = 1;\n\n    // avoid recursion by using a stack\n    while (last) {\n\n        maxSqDist = 0;\n\n        for (i = first + 1; i < last; i++) {\n            sqDist = getSqSegDist(points[i], points[first], points[last]);\n\n            if (sqDist > maxSqDist) {\n                index = i;\n                maxSqDist = sqDist;\n            }\n        }\n\n        if (maxSqDist > sqTolerance) {\n            points[index][2] = maxSqDist; // save the point importance in squared pixels as a z coordinate\n            stack.push(first);\n            stack.push(index);\n            first = index;\n\n        } else {\n            last = stack.pop();\n            first = stack.pop();\n        }\n    }\n}\n\n// square distance from a point to a segment\nfunction getSqSegDist(p, a, b) {\n\n    var x = a[0], y = a[1],\n        bx = b[0], by = b[1],\n        px = p[0], py = p[1],\n        dx = bx - x,\n        dy = by - y;\n\n    if (dx !== 0 || dy !== 0) {\n\n        var t = ((px - x) * dx + (py - y) * dy) / (dx * dx + dy * dy);\n\n        if (t > 1) {\n            x = bx;\n            y = by;\n\n        } else if (t > 0) {\n            x += dx * t;\n            y += dy * t;\n        }\n    }\n\n    dx = px - x;\n    dy = py - y;\n\n    return dx * dx + dy * dy;\n}\n\nvar feature = createFeature$1;\n\nfunction createFeature$1(tags, type, geom, id) {\n    var feature = {\n        id: id || null,\n        type: type,\n        geometry: geom,\n        tags: tags || null,\n        min: [Infinity, Infinity], // initial bbox values\n        max: [-Infinity, -Infinity]\n    };\n    calcBBox(feature);\n    return feature;\n}\n\n// calculate the feature bounding box for faster clipping later\nfunction calcBBox(feature) {\n    var geometry = feature.geometry,\n        min = feature.min,\n        max = feature.max;\n\n    if (feature.type === 1) {\n        calcRingBBox(min, max, geometry);\n    } else {\n        for (var i = 0; i < geometry.length; i++) {\n            calcRingBBox(min, max, geometry[i]);\n        }\n    }\n\n    return feature;\n}\n\nfunction calcRingBBox(min, max, points) {\n    for (var i = 0, p; i < points.length; i++) {\n        p = points[i];\n        min[0] = Math.min(p[0], min[0]);\n        max[0] = Math.max(p[0], max[0]);\n        min[1] = Math.min(p[1], min[1]);\n        max[1] = Math.max(p[1], max[1]);\n    }\n}\n\nvar convert_1 = convert$1;\n\nvar simplify = simplify_1;\nvar createFeature = feature;\n\n// converts GeoJSON feature into an intermediate projected JSON vector format with simplification data\n\nfunction convert$1(data, tolerance) {\n    var features = [];\n\n    if (data.type === 'FeatureCollection') {\n        for (var i = 0; i < data.features.length; i++) {\n            convertFeature(features, data.features[i], tolerance);\n        }\n    } else if (data.type === 'Feature') {\n        convertFeature(features, data, tolerance);\n\n    } else {\n        // single geometry or a geometry collection\n        convertFeature(features, {geometry: data}, tolerance);\n    }\n    return features;\n}\n\nfunction convertFeature(features, feature$$1, tolerance) {\n    if (feature$$1.geometry === null) {\n        // ignore features with null geometry\n        return;\n    }\n\n    var geom = feature$$1.geometry,\n        type = geom.type,\n        coords = geom.coordinates,\n        tags = feature$$1.properties,\n        id = feature$$1.id,\n        i, j, rings, projectedRing;\n\n    if (type === 'Point') {\n        features.push(createFeature(tags, 1, [projectPoint(coords)], id));\n\n    } else if (type === 'MultiPoint') {\n        features.push(createFeature(tags, 1, project(coords), id));\n\n    } else if (type === 'LineString') {\n        features.push(createFeature(tags, 2, [project(coords, tolerance)], id));\n\n    } else if (type === 'MultiLineString' || type === 'Polygon') {\n        rings = [];\n        for (i = 0; i < coords.length; i++) {\n            projectedRing = project(coords[i], tolerance);\n            if (type === 'Polygon') { projectedRing.outer = (i === 0); }\n            rings.push(projectedRing);\n        }\n        features.push(createFeature(tags, type === 'Polygon' ? 3 : 2, rings, id));\n\n    } else if (type === 'MultiPolygon') {\n        rings = [];\n        for (i = 0; i < coords.length; i++) {\n            for (j = 0; j < coords[i].length; j++) {\n                projectedRing = project(coords[i][j], tolerance);\n                projectedRing.outer = (j === 0);\n                rings.push(projectedRing);\n            }\n        }\n        features.push(createFeature(tags, 3, rings, id));\n\n    } else if (type === 'GeometryCollection') {\n        for (i = 0; i < geom.geometries.length; i++) {\n            convertFeature(features, {\n                geometry: geom.geometries[i],\n                properties: tags\n            }, tolerance);\n        }\n\n    } else {\n        throw new Error('Input data is not a valid GeoJSON object.');\n    }\n}\n\nfunction project(lonlats, tolerance) {\n    var projected = [];\n    for (var i = 0; i < lonlats.length; i++) {\n        projected.push(projectPoint(lonlats[i]));\n    }\n    if (tolerance) {\n        simplify(projected, tolerance);\n        calcSize(projected);\n    }\n    return projected;\n}\n\nfunction projectPoint(p) {\n    var sin = Math.sin(p[1] * Math.PI / 180),\n        x = (p[0] / 360 + 0.5),\n        y = (0.5 - 0.25 * Math.log((1 + sin) / (1 - sin)) / Math.PI);\n\n    y = y < 0 ? 0 :\n        y > 1 ? 1 : y;\n\n    return [x, y, 0];\n}\n\n// calculate area and length of the poly\nfunction calcSize(points) {\n    var area = 0,\n        dist = 0;\n\n    for (var i = 0, a, b; i < points.length - 1; i++) {\n        a = b || points[i];\n        b = points[i + 1];\n\n        area += a[0] * b[1] - b[0] * a[1];\n\n        // use Manhattan distance instead of Euclidian one to avoid expensive square root computation\n        dist += Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]);\n    }\n    points.area = Math.abs(area / 2);\n    points.dist = dist;\n}\n\nvar tile = transformTile;\nvar point = transformPoint;\n\n// Transforms the coordinates of each feature in the given tile from\n// mercator-projected space into (extent x extent) tile space.\nfunction transformTile(tile, extent) {\n    if (tile.transformed) { return tile; }\n\n    var z2 = tile.z2,\n        tx = tile.x,\n        ty = tile.y,\n        i, j, k;\n\n    for (i = 0; i < tile.features.length; i++) {\n        var feature = tile.features[i],\n            geom = feature.geometry,\n            type = feature.type;\n\n        if (type === 1) {\n            for (j = 0; j < geom.length; j++) { geom[j] = transformPoint(geom[j], extent, z2, tx, ty); }\n\n        } else {\n            for (j = 0; j < geom.length; j++) {\n                var ring = geom[j];\n                for (k = 0; k < ring.length; k++) { ring[k] = transformPoint(ring[k], extent, z2, tx, ty); }\n            }\n        }\n    }\n\n    tile.transformed = true;\n\n    return tile;\n}\n\nfunction transformPoint(p, extent, z2, tx, ty) {\n    var x = Math.round(extent * (p[0] * z2 - tx)),\n        y = Math.round(extent * (p[1] * z2 - ty));\n    return [x, y];\n}\n\nvar transform$1 = {\n	tile: tile,\n	point: point\n};\n\nvar clip_1 = clip$1;\n\nvar createFeature$2 = feature;\n\n/* clip features between two axis-parallel lines:\n *     |        |\n *  ___|___     |     /\n * /   |   \____|____/\n *     |        |\n */\n\nfunction clip$1(features, scale, k1, k2, axis, intersect, minAll, maxAll) {\n\n    k1 /= scale;\n    k2 /= scale;\n\n    if (minAll >= k1 && maxAll <= k2) { return features; } // trivial accept\n    else if (minAll > k2 || maxAll < k1) { return null; } // trivial reject\n\n    var clipped = [];\n\n    for (var i = 0; i < features.length; i++) {\n\n        var feature$$1 = features[i],\n            geometry = feature$$1.geometry,\n            type = feature$$1.type,\n            min, max;\n\n        min = feature$$1.min[axis];\n        max = feature$$1.max[axis];\n\n        if (min >= k1 && max <= k2) { // trivial accept\n            clipped.push(feature$$1);\n            continue;\n        } else if (min > k2 || max < k1) { continue; } // trivial reject\n\n        var slices = type === 1 ?\n                clipPoints(geometry, k1, k2, axis) :\n                clipGeometry(geometry, k1, k2, axis, intersect, type === 3);\n\n        if (slices.length) {\n            // if a feature got clipped, it will likely get clipped on the next zoom level as well,\n            // so there's no need to recalculate bboxes\n            clipped.push(createFeature$2(feature$$1.tags, type, slices, feature$$1.id));\n        }\n    }\n\n    return clipped.length ? clipped : null;\n}\n\nfunction clipPoints(geometry, k1, k2, axis) {\n    var slice = [];\n\n    for (var i = 0; i < geometry.length; i++) {\n        var a = geometry[i],\n            ak = a[axis];\n\n        if (ak >= k1 && ak <= k2) { slice.push(a); }\n    }\n    return slice;\n}\n\nfunction clipGeometry(geometry, k1, k2, axis, intersect, closed) {\n\n    var slices = [];\n\n    for (var i = 0; i < geometry.length; i++) {\n\n        var ak = 0,\n            bk = 0,\n            b = null,\n            points = geometry[i],\n            area = points.area,\n            dist = points.dist,\n            outer = points.outer,\n            len = points.length,\n            a, j, last;\n\n        var slice = [];\n\n        for (j = 0; j < len - 1; j++) {\n            a = b || points[j];\n            b = points[j + 1];\n            ak = bk || a[axis];\n            bk = b[axis];\n\n            if (ak < k1) {\n\n                if ((bk > k2)) { // ---|-----|-->\n                    slice.push(intersect(a, b, k1), intersect(a, b, k2));\n                    if (!closed) { slice = newSlice(slices, slice, area, dist, outer); }\n\n                } else if (bk >= k1) { slice.push(intersect(a, b, k1)); } // ---|-->  |\n\n            } else if (ak > k2) {\n\n                if ((bk < k1)) { // <--|-----|---\n                    slice.push(intersect(a, b, k2), intersect(a, b, k1));\n                    if (!closed) { slice = newSlice(slices, slice, area, dist, outer); }\n\n                } else if (bk <= k2) { slice.push(intersect(a, b, k2)); } // |  <--|---\n\n            } else {\n\n                slice.push(a);\n\n                if (bk < k1) { // <--|---  |\n                    slice.push(intersect(a, b, k1));\n                    if (!closed) { slice = newSlice(slices, slice, area, dist, outer); }\n\n                } else if (bk > k2) { // |  ---|-->\n                    slice.push(intersect(a, b, k2));\n                    if (!closed) { slice = newSlice(slices, slice, area, dist, outer); }\n                }\n                // | --> |\n            }\n        }\n\n        // add the last point\n        a = points[len - 1];\n        ak = a[axis];\n        if (ak >= k1 && ak <= k2) { slice.push(a); }\n\n        // close the polygon if its endpoints are not the same after clipping\n\n        last = slice[slice.length - 1];\n        if (closed && last && (slice[0][0] !== last[0] || slice[0][1] !== last[1])) { slice.push(slice[0]); }\n\n        // add the final slice\n        newSlice(slices, slice, area, dist, outer);\n    }\n\n    return slices;\n}\n\nfunction newSlice(slices, slice, area, dist, outer) {\n    if (slice.length) {\n        // we don't recalculate the area/length of the unclipped geometry because the case where it goes\n        // below the visibility threshold as a result of clipping is rare, so we avoid doing unnecessary work\n        slice.area = area;\n        slice.dist = dist;\n        if (outer !== undefined) { slice.outer = outer; }\n\n        slices.push(slice);\n    }\n    return [];\n}\n\nvar clip$2 = clip_1;\nvar createFeature$3 = feature;\n\nvar wrap_1 = wrap$1;\n\nfunction wrap$1(features, buffer, intersectX) {\n    var merged = features,\n        left  = clip$2(features, 1, -1 - buffer, buffer,     0, intersectX, -1, 2), // left world copy\n        right = clip$2(features, 1,  1 - buffer, 2 + buffer, 0, intersectX, -1, 2); // right world copy\n\n    if (left || right) {\n        merged = clip$2(features, 1, -buffer, 1 + buffer, 0, intersectX, -1, 2) || []; // center world copy\n\n        if (left) { merged = shiftFeatureCoords(left, 1).concat(merged); } // merge left into center\n        if (right) { merged = merged.concat(shiftFeatureCoords(right, -1)); } // merge right into center\n    }\n\n    return merged;\n}\n\nfunction shiftFeatureCoords(features, offset) {\n    var newFeatures = [];\n\n    for (var i = 0; i < features.length; i++) {\n        var feature$$1 = features[i],\n            type = feature$$1.type;\n\n        var newGeometry;\n\n        if (type === 1) {\n            newGeometry = shiftCoords(feature$$1.geometry, offset);\n        } else {\n            newGeometry = [];\n            for (var j = 0; j < feature$$1.geometry.length; j++) {\n                newGeometry.push(shiftCoords(feature$$1.geometry[j], offset));\n            }\n        }\n\n        newFeatures.push(createFeature$3(feature$$1.tags, type, newGeometry, feature$$1.id));\n    }\n\n    return newFeatures;\n}\n\nfunction shiftCoords(points, offset) {\n    var newPoints = [];\n    newPoints.area = points.area;\n    newPoints.dist = points.dist;\n\n    for (var i = 0; i < points.length; i++) {\n        newPoints.push([points[i][0] + offset, points[i][1], points[i][2]]);\n    }\n    return newPoints;\n}\n\nvar tile$1 = createTile$1;\n\nfunction createTile$1(features, z2, tx, ty, tolerance, noSimplify) {\n    var tile = {\n        features: [],\n        numPoints: 0,\n        numSimplified: 0,\n        numFeatures: 0,\n        source: null,\n        x: tx,\n        y: ty,\n        z2: z2,\n        transformed: false,\n        min: [2, 1],\n        max: [-1, 0]\n    };\n    for (var i = 0; i < features.length; i++) {\n        tile.numFeatures++;\n        addFeature(tile, features[i], tolerance, noSimplify);\n\n        var min = features[i].min,\n            max = features[i].max;\n\n        if (min[0] < tile.min[0]) { tile.min[0] = min[0]; }\n        if (min[1] < tile.min[1]) { tile.min[1] = min[1]; }\n        if (max[0] > tile.max[0]) { tile.max[0] = max[0]; }\n        if (max[1] > tile.max[1]) { tile.max[1] = max[1]; }\n    }\n    return tile;\n}\n\nfunction addFeature(tile, feature, tolerance, noSimplify) {\n\n    var geom = feature.geometry,\n        type = feature.type,\n        simplified = [],\n        sqTolerance = tolerance * tolerance,\n        i, j, ring, p;\n\n    if (type === 1) {\n        for (i = 0; i < geom.length; i++) {\n            simplified.push(geom[i]);\n            tile.numPoints++;\n            tile.numSimplified++;\n        }\n\n    } else {\n\n        // simplify and transform projected coordinates for tile geometry\n        for (i = 0; i < geom.length; i++) {\n            ring = geom[i];\n\n            // filter out tiny polylines & polygons\n            if (!noSimplify && ((type === 2 && ring.dist < tolerance) ||\n                                (type === 3 && ring.area < sqTolerance))) {\n                tile.numPoints += ring.length;\n                continue;\n            }\n\n            var simplifiedRing = [];\n\n            for (j = 0; j < ring.length; j++) {\n                p = ring[j];\n                // keep points with importance > tolerance\n                if (noSimplify || p[2] > sqTolerance) {\n                    simplifiedRing.push(p);\n                    tile.numSimplified++;\n                }\n                tile.numPoints++;\n            }\n\n            if (type === 3) { rewind(simplifiedRing, ring.outer); }\n\n            simplified.push(simplifiedRing);\n        }\n    }\n\n    if (simplified.length) {\n        var tileFeature = {\n            geometry: simplified,\n            type: type,\n            tags: feature.tags || null\n        };\n        if (feature.id !== null) {\n            tileFeature.id = feature.id;\n        }\n        tile.features.push(tileFeature);\n    }\n}\n\nfunction rewind(ring, clockwise) {\n    var area = signedArea(ring);\n    if (area < 0 === clockwise) { ring.reverse(); }\n}\n\nfunction signedArea(ring) {\n    var sum = 0;\n    for (var i = 0, len = ring.length, j = len - 1, p1, p2; i < len; j = i++) {\n        p1 = ring[i];\n        p2 = ring[j];\n        sum += (p2[0] - p1[0]) * (p1[1] + p2[1]);\n    }\n    return sum;\n}\n\nvar index = geojsonvt;\n\nvar convert = convert_1;\nvar transform = transform$1;\nvar clip = clip_1;\nvar wrap = wrap_1;\nvar createTile = tile$1;     // final simplified tile generation\n\n\nfunction geojsonvt(data, options) {\n    return new GeoJSONVT(data, options);\n}\n\nfunction GeoJSONVT(data, options) {\n    options = this.options = extend(Object.create(this.options), options);\n\n    var debug = options.debug;\n\n    if (debug) { console.time('preprocess data'); }\n\n    var z2 = 1 << options.maxZoom, // 2^z\n        features = convert(data, options.tolerance / (z2 * options.extent));\n\n    this.tiles = {};\n    this.tileCoords = [];\n\n    if (debug) {\n        console.timeEnd('preprocess data');\n        console.log('index: maxZoom: %d, maxPoints: %d', options.indexMaxZoom, options.indexMaxPoints);\n        console.time('generate tiles');\n        this.stats = {};\n        this.total = 0;\n    }\n\n    features = wrap(features, options.buffer / options.extent, intersectX);\n\n    // start slicing from the top tile down\n    if (features.length) { this.splitTile(features, 0, 0, 0); }\n\n    if (debug) {\n        if (features.length) { console.log('features: %d, points: %d', this.tiles[0].numFeatures, this.tiles[0].numPoints); }\n        console.timeEnd('generate tiles');\n        console.log('tiles generated:', this.total, JSON.stringify(this.stats));\n    }\n}\n\nGeoJSONVT.prototype.options = {\n    maxZoom: 14,            // max zoom to preserve detail on\n    indexMaxZoom: 5,        // max zoom in the tile index\n    indexMaxPoints: 100000, // max number of points per tile in the tile index\n    solidChildren: false,   // whether to tile solid square tiles further\n    tolerance: 3,           // simplification tolerance (higher means simpler)\n    extent: 4096,           // tile extent\n    buffer: 64,             // tile buffer on each side\n    debug: 0                // logging level (0, 1 or 2)\n};\n\nGeoJSONVT.prototype.splitTile = function (features, z, x, y, cz, cx, cy) {\n    var this$1 = this;\n\n\n    var stack = [features, z, x, y],\n        options = this.options,\n        debug = options.debug,\n        solid = null;\n\n    // avoid recursion by using a processing queue\n    while (stack.length) {\n        y = stack.pop();\n        x = stack.pop();\n        z = stack.pop();\n        features = stack.pop();\n\n        var z2 = 1 << z,\n            id = toID(z, x, y),\n            tile = this$1.tiles[id],\n            tileTolerance = z === options.maxZoom ? 0 : options.tolerance / (z2 * options.extent);\n\n        if (!tile) {\n            if (debug > 1) { console.time('creation'); }\n\n            tile = this$1.tiles[id] = createTile(features, z2, x, y, tileTolerance, z === options.maxZoom);\n            this$1.tileCoords.push({z: z, x: x, y: y});\n\n            if (debug) {\n                if (debug > 1) {\n                    console.log('tile z%d-%d-%d (features: %d, points: %d, simplified: %d)',\n                        z, x, y, tile.numFeatures, tile.numPoints, tile.numSimplified);\n                    console.timeEnd('creation');\n                }\n                var key = 'z' + z;\n                this$1.stats[key] = (this$1.stats[key] || 0) + 1;\n                this$1.total++;\n            }\n        }\n\n        // save reference to original geometry in tile so that we can drill down later if we stop now\n        tile.source = features;\n\n        // if it's the first-pass tiling\n        if (!cz) {\n            // stop tiling if we reached max zoom, or if the tile is too simple\n            if (z === options.indexMaxZoom || tile.numPoints <= options.indexMaxPoints) { continue; }\n\n        // if a drilldown to a specific tile\n        } else {\n            // stop tiling if we reached base zoom or our target tile zoom\n            if (z === options.maxZoom || z === cz) { continue; }\n\n            // stop tiling if it's not an ancestor of the target tile\n            var m = 1 << (cz - z);\n            if (x !== Math.floor(cx / m) || y !== Math.floor(cy / m)) { continue; }\n        }\n\n        // stop tiling if the tile is solid clipped square\n        if (!options.solidChildren && isClippedSquare(tile, options.extent, options.buffer)) {\n            if (cz) { solid = z; } // and remember the zoom if we're drilling down\n            continue;\n        }\n\n        // if we slice further down, no need to keep source geometry\n        tile.source = null;\n\n        if (debug > 1) { console.time('clipping'); }\n\n        // values we'll use for clipping\n        var k1 = 0.5 * options.buffer / options.extent,\n            k2 = 0.5 - k1,\n            k3 = 0.5 + k1,\n            k4 = 1 + k1,\n            tl, bl, tr, br, left, right;\n\n        tl = bl = tr = br = null;\n\n        left  = clip(features, z2, x - k1, x + k3, 0, intersectX, tile.min[0], tile.max[0]);\n        right = clip(features, z2, x + k2, x + k4, 0, intersectX, tile.min[0], tile.max[0]);\n\n        if (left) {\n            tl = clip(left, z2, y - k1, y + k3, 1, intersectY, tile.min[1], tile.max[1]);\n            bl = clip(left, z2, y + k2, y + k4, 1, intersectY, tile.min[1], tile.max[1]);\n        }\n\n        if (right) {\n            tr = clip(right, z2, y - k1, y + k3, 1, intersectY, tile.min[1], tile.max[1]);\n            br = clip(right, z2, y + k2, y + k4, 1, intersectY, tile.min[1], tile.max[1]);\n        }\n\n        if (debug > 1) { console.timeEnd('clipping'); }\n\n        if (features.length) {\n            stack.push(tl || [], z + 1, x * 2,     y * 2);\n            stack.push(bl || [], z + 1, x * 2,     y * 2 + 1);\n            stack.push(tr || [], z + 1, x * 2 + 1, y * 2);\n            stack.push(br || [], z + 1, x * 2 + 1, y * 2 + 1);\n        }\n    }\n\n    return solid;\n};\n\nGeoJSONVT.prototype.getTile = function (z, x, y) {\n    var this$1 = this;\n\n    var options = this.options,\n        extent = options.extent,\n        debug = options.debug;\n\n    var z2 = 1 << z;\n    x = ((x % z2) + z2) % z2; // wrap tile x coordinate\n\n    var id = toID(z, x, y);\n    if (this.tiles[id]) { return transform.tile(this.tiles[id], extent); }\n\n    if (debug > 1) { console.log('drilling down to z%d-%d-%d', z, x, y); }\n\n    var z0 = z,\n        x0 = x,\n        y0 = y,\n        parent;\n\n    while (!parent && z0 > 0) {\n        z0--;\n        x0 = Math.floor(x0 / 2);\n        y0 = Math.floor(y0 / 2);\n        parent = this$1.tiles[toID(z0, x0, y0)];\n    }\n\n    if (!parent || !parent.source) { return null; }\n\n    // if we found a parent tile containing the original geometry, we can drill down from it\n    if (debug > 1) { console.log('found parent tile z%d-%d-%d', z0, x0, y0); }\n\n    // it parent tile is a solid clipped square, return it instead since it's identical\n    if (isClippedSquare(parent, extent, options.buffer)) { return transform.tile(parent, extent); }\n\n    if (debug > 1) { console.time('drilling down'); }\n    var solid = this.splitTile(parent.source, z0, x0, y0, z, x, y);\n    if (debug > 1) { console.timeEnd('drilling down'); }\n\n    // one of the parent tiles was a solid clipped square\n    if (solid !== null) {\n        var m = 1 << (z - solid);\n        id = toID(solid, Math.floor(x / m), Math.floor(y / m));\n    }\n\n    return this.tiles[id] ? transform.tile(this.tiles[id], extent) : null;\n};\n\nfunction toID(z, x, y) {\n    return (((1 << z) * y + x) * 32) + z;\n}\n\nfunction intersectX(a, b, x) {\n    return [x, (x - a[0]) * (b[1] - a[1]) / (b[0] - a[0]) + a[1], 1];\n}\nfunction intersectY(a, b, y) {\n    return [(y - a[1]) * (b[0] - a[0]) / (b[1] - a[1]) + a[0], y, 1];\n}\n\nfunction extend(dest, src) {\n    for (var i in src) { dest[i] = src[i]; }\n    return dest;\n}\n\n// checks whether a tile is a whole-area fill after clipping; if it is, there's no sense slicing it further\nfunction isClippedSquare(tile, extent, buffer) {\n\n    var features = tile.source;\n    if (features.length !== 1) { return false; }\n\n    var feature = features[0];\n    if (feature.type !== 3 || feature.geometry.length > 1) { return false; }\n\n    var len = feature.geometry[0].length;\n    if (len !== 5) { return false; }\n\n    for (var i = 0; i < len; i++) {\n        var p = transform.point(feature.geometry[0][i], extent, tile.z2, tile.x, tile.y);\n        if ((p[0] !== -buffer && p[0] !== extent + buffer) ||\n            (p[1] !== -buffer && p[1] !== extent + buffer)) { return false; }\n    }\n\n    return true;\n}\n\nvar identity = function(x) {\n  return x;\n};\n\nvar transform$3 = function(topology) {\n  if ((transform = topology.transform) == null) { return identity; }\n  var transform,\n      x0,\n      y0,\n      kx = transform.scale[0],\n      ky = transform.scale[1],\n      dx = transform.translate[0],\n      dy = transform.translate[1];\n  return function(point, i) {\n    if (!i) { x0 = y0 = 0; }\n    point[0] = (x0 += point[0]) * kx + dx;\n    point[1] = (y0 += point[1]) * ky + dy;\n    return point;\n  };\n};\n\nvar bbox = function(topology) {\n  var bbox = topology.bbox;\n\n  function bboxPoint(p0) {\n    p1[0] = p0[0], p1[1] = p0[1], t(p1);\n    if (p1[0] < x0) { x0 = p1[0]; }\n    if (p1[0] > x1) { x1 = p1[0]; }\n    if (p1[1] < y0) { y0 = p1[1]; }\n    if (p1[1] > y1) { y1 = p1[1]; }\n  }\n\n  function bboxGeometry(o) {\n    switch (o.type) {\n      case \"GeometryCollection\": o.geometries.forEach(bboxGeometry); break;\n      case \"Point\": bboxPoint(o.coordinates); break;\n      case \"MultiPoint\": o.coordinates.forEach(bboxPoint); break;\n    }\n  }\n\n  if (!bbox) {\n    var t = transform$3(topology), p0, p1 = new Array(2), name,\n        x0 = Infinity, y0 = x0, x1 = -x0, y1 = -x0;\n\n    topology.arcs.forEach(function(arc) {\n      var i = -1, n = arc.length;\n      while (++i < n) {\n        p0 = arc[i], p1[0] = p0[0], p1[1] = p0[1], t(p1, i);\n        if (p1[0] < x0) { x0 = p1[0]; }\n        if (p1[0] > x1) { x1 = p1[0]; }\n        if (p1[1] < y0) { y0 = p1[1]; }\n        if (p1[1] > y1) { y1 = p1[1]; }\n      }\n    });\n\n    for (name in topology.objects) {\n      bboxGeometry(topology.objects[name]);\n    }\n\n    bbox = topology.bbox = [x0, y0, x1, y1];\n  }\n\n  return bbox;\n};\n\nvar reverse = function(array, n) {\n  var t, j = array.length, i = j - n;\n  while (i < --j) { t = array[i], array[i++] = array[j], array[j] = t; }\n};\n\nvar feature$2 = function(topology, o) {\n  return o.type === \"GeometryCollection\"\n      ? {type: \"FeatureCollection\", features: o.geometries.map(function(o) { return feature$3(topology, o); })}\n      : feature$3(topology, o);\n};\n\nfunction feature$3(topology, o) {\n  var id = o.id,\n      bbox = o.bbox,\n      properties = o.properties == null ? {} : o.properties,\n      geometry = object(topology, o);\n  return id == null && bbox == null ? {type: \"Feature\", properties: properties, geometry: geometry}\n      : bbox == null ? {type: \"Feature\", id: id, properties: properties, geometry: geometry}\n      : {type: \"Feature\", id: id, bbox: bbox, properties: properties, geometry: geometry};\n}\n\nfunction object(topology, o) {\n  var transformPoint = transform$3(topology),\n      arcs = topology.arcs;\n\n  function arc(i, points) {\n    if (points.length) { points.pop(); }\n    for (var a = arcs[i < 0 ? ~i : i], k = 0, n = a.length; k < n; ++k) {\n      points.push(transformPoint(a[k].slice(), k));\n    }\n    if (i < 0) { reverse(points, n); }\n  }\n\n  function point(p) {\n    return transformPoint(p.slice());\n  }\n\n  function line(arcs) {\n    var points = [];\n    for (var i = 0, n = arcs.length; i < n; ++i) { arc(arcs[i], points); }\n    if (points.length < 2) { points.push(points[0].slice()); }\n    return points;\n  }\n\n  function ring(arcs) {\n    var points = line(arcs);\n    while (points.length < 4) { points.push(points[0].slice()); }\n    return points;\n  }\n\n  function polygon(arcs) {\n    return arcs.map(ring);\n  }\n\n  function geometry(o) {\n    var type = o.type, coordinates;\n    switch (type) {\n      case \"GeometryCollection\": return {type: type, geometries: o.geometries.map(geometry)};\n      case \"Point\": coordinates = point(o.coordinates); break;\n      case \"MultiPoint\": coordinates = o.coordinates.map(point); break;\n      case \"LineString\": coordinates = line(o.arcs); break;\n      case \"MultiLineString\": coordinates = o.arcs.map(line); break;\n      case \"Polygon\": coordinates = polygon(o.arcs); break;\n      case \"MultiPolygon\": coordinates = o.arcs.map(polygon); break;\n      default: return null;\n    }\n    return {type: type, coordinates: coordinates};\n  }\n\n  return geometry(o);\n}\n\nvar stitch = function(topology, arcs) {\n  var stitchedArcs = {},\n      fragmentByStart = {},\n      fragmentByEnd = {},\n      fragments = [],\n      emptyIndex = -1;\n\n  // Stitch empty arcs first, since they may be subsumed by other arcs.\n  arcs.forEach(function(i, j) {\n    var arc = topology.arcs[i < 0 ? ~i : i], t;\n    if (arc.length < 3 && !arc[1][0] && !arc[1][1]) {\n      t = arcs[++emptyIndex], arcs[emptyIndex] = i, arcs[j] = t;\n    }\n  });\n\n  arcs.forEach(function(i) {\n    var e = ends(i),\n        start = e[0],\n        end = e[1],\n        f, g;\n\n    if (f = fragmentByEnd[start]) {\n      delete fragmentByEnd[f.end];\n      f.push(i);\n      f.end = end;\n      if (g = fragmentByStart[end]) {\n        delete fragmentByStart[g.start];\n        var fg = g === f ? f : f.concat(g);\n        fragmentByStart[fg.start = f.start] = fragmentByEnd[fg.end = g.end] = fg;\n      } else {\n        fragmentByStart[f.start] = fragmentByEnd[f.end] = f;\n      }\n    } else if (f = fragmentByStart[end]) {\n      delete fragmentByStart[f.start];\n      f.unshift(i);\n      f.start = start;\n      if (g = fragmentByEnd[start]) {\n        delete fragmentByEnd[g.end];\n        var gf = g === f ? f : g.concat(f);\n        fragmentByStart[gf.start = g.start] = fragmentByEnd[gf.end = f.end] = gf;\n      } else {\n        fragmentByStart[f.start] = fragmentByEnd[f.end] = f;\n      }\n    } else {\n      f = [i];\n      fragmentByStart[f.start = start] = fragmentByEnd[f.end = end] = f;\n    }\n  });\n\n  function ends(i) {\n    var arc = topology.arcs[i < 0 ? ~i : i], p0 = arc[0], p1;\n    if (topology.transform) { p1 = [0, 0], arc.forEach(function(dp) { p1[0] += dp[0], p1[1] += dp[1]; }); }\n    else { p1 = arc[arc.length - 1]; }\n    return i < 0 ? [p1, p0] : [p0, p1];\n  }\n\n  function flush(fragmentByEnd, fragmentByStart) {\n    for (var k in fragmentByEnd) {\n      var f = fragmentByEnd[k];\n      delete fragmentByStart[f.start];\n      delete f.start;\n      delete f.end;\n      f.forEach(function(i) { stitchedArcs[i < 0 ? ~i : i] = 1; });\n      fragments.push(f);\n    }\n  }\n\n  flush(fragmentByEnd, fragmentByStart);\n  flush(fragmentByStart, fragmentByEnd);\n  arcs.forEach(function(i) { if (!stitchedArcs[i < 0 ? ~i : i]) { fragments.push([i]); } });\n\n  return fragments;\n};\n\nfunction extractArcs(topology, object$$1, filter) {\n  var arcs = [],\n      geomsByArc = [],\n      geom;\n\n  function extract0(i) {\n    var j = i < 0 ? ~i : i;\n    (geomsByArc[j] || (geomsByArc[j] = [])).push({i: i, g: geom});\n  }\n\n  function extract1(arcs) {\n    arcs.forEach(extract0);\n  }\n\n  function extract2(arcs) {\n    arcs.forEach(extract1);\n  }\n\n  function extract3(arcs) {\n    arcs.forEach(extract2);\n  }\n\n  function geometry(o) {\n    switch (geom = o, o.type) {\n      case \"GeometryCollection\": o.geometries.forEach(geometry); break;\n      case \"LineString\": extract1(o.arcs); break;\n      case \"MultiLineString\": case \"Polygon\": extract2(o.arcs); break;\n      case \"MultiPolygon\": extract3(o.arcs); break;\n    }\n  }\n\n  geometry(object$$1);\n\n  geomsByArc.forEach(filter == null\n      ? function(geoms) { arcs.push(geoms[0].i); }\n      : function(geoms) { if (filter(geoms[0].g, geoms[geoms.length - 1].g)) { arcs.push(geoms[0].i); } });\n\n  return arcs;\n}\n\nfunction planarRingArea(ring) {\n  var i = -1, n = ring.length, a, b = ring[n - 1], area = 0;\n  while (++i < n) { a = b, b = ring[i], area += a[0] * b[1] - a[1] * b[0]; }\n  return Math.abs(area); // Note: doubled area!\n}\n\nvar bisect = function(a, x) {\n  var lo = 0, hi = a.length;\n  while (lo < hi) {\n    var mid = lo + hi >>> 1;\n    if (a[mid] < x) { lo = mid + 1; }\n    else { hi = mid; }\n  }\n  return lo;\n};\n\nvar slicers = {};\nvar options;\n\nonmessage = function (e) {\n	if (e.data[0] === 'slice') {\n		// Given a blob of GeoJSON and some topojson/geojson-vt options, do the slicing.\n		var geojson = e.data[1];\n		options     = e.data[2];\n\n		if (geojson.type && geojson.type === 'Topology') {\n			for (var layerName in geojson.objects) {\n				slicers[layerName] = index(\n					feature$2(geojson, geojson.objects[layerName])\n				, options);\n			}\n		} else {\n			slicers[options.vectorTileLayerName] = index(geojson, options);\n		}\n\n	} else if (e.data[0] === 'get') {\n		// Gets the vector tile for the given coordinates, sends it back as a message\n		var coords = e.data[1];\n\n		var tileLayers = {};\n		for (var layerName in slicers) {\n			var slicedTileLayer = slicers[layerName].getTile(coords.z, coords.x, coords.y);\n\n			if (slicedTileLayer) {\n				var vectorTileLayer = {\n					features: [],\n					extent: options.extent,\n					name: options.vectorTileLayerName,\n					length: slicedTileLayer.features.length\n				};\n\n				for (var i in slicedTileLayer.features) {\n					var feat = {\n						geometry: slicedTileLayer.features[i].geometry,\n						properties: slicedTileLayer.features[i].tags,\n						type: slicedTileLayer.features[i].type	// 1 = point, 2 = line, 3 = polygon\n					};\n					vectorTileLayer.features.push(feat);\n				}\n				tileLayers[layerName] = vectorTileLayer;\n			}\n		}\n		postMessage({ layers: tileLayers, coords: coords });\n	}\n};\n//# sourceMap" + "pingURL=slicerWebWorker.js.worker.map\n", "text/plain; charset=us-ascii", false);
+
+    // The geojson/topojson is sliced into tiles via a web worker.
+    // This import statement depends on rollup-file-as-blob, so that the
+    // variable 'workerCode' is a blob URL.
+
+    /*
+     * 🍂class VectorGrid.Slicer
+     * 🍂extends VectorGrid
+     *
+     * A `VectorGrid` for slicing up big GeoJSON or TopoJSON documents in vector
+     * tiles, leveraging [`geojson-vt`](https://github.com/mapbox/geojson-vt).
+     *
+     * 🍂example
+     *
+     * ```
+     * var geoJsonDocument = {
+     * 	type: 'FeatureCollection',
+     * 	features: [ ... ]
+     * };
+     *
+     * L.vectorGrid.slicer(geoJsonDocument, {
+     * 	vectorTileLayerStyles: {
+     * 		sliced: { ... }
+     * 	}
+     * }).addTo(map);
+     *
+     * ```
+     *
+     * `VectorGrid.Slicer` can also handle [TopoJSON](https://github.com/mbostock/topojson) transparently:
+     * ```js
+     * var layer = L.vectorGrid.slicer(topojson, options);
+     * ```
+     *
+     * The TopoJSON format [implicitly groups features into "objects"](https://github.com/mbostock/topojson-specification/blob/master/README.md#215-objects).
+     * These will be transformed into vector tile layer names when styling (the
+     * `vectorTileLayerName` option is ignored when using TopoJSON).
+     *
+     */
+
+    L.VectorGrid.Slicer = L.VectorGrid.extend({
+
+        options: {
+            // 🍂section
+            // Additionally to these options, `VectorGrid.Slicer` can take in any
+            // of the [`geojson-vt` options](https://github.com/mapbox/geojson-vt#options).
+
+            // 🍂option vectorTileLayerName: String = 'sliced'
+            // Vector tiles contain a set of *data layers*, and those data layers
+            // contain features. Thus, the slicer creates one data layer, with
+            // the name given in this option. This is important for symbolizing the data.
+            vectorTileLayerName: 'sliced',
+
+            extent: 4096, // Default for geojson-vt
+            maxZoom: 14 // Default for geojson-vt
+        },
+
+        initialize: function (geojson, options) {
+            L.VectorGrid.prototype.initialize.call(this, options);
+
+            // Create a shallow copy of this.options, excluding things that might
+            // be functions - we only care about topojson/geojsonvt options
+            var options = {};
+            for (var i in this.options) {
+                if (i !== 'rendererFactory' && i !== 'vectorTileLayerStyles' && typeof this.options[i] !== 'function') {
+                    options[i] = this.options[i];
+                }
+            }
+
+            // 		this._worker = new Worker(window.URL.createObjectURL(new Blob([workerCode])));
+            this._worker = new Worker(workerCode);
+
+            // Send initial data to worker.
+            this._worker.postMessage(['slice', geojson, options]);
+        },
+
+        _getVectorTilePromise: function (coords) {
+
+            var _this = this;
+
+            var p = new Promise(function waitForWorker(res) {
+                _this._worker.addEventListener('message', function recv(m) {
+                    if (m.data.coords && m.data.coords.x === coords.x && m.data.coords.y === coords.y && m.data.coords.z === coords.z) {
+
+                        res(m.data);
+                        _this._worker.removeEventListener('message', recv);
+                    }
+                });
+            });
+
+            this._worker.postMessage(['get', coords]);
+
+            return p;
+        }
+
+    });
+
+    L.vectorGrid.slicer = function (geojson, options) {
+        return new L.VectorGrid.Slicer(geojson, options);
+    };
+
+    L.Canvas.Tile = L.Canvas.extend({
+
+        initialize: function (tileCoord, tileSize, options) {
+            L.Canvas.prototype.initialize.call(this, options);
+            this._tileCoord = tileCoord;
+            this._size = tileSize;
+
+            this._initContainer();
+            this._container.setAttribute('width', this._size.x);
+            this._container.setAttribute('height', this._size.y);
+            this._layers = {};
+            this._drawnLayers = {};
+            this._drawing = true;
+
+            if (options.interactive) {
+                // By default, Leaflet tiles do not have pointer events
+                this._container.style.pointerEvents = 'auto';
+            }
+        },
+
+        getCoord: function () {
+            return this._tileCoord;
+        },
+
+        getContainer: function () {
+            return this._container;
+        },
+
+        getOffset: function () {
+            return this._tileCoord.scaleBy(this._size).subtract(this._map.getPixelOrigin());
+        },
+
+        onAdd: L.Util.falseFn,
+
+        addTo: function (map) {
+            this._map = map;
+        },
+
+        removeFrom: function (map) {
+            delete this._map;
+        },
+
+        _onClick: function (e) {
+            var point = this._map.mouseEventToLayerPoint(e).subtract(this.getOffset()),
+                layer,
+                clickedLayer;
+
+            for (var id in this._layers) {
+                layer = this._layers[id];
+                if (layer.options.interactive && layer._containsPoint(point) && !this._map._draggableMoved(layer)) {
+                    clickedLayer = layer;
+                }
+            }
+            if (clickedLayer) {
+                L.DomEvent.fakeStop(e);
+                this._fireEvent([clickedLayer], e);
+            }
+        },
+
+        _onMouseMove: function (e) {
+            if (!this._map || this._map.dragging.moving() || this._map._animatingZoom) {
+                return;
+            }
+
+            var point = this._map.mouseEventToLayerPoint(e).subtract(this.getOffset());
+            this._handleMouseHover(e, point);
+        },
+
+        /// TODO: Modify _initPath to include an extra parameter, a group name
+        /// to order symbolizers by z-index
+
+        _updateIcon: function (layer) {
+            if (!this._drawing) {
+                return;
+            }
+
+            var icon = layer.options.icon,
+                options = icon.options,
+                size = L.point(options.iconSize),
+                anchor = options.iconAnchor || size && size.divideBy(2, true),
+                p = layer._point.subtract(anchor),
+                ctx = this._ctx,
+                img = layer._getImage();
+
+            if (img.complete) {
+                ctx.drawImage(img, p.x, p.y, size.x, size.y);
+            } else {
+                L.DomEvent.on(img, 'load', function () {
+                    ctx.drawImage(img, p.x, p.y, size.x, size.y);
+                });
+            }
+
+            this._drawnLayers[layer._leaflet_id] = layer;
+        }
+    });
+
+    L.canvas.tile = function (tileCoord, tileSize, opts) {
+        return new L.Canvas.Tile(tileCoord, tileSize, opts);
+    };
+
+    // Aux file to bundle everything together, including the optional dependencies
+    // for protobuf tiles
+})();
 
 
 },{}],11:[function(require,module,exports){
@@ -4684,7 +4898,7 @@ L.canvas.tile = function(tileCoord, tileSize, opts){
                 this._url = url;
                 this._geojsons = {};
                 this._features = {};
-                this.geoJsonClass = (this.options.geoJsonClass ? this.options.geoJsonClass : L.GeoJSON);
+                this.geoJsonClass = this.options.geoJsonClass ? this.options.geoJsonClass : L.GeoJSON;
             },
 
             onAdd: function (map) {
@@ -4768,8 +4982,7 @@ L.canvas.tile = function(tileCoord, tileSize, opts){
                 if (data.type === 'FeatureCollection') {
                     // console.log('addData > addSubLayerData');
                     this.addSubLayerData('default', data);
-                }
-                else {
+                } else {
                     // console.log('addData > spacchetta per livelli');
                     var tileLayer = this;
                     Object.keys(data).forEach(function (key) {
@@ -4780,7 +4993,7 @@ L.canvas.tile = function(tileCoord, tileSize, opts){
             },
 
             addSubLayerData: function (sublayer, data) {
-                // console.log('addSubLayerData',sublayer,data,this.options);
+                console.log('addSubLayerData', sublayer, data, this.options);
                 // se non c'e' crea il livello
                 if (!this._geojsons[sublayer]) {
                     this._geojsons[sublayer] = new this.geoJsonClass(null, this.options.layers[sublayer]).addTo(this._map);
@@ -4788,6 +5001,7 @@ L.canvas.tile = function(tileCoord, tileSize, opts){
                 }
                 // filtra le features gia' esistenti
                 var toAdd = data.features.filter(function (feature) {
+                    console.log('check ', sublayer, feature);
                     return !this.hasLayerWithId(sublayer, feature.id ? feature.id : feature.properties.id);
                 }, this);
 
@@ -4812,18 +5026,16 @@ L.canvas.tile = function(tileCoord, tileSize, opts){
                 Object.keys(layers).forEach(function (key) {
                     var layer = layers[key],
                         options = layer.options;
-                    if ((options.maxZoom && zoom > options.maxZoom) ||
-                        (options.minZoom && zoom < options.minZoom)) {
+                    if (options.maxZoom && zoom > options.maxZoom || options.minZoom && zoom < options.minZoom) {
                         map.removeLayer(layer);
-                    }
-                    else {
+                    } else {
                         map.addLayer(layer);
                     }
                 });
             }
         });
 
-        L.geoJsonGridLayer = function(url, options) {
+        L.geoJsonGridLayer = function (url, options) {
             return new L.GeoJSONGridLayer(url, options);
         };
     }
@@ -4833,12 +5045,10 @@ L.canvas.tile = function(tileCoord, tileSize, opts){
         define(['leaflet'], function (L) {
             defineLeafletGeoJSONGridLayer(L);
         });
-    }
-    else {
+    } else {
         // Else use the global L
         defineLeafletGeoJSONGridLayer(L);
     }
-
 })();
 
 },{}],12:[function(require,module,exports){
@@ -7030,6 +7240,1450 @@ module.exports = function (points, polygons) {
 };
 
 },{"@turf/helpers":14,"@turf/inside":15}],19:[function(require,module,exports){
+module.exports = require('./lib/axios');
+},{"./lib/axios":21}],20:[function(require,module,exports){
+(function (process){
+'use strict';
+
+var utils = require('./../utils');
+var settle = require('./../core/settle');
+var buildURL = require('./../helpers/buildURL');
+var parseHeaders = require('./../helpers/parseHeaders');
+var isURLSameOrigin = require('./../helpers/isURLSameOrigin');
+var createError = require('../core/createError');
+var btoa = (typeof window !== 'undefined' && window.btoa && window.btoa.bind(window)) || require('./../helpers/btoa');
+
+module.exports = function xhrAdapter(config) {
+  return new Promise(function dispatchXhrRequest(resolve, reject) {
+    var requestData = config.data;
+    var requestHeaders = config.headers;
+
+    if (utils.isFormData(requestData)) {
+      delete requestHeaders['Content-Type']; // Let the browser set it
+    }
+
+    var request = new XMLHttpRequest();
+    var loadEvent = 'onreadystatechange';
+    var xDomain = false;
+
+    // For IE 8/9 CORS support
+    // Only supports POST and GET calls and doesn't returns the response headers.
+    // DON'T do this for testing b/c XMLHttpRequest is mocked, not XDomainRequest.
+    if (!window.XMLHttpRequest &&
+        process.env.NODE_ENV !== 'test' &&
+        typeof window !== 'undefined' &&
+        window.XDomainRequest && !('withCredentials' in request) &&
+        !isURLSameOrigin(config.url)) {
+      request = new window.XDomainRequest();
+      loadEvent = 'onload';
+      xDomain = true;
+      request.onprogress = function handleProgress() {};
+      request.ontimeout = function handleTimeout() {};
+    }
+
+    // HTTP basic authentication
+    if (config.auth) {
+      var username = config.auth.username || '';
+      var password = config.auth.password || '';
+      requestHeaders.Authorization = 'Basic ' + btoa(username + ':' + password);
+    }
+
+    request.open(config.method.toUpperCase(), buildURL(config.url, config.params, config.paramsSerializer), true);
+
+    // Set the request timeout in MS
+    request.timeout = config.timeout;
+
+    // Listen for ready state
+    request[loadEvent] = function handleLoad() {
+      if (!request || (request.readyState !== 4 && !xDomain)) {
+        return;
+      }
+
+      // The request errored out and we didn't get a response, this will be
+      // handled by onerror instead
+      // With one exception: request that using file: protocol, most browsers
+      // will return status as 0 even though it's a successful request
+      if (request.status === 0 && !(request.responseURL && request.responseURL.indexOf('file:') === 0)) {
+        return;
+      }
+
+      // Prepare the response
+      var responseHeaders = 'getAllResponseHeaders' in request ? parseHeaders(request.getAllResponseHeaders()) : null;
+      var responseData = !config.responseType || config.responseType === 'text' ? request.responseText : request.response;
+      var response = {
+        data: responseData,
+        // IE sends 1223 instead of 204 (https://github.com/axios/axios/issues/201)
+        status: request.status === 1223 ? 204 : request.status,
+        statusText: request.status === 1223 ? 'No Content' : request.statusText,
+        headers: responseHeaders,
+        config: config,
+        request: request
+      };
+
+      settle(resolve, reject, response);
+
+      // Clean up request
+      request = null;
+    };
+
+    // Handle low level network errors
+    request.onerror = function handleError() {
+      // Real errors are hidden from us by the browser
+      // onerror should only fire if it's a network error
+      reject(createError('Network Error', config, null, request));
+
+      // Clean up request
+      request = null;
+    };
+
+    // Handle timeout
+    request.ontimeout = function handleTimeout() {
+      reject(createError('timeout of ' + config.timeout + 'ms exceeded', config, 'ECONNABORTED',
+        request));
+
+      // Clean up request
+      request = null;
+    };
+
+    // Add xsrf header
+    // This is only done if running in a standard browser environment.
+    // Specifically not if we're in a web worker, or react-native.
+    if (utils.isStandardBrowserEnv()) {
+      var cookies = require('./../helpers/cookies');
+
+      // Add xsrf header
+      var xsrfValue = (config.withCredentials || isURLSameOrigin(config.url)) && config.xsrfCookieName ?
+          cookies.read(config.xsrfCookieName) :
+          undefined;
+
+      if (xsrfValue) {
+        requestHeaders[config.xsrfHeaderName] = xsrfValue;
+      }
+    }
+
+    // Add headers to the request
+    if ('setRequestHeader' in request) {
+      utils.forEach(requestHeaders, function setRequestHeader(val, key) {
+        if (typeof requestData === 'undefined' && key.toLowerCase() === 'content-type') {
+          // Remove Content-Type if data is undefined
+          delete requestHeaders[key];
+        } else {
+          // Otherwise add header to the request
+          request.setRequestHeader(key, val);
+        }
+      });
+    }
+
+    // Add withCredentials to request if needed
+    if (config.withCredentials) {
+      request.withCredentials = true;
+    }
+
+    // Add responseType to request if needed
+    if (config.responseType) {
+      try {
+        request.responseType = config.responseType;
+      } catch (e) {
+        // Expected DOMException thrown by browsers not compatible XMLHttpRequest Level 2.
+        // But, this can be suppressed for 'json' type as it can be parsed by default 'transformResponse' function.
+        if (config.responseType !== 'json') {
+          throw e;
+        }
+      }
+    }
+
+    // Handle progress if needed
+    if (typeof config.onDownloadProgress === 'function') {
+      request.addEventListener('progress', config.onDownloadProgress);
+    }
+
+    // Not all browsers support upload events
+    if (typeof config.onUploadProgress === 'function' && request.upload) {
+      request.upload.addEventListener('progress', config.onUploadProgress);
+    }
+
+    if (config.cancelToken) {
+      // Handle cancellation
+      config.cancelToken.promise.then(function onCanceled(cancel) {
+        if (!request) {
+          return;
+        }
+
+        request.abort();
+        reject(cancel);
+        // Clean up request
+        request = null;
+      });
+    }
+
+    if (requestData === undefined) {
+      requestData = null;
+    }
+
+    // Send the request
+    request.send(requestData);
+  });
+};
+
+}).call(this,require('_process'))
+},{"../core/createError":27,"./../core/settle":30,"./../helpers/btoa":34,"./../helpers/buildURL":35,"./../helpers/cookies":37,"./../helpers/isURLSameOrigin":39,"./../helpers/parseHeaders":41,"./../utils":43,"_process":48}],21:[function(require,module,exports){
+'use strict';
+
+var utils = require('./utils');
+var bind = require('./helpers/bind');
+var Axios = require('./core/Axios');
+var defaults = require('./defaults');
+
+/**
+ * Create an instance of Axios
+ *
+ * @param {Object} defaultConfig The default config for the instance
+ * @return {Axios} A new instance of Axios
+ */
+function createInstance(defaultConfig) {
+  var context = new Axios(defaultConfig);
+  var instance = bind(Axios.prototype.request, context);
+
+  // Copy axios.prototype to instance
+  utils.extend(instance, Axios.prototype, context);
+
+  // Copy context to instance
+  utils.extend(instance, context);
+
+  return instance;
+}
+
+// Create the default instance to be exported
+var axios = createInstance(defaults);
+
+// Expose Axios class to allow class inheritance
+axios.Axios = Axios;
+
+// Factory for creating new instances
+axios.create = function create(instanceConfig) {
+  return createInstance(utils.merge(defaults, instanceConfig));
+};
+
+// Expose Cancel & CancelToken
+axios.Cancel = require('./cancel/Cancel');
+axios.CancelToken = require('./cancel/CancelToken');
+axios.isCancel = require('./cancel/isCancel');
+
+// Expose all/spread
+axios.all = function all(promises) {
+  return Promise.all(promises);
+};
+axios.spread = require('./helpers/spread');
+
+module.exports = axios;
+
+// Allow use of default import syntax in TypeScript
+module.exports.default = axios;
+
+},{"./cancel/Cancel":22,"./cancel/CancelToken":23,"./cancel/isCancel":24,"./core/Axios":25,"./defaults":32,"./helpers/bind":33,"./helpers/spread":42,"./utils":43}],22:[function(require,module,exports){
+'use strict';
+
+/**
+ * A `Cancel` is an object that is thrown when an operation is canceled.
+ *
+ * @class
+ * @param {string=} message The message.
+ */
+function Cancel(message) {
+  this.message = message;
+}
+
+Cancel.prototype.toString = function toString() {
+  return 'Cancel' + (this.message ? ': ' + this.message : '');
+};
+
+Cancel.prototype.__CANCEL__ = true;
+
+module.exports = Cancel;
+
+},{}],23:[function(require,module,exports){
+'use strict';
+
+var Cancel = require('./Cancel');
+
+/**
+ * A `CancelToken` is an object that can be used to request cancellation of an operation.
+ *
+ * @class
+ * @param {Function} executor The executor function.
+ */
+function CancelToken(executor) {
+  if (typeof executor !== 'function') {
+    throw new TypeError('executor must be a function.');
+  }
+
+  var resolvePromise;
+  this.promise = new Promise(function promiseExecutor(resolve) {
+    resolvePromise = resolve;
+  });
+
+  var token = this;
+  executor(function cancel(message) {
+    if (token.reason) {
+      // Cancellation has already been requested
+      return;
+    }
+
+    token.reason = new Cancel(message);
+    resolvePromise(token.reason);
+  });
+}
+
+/**
+ * Throws a `Cancel` if cancellation has been requested.
+ */
+CancelToken.prototype.throwIfRequested = function throwIfRequested() {
+  if (this.reason) {
+    throw this.reason;
+  }
+};
+
+/**
+ * Returns an object that contains a new `CancelToken` and a function that, when called,
+ * cancels the `CancelToken`.
+ */
+CancelToken.source = function source() {
+  var cancel;
+  var token = new CancelToken(function executor(c) {
+    cancel = c;
+  });
+  return {
+    token: token,
+    cancel: cancel
+  };
+};
+
+module.exports = CancelToken;
+
+},{"./Cancel":22}],24:[function(require,module,exports){
+'use strict';
+
+module.exports = function isCancel(value) {
+  return !!(value && value.__CANCEL__);
+};
+
+},{}],25:[function(require,module,exports){
+'use strict';
+
+var defaults = require('./../defaults');
+var utils = require('./../utils');
+var InterceptorManager = require('./InterceptorManager');
+var dispatchRequest = require('./dispatchRequest');
+
+/**
+ * Create a new instance of Axios
+ *
+ * @param {Object} instanceConfig The default config for the instance
+ */
+function Axios(instanceConfig) {
+  this.defaults = instanceConfig;
+  this.interceptors = {
+    request: new InterceptorManager(),
+    response: new InterceptorManager()
+  };
+}
+
+/**
+ * Dispatch a request
+ *
+ * @param {Object} config The config specific for this request (merged with this.defaults)
+ */
+Axios.prototype.request = function request(config) {
+  /*eslint no-param-reassign:0*/
+  // Allow for axios('example/url'[, config]) a la fetch API
+  if (typeof config === 'string') {
+    config = utils.merge({
+      url: arguments[0]
+    }, arguments[1]);
+  }
+
+  config = utils.merge(defaults, this.defaults, { method: 'get' }, config);
+  config.method = config.method.toLowerCase();
+
+  // Hook up interceptors middleware
+  var chain = [dispatchRequest, undefined];
+  var promise = Promise.resolve(config);
+
+  this.interceptors.request.forEach(function unshiftRequestInterceptors(interceptor) {
+    chain.unshift(interceptor.fulfilled, interceptor.rejected);
+  });
+
+  this.interceptors.response.forEach(function pushResponseInterceptors(interceptor) {
+    chain.push(interceptor.fulfilled, interceptor.rejected);
+  });
+
+  while (chain.length) {
+    promise = promise.then(chain.shift(), chain.shift());
+  }
+
+  return promise;
+};
+
+// Provide aliases for supported request methods
+utils.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData(method) {
+  /*eslint func-names:0*/
+  Axios.prototype[method] = function(url, config) {
+    return this.request(utils.merge(config || {}, {
+      method: method,
+      url: url
+    }));
+  };
+});
+
+utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
+  /*eslint func-names:0*/
+  Axios.prototype[method] = function(url, data, config) {
+    return this.request(utils.merge(config || {}, {
+      method: method,
+      url: url,
+      data: data
+    }));
+  };
+});
+
+module.exports = Axios;
+
+},{"./../defaults":32,"./../utils":43,"./InterceptorManager":26,"./dispatchRequest":28}],26:[function(require,module,exports){
+'use strict';
+
+var utils = require('./../utils');
+
+function InterceptorManager() {
+  this.handlers = [];
+}
+
+/**
+ * Add a new interceptor to the stack
+ *
+ * @param {Function} fulfilled The function to handle `then` for a `Promise`
+ * @param {Function} rejected The function to handle `reject` for a `Promise`
+ *
+ * @return {Number} An ID used to remove interceptor later
+ */
+InterceptorManager.prototype.use = function use(fulfilled, rejected) {
+  this.handlers.push({
+    fulfilled: fulfilled,
+    rejected: rejected
+  });
+  return this.handlers.length - 1;
+};
+
+/**
+ * Remove an interceptor from the stack
+ *
+ * @param {Number} id The ID that was returned by `use`
+ */
+InterceptorManager.prototype.eject = function eject(id) {
+  if (this.handlers[id]) {
+    this.handlers[id] = null;
+  }
+};
+
+/**
+ * Iterate over all the registered interceptors
+ *
+ * This method is particularly useful for skipping over any
+ * interceptors that may have become `null` calling `eject`.
+ *
+ * @param {Function} fn The function to call for each interceptor
+ */
+InterceptorManager.prototype.forEach = function forEach(fn) {
+  utils.forEach(this.handlers, function forEachHandler(h) {
+    if (h !== null) {
+      fn(h);
+    }
+  });
+};
+
+module.exports = InterceptorManager;
+
+},{"./../utils":43}],27:[function(require,module,exports){
+'use strict';
+
+var enhanceError = require('./enhanceError');
+
+/**
+ * Create an Error with the specified message, config, error code, request and response.
+ *
+ * @param {string} message The error message.
+ * @param {Object} config The config.
+ * @param {string} [code] The error code (for example, 'ECONNABORTED').
+ * @param {Object} [request] The request.
+ * @param {Object} [response] The response.
+ * @returns {Error} The created error.
+ */
+module.exports = function createError(message, config, code, request, response) {
+  var error = new Error(message);
+  return enhanceError(error, config, code, request, response);
+};
+
+},{"./enhanceError":29}],28:[function(require,module,exports){
+'use strict';
+
+var utils = require('./../utils');
+var transformData = require('./transformData');
+var isCancel = require('../cancel/isCancel');
+var defaults = require('../defaults');
+var isAbsoluteURL = require('./../helpers/isAbsoluteURL');
+var combineURLs = require('./../helpers/combineURLs');
+
+/**
+ * Throws a `Cancel` if cancellation has been requested.
+ */
+function throwIfCancellationRequested(config) {
+  if (config.cancelToken) {
+    config.cancelToken.throwIfRequested();
+  }
+}
+
+/**
+ * Dispatch a request to the server using the configured adapter.
+ *
+ * @param {object} config The config that is to be used for the request
+ * @returns {Promise} The Promise to be fulfilled
+ */
+module.exports = function dispatchRequest(config) {
+  throwIfCancellationRequested(config);
+
+  // Support baseURL config
+  if (config.baseURL && !isAbsoluteURL(config.url)) {
+    config.url = combineURLs(config.baseURL, config.url);
+  }
+
+  // Ensure headers exist
+  config.headers = config.headers || {};
+
+  // Transform request data
+  config.data = transformData(
+    config.data,
+    config.headers,
+    config.transformRequest
+  );
+
+  // Flatten headers
+  config.headers = utils.merge(
+    config.headers.common || {},
+    config.headers[config.method] || {},
+    config.headers || {}
+  );
+
+  utils.forEach(
+    ['delete', 'get', 'head', 'post', 'put', 'patch', 'common'],
+    function cleanHeaderConfig(method) {
+      delete config.headers[method];
+    }
+  );
+
+  var adapter = config.adapter || defaults.adapter;
+
+  return adapter(config).then(function onAdapterResolution(response) {
+    throwIfCancellationRequested(config);
+
+    // Transform response data
+    response.data = transformData(
+      response.data,
+      response.headers,
+      config.transformResponse
+    );
+
+    return response;
+  }, function onAdapterRejection(reason) {
+    if (!isCancel(reason)) {
+      throwIfCancellationRequested(config);
+
+      // Transform response data
+      if (reason && reason.response) {
+        reason.response.data = transformData(
+          reason.response.data,
+          reason.response.headers,
+          config.transformResponse
+        );
+      }
+    }
+
+    return Promise.reject(reason);
+  });
+};
+
+},{"../cancel/isCancel":24,"../defaults":32,"./../helpers/combineURLs":36,"./../helpers/isAbsoluteURL":38,"./../utils":43,"./transformData":31}],29:[function(require,module,exports){
+'use strict';
+
+/**
+ * Update an Error with the specified config, error code, and response.
+ *
+ * @param {Error} error The error to update.
+ * @param {Object} config The config.
+ * @param {string} [code] The error code (for example, 'ECONNABORTED').
+ * @param {Object} [request] The request.
+ * @param {Object} [response] The response.
+ * @returns {Error} The error.
+ */
+module.exports = function enhanceError(error, config, code, request, response) {
+  error.config = config;
+  if (code) {
+    error.code = code;
+  }
+  error.request = request;
+  error.response = response;
+  return error;
+};
+
+},{}],30:[function(require,module,exports){
+'use strict';
+
+var createError = require('./createError');
+
+/**
+ * Resolve or reject a Promise based on response status.
+ *
+ * @param {Function} resolve A function that resolves the promise.
+ * @param {Function} reject A function that rejects the promise.
+ * @param {object} response The response.
+ */
+module.exports = function settle(resolve, reject, response) {
+  var validateStatus = response.config.validateStatus;
+  // Note: status is not exposed by XDomainRequest
+  if (!response.status || !validateStatus || validateStatus(response.status)) {
+    resolve(response);
+  } else {
+    reject(createError(
+      'Request failed with status code ' + response.status,
+      response.config,
+      null,
+      response.request,
+      response
+    ));
+  }
+};
+
+},{"./createError":27}],31:[function(require,module,exports){
+'use strict';
+
+var utils = require('./../utils');
+
+/**
+ * Transform the data for a request or a response
+ *
+ * @param {Object|String} data The data to be transformed
+ * @param {Array} headers The headers for the request or response
+ * @param {Array|Function} fns A single function or Array of functions
+ * @returns {*} The resulting transformed data
+ */
+module.exports = function transformData(data, headers, fns) {
+  /*eslint no-param-reassign:0*/
+  utils.forEach(fns, function transform(fn) {
+    data = fn(data, headers);
+  });
+
+  return data;
+};
+
+},{"./../utils":43}],32:[function(require,module,exports){
+(function (process){
+'use strict';
+
+var utils = require('./utils');
+var normalizeHeaderName = require('./helpers/normalizeHeaderName');
+
+var DEFAULT_CONTENT_TYPE = {
+  'Content-Type': 'application/x-www-form-urlencoded'
+};
+
+function setContentTypeIfUnset(headers, value) {
+  if (!utils.isUndefined(headers) && utils.isUndefined(headers['Content-Type'])) {
+    headers['Content-Type'] = value;
+  }
+}
+
+function getDefaultAdapter() {
+  var adapter;
+  if (typeof XMLHttpRequest !== 'undefined') {
+    // For browsers use XHR adapter
+    adapter = require('./adapters/xhr');
+  } else if (typeof process !== 'undefined') {
+    // For node use HTTP adapter
+    adapter = require('./adapters/http');
+  }
+  return adapter;
+}
+
+var defaults = {
+  adapter: getDefaultAdapter(),
+
+  transformRequest: [function transformRequest(data, headers) {
+    normalizeHeaderName(headers, 'Content-Type');
+    if (utils.isFormData(data) ||
+      utils.isArrayBuffer(data) ||
+      utils.isBuffer(data) ||
+      utils.isStream(data) ||
+      utils.isFile(data) ||
+      utils.isBlob(data)
+    ) {
+      return data;
+    }
+    if (utils.isArrayBufferView(data)) {
+      return data.buffer;
+    }
+    if (utils.isURLSearchParams(data)) {
+      setContentTypeIfUnset(headers, 'application/x-www-form-urlencoded;charset=utf-8');
+      return data.toString();
+    }
+    if (utils.isObject(data)) {
+      setContentTypeIfUnset(headers, 'application/json;charset=utf-8');
+      return JSON.stringify(data);
+    }
+    return data;
+  }],
+
+  transformResponse: [function transformResponse(data) {
+    /*eslint no-param-reassign:0*/
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (e) { /* Ignore */ }
+    }
+    return data;
+  }],
+
+  timeout: 0,
+
+  xsrfCookieName: 'XSRF-TOKEN',
+  xsrfHeaderName: 'X-XSRF-TOKEN',
+
+  maxContentLength: -1,
+
+  validateStatus: function validateStatus(status) {
+    return status >= 200 && status < 300;
+  }
+};
+
+defaults.headers = {
+  common: {
+    'Accept': 'application/json, text/plain, */*'
+  }
+};
+
+utils.forEach(['delete', 'get', 'head'], function forEachMethodNoData(method) {
+  defaults.headers[method] = {};
+});
+
+utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
+  defaults.headers[method] = utils.merge(DEFAULT_CONTENT_TYPE);
+});
+
+module.exports = defaults;
+
+}).call(this,require('_process'))
+},{"./adapters/http":20,"./adapters/xhr":20,"./helpers/normalizeHeaderName":40,"./utils":43,"_process":48}],33:[function(require,module,exports){
+'use strict';
+
+module.exports = function bind(fn, thisArg) {
+  return function wrap() {
+    var args = new Array(arguments.length);
+    for (var i = 0; i < args.length; i++) {
+      args[i] = arguments[i];
+    }
+    return fn.apply(thisArg, args);
+  };
+};
+
+},{}],34:[function(require,module,exports){
+'use strict';
+
+// btoa polyfill for IE<10 courtesy https://github.com/davidchambers/Base64.js
+
+var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+
+function E() {
+  this.message = 'String contains an invalid character';
+}
+E.prototype = new Error;
+E.prototype.code = 5;
+E.prototype.name = 'InvalidCharacterError';
+
+function btoa(input) {
+  var str = String(input);
+  var output = '';
+  for (
+    // initialize result and counter
+    var block, charCode, idx = 0, map = chars;
+    // if the next str index does not exist:
+    //   change the mapping table to "="
+    //   check if d has no fractional digits
+    str.charAt(idx | 0) || (map = '=', idx % 1);
+    // "8 - idx % 1 * 8" generates the sequence 2, 4, 6, 8
+    output += map.charAt(63 & block >> 8 - idx % 1 * 8)
+  ) {
+    charCode = str.charCodeAt(idx += 3 / 4);
+    if (charCode > 0xFF) {
+      throw new E();
+    }
+    block = block << 8 | charCode;
+  }
+  return output;
+}
+
+module.exports = btoa;
+
+},{}],35:[function(require,module,exports){
+'use strict';
+
+var utils = require('./../utils');
+
+function encode(val) {
+  return encodeURIComponent(val).
+    replace(/%40/gi, '@').
+    replace(/%3A/gi, ':').
+    replace(/%24/g, '$').
+    replace(/%2C/gi, ',').
+    replace(/%20/g, '+').
+    replace(/%5B/gi, '[').
+    replace(/%5D/gi, ']');
+}
+
+/**
+ * Build a URL by appending params to the end
+ *
+ * @param {string} url The base of the url (e.g., http://www.google.com)
+ * @param {object} [params] The params to be appended
+ * @returns {string} The formatted url
+ */
+module.exports = function buildURL(url, params, paramsSerializer) {
+  /*eslint no-param-reassign:0*/
+  if (!params) {
+    return url;
+  }
+
+  var serializedParams;
+  if (paramsSerializer) {
+    serializedParams = paramsSerializer(params);
+  } else if (utils.isURLSearchParams(params)) {
+    serializedParams = params.toString();
+  } else {
+    var parts = [];
+
+    utils.forEach(params, function serialize(val, key) {
+      if (val === null || typeof val === 'undefined') {
+        return;
+      }
+
+      if (utils.isArray(val)) {
+        key = key + '[]';
+      }
+
+      if (!utils.isArray(val)) {
+        val = [val];
+      }
+
+      utils.forEach(val, function parseValue(v) {
+        if (utils.isDate(v)) {
+          v = v.toISOString();
+        } else if (utils.isObject(v)) {
+          v = JSON.stringify(v);
+        }
+        parts.push(encode(key) + '=' + encode(v));
+      });
+    });
+
+    serializedParams = parts.join('&');
+  }
+
+  if (serializedParams) {
+    url += (url.indexOf('?') === -1 ? '?' : '&') + serializedParams;
+  }
+
+  return url;
+};
+
+},{"./../utils":43}],36:[function(require,module,exports){
+'use strict';
+
+/**
+ * Creates a new URL by combining the specified URLs
+ *
+ * @param {string} baseURL The base URL
+ * @param {string} relativeURL The relative URL
+ * @returns {string} The combined URL
+ */
+module.exports = function combineURLs(baseURL, relativeURL) {
+  return relativeURL
+    ? baseURL.replace(/\/+$/, '') + '/' + relativeURL.replace(/^\/+/, '')
+    : baseURL;
+};
+
+},{}],37:[function(require,module,exports){
+'use strict';
+
+var utils = require('./../utils');
+
+module.exports = (
+  utils.isStandardBrowserEnv() ?
+
+  // Standard browser envs support document.cookie
+  (function standardBrowserEnv() {
+    return {
+      write: function write(name, value, expires, path, domain, secure) {
+        var cookie = [];
+        cookie.push(name + '=' + encodeURIComponent(value));
+
+        if (utils.isNumber(expires)) {
+          cookie.push('expires=' + new Date(expires).toGMTString());
+        }
+
+        if (utils.isString(path)) {
+          cookie.push('path=' + path);
+        }
+
+        if (utils.isString(domain)) {
+          cookie.push('domain=' + domain);
+        }
+
+        if (secure === true) {
+          cookie.push('secure');
+        }
+
+        document.cookie = cookie.join('; ');
+      },
+
+      read: function read(name) {
+        var match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+        return (match ? decodeURIComponent(match[3]) : null);
+      },
+
+      remove: function remove(name) {
+        this.write(name, '', Date.now() - 86400000);
+      }
+    };
+  })() :
+
+  // Non standard browser env (web workers, react-native) lack needed support.
+  (function nonStandardBrowserEnv() {
+    return {
+      write: function write() {},
+      read: function read() { return null; },
+      remove: function remove() {}
+    };
+  })()
+);
+
+},{"./../utils":43}],38:[function(require,module,exports){
+'use strict';
+
+/**
+ * Determines whether the specified URL is absolute
+ *
+ * @param {string} url The URL to test
+ * @returns {boolean} True if the specified URL is absolute, otherwise false
+ */
+module.exports = function isAbsoluteURL(url) {
+  // A URL is considered absolute if it begins with "<scheme>://" or "//" (protocol-relative URL).
+  // RFC 3986 defines scheme name as a sequence of characters beginning with a letter and followed
+  // by any combination of letters, digits, plus, period, or hyphen.
+  return /^([a-z][a-z\d\+\-\.]*:)?\/\//i.test(url);
+};
+
+},{}],39:[function(require,module,exports){
+'use strict';
+
+var utils = require('./../utils');
+
+module.exports = (
+  utils.isStandardBrowserEnv() ?
+
+  // Standard browser envs have full support of the APIs needed to test
+  // whether the request URL is of the same origin as current location.
+  (function standardBrowserEnv() {
+    var msie = /(msie|trident)/i.test(navigator.userAgent);
+    var urlParsingNode = document.createElement('a');
+    var originURL;
+
+    /**
+    * Parse a URL to discover it's components
+    *
+    * @param {String} url The URL to be parsed
+    * @returns {Object}
+    */
+    function resolveURL(url) {
+      var href = url;
+
+      if (msie) {
+        // IE needs attribute set twice to normalize properties
+        urlParsingNode.setAttribute('href', href);
+        href = urlParsingNode.href;
+      }
+
+      urlParsingNode.setAttribute('href', href);
+
+      // urlParsingNode provides the UrlUtils interface - http://url.spec.whatwg.org/#urlutils
+      return {
+        href: urlParsingNode.href,
+        protocol: urlParsingNode.protocol ? urlParsingNode.protocol.replace(/:$/, '') : '',
+        host: urlParsingNode.host,
+        search: urlParsingNode.search ? urlParsingNode.search.replace(/^\?/, '') : '',
+        hash: urlParsingNode.hash ? urlParsingNode.hash.replace(/^#/, '') : '',
+        hostname: urlParsingNode.hostname,
+        port: urlParsingNode.port,
+        pathname: (urlParsingNode.pathname.charAt(0) === '/') ?
+                  urlParsingNode.pathname :
+                  '/' + urlParsingNode.pathname
+      };
+    }
+
+    originURL = resolveURL(window.location.href);
+
+    /**
+    * Determine if a URL shares the same origin as the current location
+    *
+    * @param {String} requestURL The URL to test
+    * @returns {boolean} True if URL shares the same origin, otherwise false
+    */
+    return function isURLSameOrigin(requestURL) {
+      var parsed = (utils.isString(requestURL)) ? resolveURL(requestURL) : requestURL;
+      return (parsed.protocol === originURL.protocol &&
+            parsed.host === originURL.host);
+    };
+  })() :
+
+  // Non standard browser envs (web workers, react-native) lack needed support.
+  (function nonStandardBrowserEnv() {
+    return function isURLSameOrigin() {
+      return true;
+    };
+  })()
+);
+
+},{"./../utils":43}],40:[function(require,module,exports){
+'use strict';
+
+var utils = require('../utils');
+
+module.exports = function normalizeHeaderName(headers, normalizedName) {
+  utils.forEach(headers, function processHeader(value, name) {
+    if (name !== normalizedName && name.toUpperCase() === normalizedName.toUpperCase()) {
+      headers[normalizedName] = value;
+      delete headers[name];
+    }
+  });
+};
+
+},{"../utils":43}],41:[function(require,module,exports){
+'use strict';
+
+var utils = require('./../utils');
+
+// Headers whose duplicates are ignored by node
+// c.f. https://nodejs.org/api/http.html#http_message_headers
+var ignoreDuplicateOf = [
+  'age', 'authorization', 'content-length', 'content-type', 'etag',
+  'expires', 'from', 'host', 'if-modified-since', 'if-unmodified-since',
+  'last-modified', 'location', 'max-forwards', 'proxy-authorization',
+  'referer', 'retry-after', 'user-agent'
+];
+
+/**
+ * Parse headers into an object
+ *
+ * ```
+ * Date: Wed, 27 Aug 2014 08:58:49 GMT
+ * Content-Type: application/json
+ * Connection: keep-alive
+ * Transfer-Encoding: chunked
+ * ```
+ *
+ * @param {String} headers Headers needing to be parsed
+ * @returns {Object} Headers parsed into an object
+ */
+module.exports = function parseHeaders(headers) {
+  var parsed = {};
+  var key;
+  var val;
+  var i;
+
+  if (!headers) { return parsed; }
+
+  utils.forEach(headers.split('\n'), function parser(line) {
+    i = line.indexOf(':');
+    key = utils.trim(line.substr(0, i)).toLowerCase();
+    val = utils.trim(line.substr(i + 1));
+
+    if (key) {
+      if (parsed[key] && ignoreDuplicateOf.indexOf(key) >= 0) {
+        return;
+      }
+      if (key === 'set-cookie') {
+        parsed[key] = (parsed[key] ? parsed[key] : []).concat([val]);
+      } else {
+        parsed[key] = parsed[key] ? parsed[key] + ', ' + val : val;
+      }
+    }
+  });
+
+  return parsed;
+};
+
+},{"./../utils":43}],42:[function(require,module,exports){
+'use strict';
+
+/**
+ * Syntactic sugar for invoking a function and expanding an array for arguments.
+ *
+ * Common use case would be to use `Function.prototype.apply`.
+ *
+ *  ```js
+ *  function f(x, y, z) {}
+ *  var args = [1, 2, 3];
+ *  f.apply(null, args);
+ *  ```
+ *
+ * With `spread` this example can be re-written.
+ *
+ *  ```js
+ *  spread(function(x, y, z) {})([1, 2, 3]);
+ *  ```
+ *
+ * @param {Function} callback
+ * @returns {Function}
+ */
+module.exports = function spread(callback) {
+  return function wrap(arr) {
+    return callback.apply(null, arr);
+  };
+};
+
+},{}],43:[function(require,module,exports){
+'use strict';
+
+var bind = require('./helpers/bind');
+var isBuffer = require('is-buffer');
+
+/*global toString:true*/
+
+// utils is a library of generic helper functions non-specific to axios
+
+var toString = Object.prototype.toString;
+
+/**
+ * Determine if a value is an Array
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is an Array, otherwise false
+ */
+function isArray(val) {
+  return toString.call(val) === '[object Array]';
+}
+
+/**
+ * Determine if a value is an ArrayBuffer
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is an ArrayBuffer, otherwise false
+ */
+function isArrayBuffer(val) {
+  return toString.call(val) === '[object ArrayBuffer]';
+}
+
+/**
+ * Determine if a value is a FormData
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is an FormData, otherwise false
+ */
+function isFormData(val) {
+  return (typeof FormData !== 'undefined') && (val instanceof FormData);
+}
+
+/**
+ * Determine if a value is a view on an ArrayBuffer
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a view on an ArrayBuffer, otherwise false
+ */
+function isArrayBufferView(val) {
+  var result;
+  if ((typeof ArrayBuffer !== 'undefined') && (ArrayBuffer.isView)) {
+    result = ArrayBuffer.isView(val);
+  } else {
+    result = (val) && (val.buffer) && (val.buffer instanceof ArrayBuffer);
+  }
+  return result;
+}
+
+/**
+ * Determine if a value is a String
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a String, otherwise false
+ */
+function isString(val) {
+  return typeof val === 'string';
+}
+
+/**
+ * Determine if a value is a Number
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Number, otherwise false
+ */
+function isNumber(val) {
+  return typeof val === 'number';
+}
+
+/**
+ * Determine if a value is undefined
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if the value is undefined, otherwise false
+ */
+function isUndefined(val) {
+  return typeof val === 'undefined';
+}
+
+/**
+ * Determine if a value is an Object
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is an Object, otherwise false
+ */
+function isObject(val) {
+  return val !== null && typeof val === 'object';
+}
+
+/**
+ * Determine if a value is a Date
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Date, otherwise false
+ */
+function isDate(val) {
+  return toString.call(val) === '[object Date]';
+}
+
+/**
+ * Determine if a value is a File
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a File, otherwise false
+ */
+function isFile(val) {
+  return toString.call(val) === '[object File]';
+}
+
+/**
+ * Determine if a value is a Blob
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Blob, otherwise false
+ */
+function isBlob(val) {
+  return toString.call(val) === '[object Blob]';
+}
+
+/**
+ * Determine if a value is a Function
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Function, otherwise false
+ */
+function isFunction(val) {
+  return toString.call(val) === '[object Function]';
+}
+
+/**
+ * Determine if a value is a Stream
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a Stream, otherwise false
+ */
+function isStream(val) {
+  return isObject(val) && isFunction(val.pipe);
+}
+
+/**
+ * Determine if a value is a URLSearchParams object
+ *
+ * @param {Object} val The value to test
+ * @returns {boolean} True if value is a URLSearchParams object, otherwise false
+ */
+function isURLSearchParams(val) {
+  return typeof URLSearchParams !== 'undefined' && val instanceof URLSearchParams;
+}
+
+/**
+ * Trim excess whitespace off the beginning and end of a string
+ *
+ * @param {String} str The String to trim
+ * @returns {String} The String freed of excess whitespace
+ */
+function trim(str) {
+  return str.replace(/^\s*/, '').replace(/\s*$/, '');
+}
+
+/**
+ * Determine if we're running in a standard browser environment
+ *
+ * This allows axios to run in a web worker, and react-native.
+ * Both environments support XMLHttpRequest, but not fully standard globals.
+ *
+ * web workers:
+ *  typeof window -> undefined
+ *  typeof document -> undefined
+ *
+ * react-native:
+ *  navigator.product -> 'ReactNative'
+ */
+function isStandardBrowserEnv() {
+  if (typeof navigator !== 'undefined' && navigator.product === 'ReactNative') {
+    return false;
+  }
+  return (
+    typeof window !== 'undefined' &&
+    typeof document !== 'undefined'
+  );
+}
+
+/**
+ * Iterate over an Array or an Object invoking a function for each item.
+ *
+ * If `obj` is an Array callback will be called passing
+ * the value, index, and complete array for each item.
+ *
+ * If 'obj' is an Object callback will be called passing
+ * the value, key, and complete object for each property.
+ *
+ * @param {Object|Array} obj The object to iterate
+ * @param {Function} fn The callback to invoke for each item
+ */
+function forEach(obj, fn) {
+  // Don't bother if no value provided
+  if (obj === null || typeof obj === 'undefined') {
+    return;
+  }
+
+  // Force an array if not already something iterable
+  if (typeof obj !== 'object' && !isArray(obj)) {
+    /*eslint no-param-reassign:0*/
+    obj = [obj];
+  }
+
+  if (isArray(obj)) {
+    // Iterate over array values
+    for (var i = 0, l = obj.length; i < l; i++) {
+      fn.call(null, obj[i], i, obj);
+    }
+  } else {
+    // Iterate over object keys
+    for (var key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        fn.call(null, obj[key], key, obj);
+      }
+    }
+  }
+}
+
+/**
+ * Accepts varargs expecting each argument to be an object, then
+ * immutably merges the properties of each object and returns result.
+ *
+ * When multiple objects contain the same key the later object in
+ * the arguments list will take precedence.
+ *
+ * Example:
+ *
+ * ```js
+ * var result = merge({foo: 123}, {foo: 456});
+ * console.log(result.foo); // outputs 456
+ * ```
+ *
+ * @param {Object} obj1 Object to merge
+ * @returns {Object} Result of all merge properties
+ */
+function merge(/* obj1, obj2, obj3, ... */) {
+  var result = {};
+  function assignValue(val, key) {
+    if (typeof result[key] === 'object' && typeof val === 'object') {
+      result[key] = merge(result[key], val);
+    } else {
+      result[key] = val;
+    }
+  }
+
+  for (var i = 0, l = arguments.length; i < l; i++) {
+    forEach(arguments[i], assignValue);
+  }
+  return result;
+}
+
+/**
+ * Extends object a by mutably adding to it the properties of object b.
+ *
+ * @param {Object} a The object to be extended
+ * @param {Object} b The object to copy properties from
+ * @param {Object} thisArg The object to bind function to
+ * @return {Object} The resulting value of object a
+ */
+function extend(a, b, thisArg) {
+  forEach(b, function assignValue(val, key) {
+    if (thisArg && typeof val === 'function') {
+      a[key] = bind(val, thisArg);
+    } else {
+      a[key] = val;
+    }
+  });
+  return a;
+}
+
+module.exports = {
+  isArray: isArray,
+  isArrayBuffer: isArrayBuffer,
+  isBuffer: isBuffer,
+  isFormData: isFormData,
+  isArrayBufferView: isArrayBufferView,
+  isString: isString,
+  isNumber: isNumber,
+  isObject: isObject,
+  isUndefined: isUndefined,
+  isDate: isDate,
+  isFile: isFile,
+  isBlob: isBlob,
+  isFunction: isFunction,
+  isStream: isStream,
+  isURLSearchParams: isURLSearchParams,
+  isStandardBrowserEnv: isStandardBrowserEnv,
+  forEach: forEach,
+  merge: merge,
+  extend: extend,
+  trim: trim
+};
+
+},{"./helpers/bind":33,"is-buffer":44}],44:[function(require,module,exports){
+/*!
+ * Determine if an object is a Buffer
+ *
+ * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @license  MIT
+ */
+
+// The _isBuffer check is for Safari 5-7 support, because it's missing
+// Object.prototype.constructor. Remove this eventually
+module.exports = function (obj) {
+  return obj != null && (isBuffer(obj) || isSlowBuffer(obj) || !!obj._isBuffer)
+}
+
+function isBuffer (obj) {
+  return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
+}
+
+// For Node v0.10 support. Remove this eventually.
+function isSlowBuffer (obj) {
+  return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
+}
+
+},{}],45:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v3.2.1
  * https://jquery.com/
@@ -17284,7 +18938,7 @@ if ( !noGlobal ) {
 return jQuery;
 } );
 
-},{}],20:[function(require,module,exports){
+},{}],46:[function(require,module,exports){
 /*
  Leaflet 1.0.3, a JS library for interactive maps. http://leafletjs.com
  (c) 2010-2016 Vladimir Agafonkin, (c) 2010-2011 CloudMade
@@ -30536,7 +32190,7 @@ L.control.layers = function (baseLayers, overlays, options) {
 
 }(window, document));
 
-},{}],21:[function(require,module,exports){
+},{}],47:[function(require,module,exports){
 //! moment.js
 //! version : 2.18.1
 //! authors : Tim Wood, Iskren Chernev, Moment.js contributors
@@ -35001,7 +36655,193 @@ return hooks;
 
 })));
 
-},{}],22:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
+// shim for using process in browser
+var process = module.exports = {};
+
+// cached from whatever global is present so that test runners that stub it
+// don't break things.  But we need to wrap it in a try catch in case it is
+// wrapped in strict mode code which doesn't define any globals.  It's inside a
+// function because try/catches deoptimize in certain engines.
+
+var cachedSetTimeout;
+var cachedClearTimeout;
+
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
+(function () {
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
+    }
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
+    }
+} ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
+var queue = [];
+var draining = false;
+var currentQueue;
+var queueIndex = -1;
+
+function cleanUpNextTick() {
+    if (!draining || !currentQueue) {
+        return;
+    }
+    draining = false;
+    if (currentQueue.length) {
+        queue = currentQueue.concat(queue);
+    } else {
+        queueIndex = -1;
+    }
+    if (queue.length) {
+        drainQueue();
+    }
+}
+
+function drainQueue() {
+    if (draining) {
+        return;
+    }
+    var timeout = runTimeout(cleanUpNextTick);
+    draining = true;
+
+    var len = queue.length;
+    while(len) {
+        currentQueue = queue;
+        queue = [];
+        while (++queueIndex < len) {
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
+        }
+        queueIndex = -1;
+        len = queue.length;
+    }
+    currentQueue = null;
+    draining = false;
+    runClearTimeout(timeout);
+}
+
+process.nextTick = function (fun) {
+    var args = new Array(arguments.length - 1);
+    if (arguments.length > 1) {
+        for (var i = 1; i < arguments.length; i++) {
+            args[i - 1] = arguments[i];
+        }
+    }
+    queue.push(new Item(fun, args));
+    if (queue.length === 1 && !draining) {
+        runTimeout(drainQueue);
+    }
+};
+
+// v8 likes predictible objects
+function Item(fun, array) {
+    this.fun = fun;
+    this.array = array;
+}
+Item.prototype.run = function () {
+    this.fun.apply(null, this.array);
+};
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+process.version = ''; // empty string to avoid regexp issues
+process.versions = {};
+
+function noop() {}
+
+process.on = noop;
+process.addListener = noop;
+process.once = noop;
+process.off = noop;
+process.removeListener = noop;
+process.removeAllListeners = noop;
+process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+
+process.listeners = function (name) { return [] }
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+};
+
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+process.umask = function() { return 0; };
+
+},{}],49:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -35055,7 +36895,7 @@ var AsyncSubject = (function (_super) {
 }(Subject_1.Subject));
 exports.AsyncSubject = AsyncSubject;
 
-},{"./Subject":32,"./Subscription":35}],23:[function(require,module,exports){
+},{"./Subject":59,"./Subscription":62}],50:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -35105,7 +36945,7 @@ var BehaviorSubject = (function (_super) {
 }(Subject_1.Subject));
 exports.BehaviorSubject = BehaviorSubject;
 
-},{"./Subject":32,"./util/ObjectUnsubscribedError":346}],24:[function(require,module,exports){
+},{"./Subject":59,"./util/ObjectUnsubscribedError":373}],51:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -35142,7 +36982,7 @@ var InnerSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.InnerSubscriber = InnerSubscriber;
 
-},{"./Subscriber":34}],25:[function(require,module,exports){
+},{"./Subscriber":61}],52:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('./Observable');
 /**
@@ -35270,7 +37110,7 @@ var Notification = (function () {
 }());
 exports.Notification = Notification;
 
-},{"./Observable":26}],26:[function(require,module,exports){
+},{"./Observable":53}],53:[function(require,module,exports){
 "use strict";
 var root_1 = require('./util/root');
 var toSubscriber_1 = require('./util/toSubscriber');
@@ -35527,7 +37367,7 @@ var Observable = (function () {
 }());
 exports.Observable = Observable;
 
-},{"./symbol/observable":332,"./util/root":363,"./util/toSubscriber":365}],27:[function(require,module,exports){
+},{"./symbol/observable":359,"./util/root":390,"./util/toSubscriber":392}],54:[function(require,module,exports){
 "use strict";
 exports.empty = {
     closed: true,
@@ -35536,7 +37376,7 @@ exports.empty = {
     complete: function () { }
 };
 
-},{}],28:[function(require,module,exports){
+},{}],55:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -35567,7 +37407,7 @@ var OuterSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.OuterSubscriber = OuterSubscriber;
 
-},{"./Subscriber":34}],29:[function(require,module,exports){
+},{"./Subscriber":61}],56:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -35670,7 +37510,7 @@ var ReplayEvent = (function () {
     return ReplayEvent;
 }());
 
-},{"./Subject":32,"./SubjectSubscription":33,"./Subscription":35,"./operator/observeOn":266,"./scheduler/queue":330,"./util/ObjectUnsubscribedError":346}],30:[function(require,module,exports){
+},{"./Subject":59,"./SubjectSubscription":60,"./Subscription":62,"./operator/observeOn":293,"./scheduler/queue":357,"./util/ObjectUnsubscribedError":373}],57:[function(require,module,exports){
 "use strict";
 /* tslint:disable:no-unused-variable */
 // Subject imported before Observable to bypass circular dependency issue since
@@ -35900,7 +37740,7 @@ var Symbol = {
 };
 exports.Symbol = Symbol;
 
-},{"./AsyncSubject":22,"./BehaviorSubject":23,"./Notification":25,"./Observable":26,"./ReplaySubject":29,"./Subject":32,"./Subscriber":34,"./Subscription":35,"./add/observable/bindCallback":36,"./add/observable/bindNodeCallback":37,"./add/observable/combineLatest":38,"./add/observable/concat":39,"./add/observable/defer":40,"./add/observable/dom/ajax":41,"./add/observable/dom/webSocket":42,"./add/observable/empty":43,"./add/observable/forkJoin":44,"./add/observable/from":45,"./add/observable/fromEvent":46,"./add/observable/fromEventPattern":47,"./add/observable/fromPromise":48,"./add/observable/generate":49,"./add/observable/if":50,"./add/observable/interval":51,"./add/observable/merge":52,"./add/observable/never":53,"./add/observable/of":54,"./add/observable/onErrorResumeNext":55,"./add/observable/pairs":56,"./add/observable/race":57,"./add/observable/range":58,"./add/observable/throw":59,"./add/observable/timer":60,"./add/observable/using":61,"./add/observable/zip":62,"./add/operator/audit":63,"./add/operator/auditTime":64,"./add/operator/buffer":65,"./add/operator/bufferCount":66,"./add/operator/bufferTime":67,"./add/operator/bufferToggle":68,"./add/operator/bufferWhen":69,"./add/operator/catch":70,"./add/operator/combineAll":71,"./add/operator/combineLatest":72,"./add/operator/concat":73,"./add/operator/concatAll":74,"./add/operator/concatMap":75,"./add/operator/concatMapTo":76,"./add/operator/count":77,"./add/operator/debounce":78,"./add/operator/debounceTime":79,"./add/operator/defaultIfEmpty":80,"./add/operator/delay":81,"./add/operator/delayWhen":82,"./add/operator/dematerialize":83,"./add/operator/distinct":84,"./add/operator/distinctUntilChanged":85,"./add/operator/distinctUntilKeyChanged":86,"./add/operator/do":87,"./add/operator/elementAt":88,"./add/operator/every":89,"./add/operator/exhaust":90,"./add/operator/exhaustMap":91,"./add/operator/expand":92,"./add/operator/filter":93,"./add/operator/finally":94,"./add/operator/find":95,"./add/operator/findIndex":96,"./add/operator/first":97,"./add/operator/groupBy":98,"./add/operator/ignoreElements":99,"./add/operator/isEmpty":100,"./add/operator/last":101,"./add/operator/let":102,"./add/operator/map":103,"./add/operator/mapTo":104,"./add/operator/materialize":105,"./add/operator/max":106,"./add/operator/merge":107,"./add/operator/mergeAll":108,"./add/operator/mergeMap":109,"./add/operator/mergeMapTo":110,"./add/operator/mergeScan":111,"./add/operator/min":112,"./add/operator/multicast":113,"./add/operator/observeOn":114,"./add/operator/onErrorResumeNext":115,"./add/operator/pairwise":116,"./add/operator/partition":117,"./add/operator/pluck":118,"./add/operator/publish":119,"./add/operator/publishBehavior":120,"./add/operator/publishLast":121,"./add/operator/publishReplay":122,"./add/operator/race":123,"./add/operator/reduce":124,"./add/operator/repeat":125,"./add/operator/repeatWhen":126,"./add/operator/retry":127,"./add/operator/retryWhen":128,"./add/operator/sample":129,"./add/operator/sampleTime":130,"./add/operator/scan":131,"./add/operator/sequenceEqual":132,"./add/operator/share":133,"./add/operator/shareReplay":134,"./add/operator/single":135,"./add/operator/skip":136,"./add/operator/skipLast":137,"./add/operator/skipUntil":138,"./add/operator/skipWhile":139,"./add/operator/startWith":140,"./add/operator/subscribeOn":141,"./add/operator/switch":142,"./add/operator/switchMap":143,"./add/operator/switchMapTo":144,"./add/operator/take":145,"./add/operator/takeLast":146,"./add/operator/takeUntil":147,"./add/operator/takeWhile":148,"./add/operator/throttle":149,"./add/operator/throttleTime":150,"./add/operator/timeInterval":151,"./add/operator/timeout":152,"./add/operator/timeoutWith":153,"./add/operator/timestamp":154,"./add/operator/toArray":155,"./add/operator/toPromise":156,"./add/operator/window":157,"./add/operator/windowCount":158,"./add/operator/windowTime":159,"./add/operator/windowToggle":160,"./add/operator/windowWhen":161,"./add/operator/withLatestFrom":162,"./add/operator/zip":163,"./add/operator/zipAll":164,"./observable/ConnectableObservable":169,"./observable/dom/AjaxObservable":194,"./operator/timeInterval":303,"./operator/timestamp":306,"./scheduler/VirtualTimeScheduler":326,"./scheduler/animationFrame":327,"./scheduler/asap":328,"./scheduler/async":329,"./scheduler/queue":330,"./symbol/iterator":331,"./symbol/observable":332,"./symbol/rxSubscriber":333,"./testing/TestScheduler":338,"./util/ArgumentOutOfRangeError":340,"./util/EmptyError":341,"./util/ObjectUnsubscribedError":346,"./util/TimeoutError":348,"./util/UnsubscriptionError":349}],31:[function(require,module,exports){
+},{"./AsyncSubject":49,"./BehaviorSubject":50,"./Notification":52,"./Observable":53,"./ReplaySubject":56,"./Subject":59,"./Subscriber":61,"./Subscription":62,"./add/observable/bindCallback":63,"./add/observable/bindNodeCallback":64,"./add/observable/combineLatest":65,"./add/observable/concat":66,"./add/observable/defer":67,"./add/observable/dom/ajax":68,"./add/observable/dom/webSocket":69,"./add/observable/empty":70,"./add/observable/forkJoin":71,"./add/observable/from":72,"./add/observable/fromEvent":73,"./add/observable/fromEventPattern":74,"./add/observable/fromPromise":75,"./add/observable/generate":76,"./add/observable/if":77,"./add/observable/interval":78,"./add/observable/merge":79,"./add/observable/never":80,"./add/observable/of":81,"./add/observable/onErrorResumeNext":82,"./add/observable/pairs":83,"./add/observable/race":84,"./add/observable/range":85,"./add/observable/throw":86,"./add/observable/timer":87,"./add/observable/using":88,"./add/observable/zip":89,"./add/operator/audit":90,"./add/operator/auditTime":91,"./add/operator/buffer":92,"./add/operator/bufferCount":93,"./add/operator/bufferTime":94,"./add/operator/bufferToggle":95,"./add/operator/bufferWhen":96,"./add/operator/catch":97,"./add/operator/combineAll":98,"./add/operator/combineLatest":99,"./add/operator/concat":100,"./add/operator/concatAll":101,"./add/operator/concatMap":102,"./add/operator/concatMapTo":103,"./add/operator/count":104,"./add/operator/debounce":105,"./add/operator/debounceTime":106,"./add/operator/defaultIfEmpty":107,"./add/operator/delay":108,"./add/operator/delayWhen":109,"./add/operator/dematerialize":110,"./add/operator/distinct":111,"./add/operator/distinctUntilChanged":112,"./add/operator/distinctUntilKeyChanged":113,"./add/operator/do":114,"./add/operator/elementAt":115,"./add/operator/every":116,"./add/operator/exhaust":117,"./add/operator/exhaustMap":118,"./add/operator/expand":119,"./add/operator/filter":120,"./add/operator/finally":121,"./add/operator/find":122,"./add/operator/findIndex":123,"./add/operator/first":124,"./add/operator/groupBy":125,"./add/operator/ignoreElements":126,"./add/operator/isEmpty":127,"./add/operator/last":128,"./add/operator/let":129,"./add/operator/map":130,"./add/operator/mapTo":131,"./add/operator/materialize":132,"./add/operator/max":133,"./add/operator/merge":134,"./add/operator/mergeAll":135,"./add/operator/mergeMap":136,"./add/operator/mergeMapTo":137,"./add/operator/mergeScan":138,"./add/operator/min":139,"./add/operator/multicast":140,"./add/operator/observeOn":141,"./add/operator/onErrorResumeNext":142,"./add/operator/pairwise":143,"./add/operator/partition":144,"./add/operator/pluck":145,"./add/operator/publish":146,"./add/operator/publishBehavior":147,"./add/operator/publishLast":148,"./add/operator/publishReplay":149,"./add/operator/race":150,"./add/operator/reduce":151,"./add/operator/repeat":152,"./add/operator/repeatWhen":153,"./add/operator/retry":154,"./add/operator/retryWhen":155,"./add/operator/sample":156,"./add/operator/sampleTime":157,"./add/operator/scan":158,"./add/operator/sequenceEqual":159,"./add/operator/share":160,"./add/operator/shareReplay":161,"./add/operator/single":162,"./add/operator/skip":163,"./add/operator/skipLast":164,"./add/operator/skipUntil":165,"./add/operator/skipWhile":166,"./add/operator/startWith":167,"./add/operator/subscribeOn":168,"./add/operator/switch":169,"./add/operator/switchMap":170,"./add/operator/switchMapTo":171,"./add/operator/take":172,"./add/operator/takeLast":173,"./add/operator/takeUntil":174,"./add/operator/takeWhile":175,"./add/operator/throttle":176,"./add/operator/throttleTime":177,"./add/operator/timeInterval":178,"./add/operator/timeout":179,"./add/operator/timeoutWith":180,"./add/operator/timestamp":181,"./add/operator/toArray":182,"./add/operator/toPromise":183,"./add/operator/window":184,"./add/operator/windowCount":185,"./add/operator/windowTime":186,"./add/operator/windowToggle":187,"./add/operator/windowWhen":188,"./add/operator/withLatestFrom":189,"./add/operator/zip":190,"./add/operator/zipAll":191,"./observable/ConnectableObservable":196,"./observable/dom/AjaxObservable":221,"./operator/timeInterval":330,"./operator/timestamp":333,"./scheduler/VirtualTimeScheduler":353,"./scheduler/animationFrame":354,"./scheduler/asap":355,"./scheduler/async":356,"./scheduler/queue":357,"./symbol/iterator":358,"./symbol/observable":359,"./symbol/rxSubscriber":360,"./testing/TestScheduler":365,"./util/ArgumentOutOfRangeError":367,"./util/EmptyError":368,"./util/ObjectUnsubscribedError":373,"./util/TimeoutError":375,"./util/UnsubscriptionError":376}],58:[function(require,module,exports){
 "use strict";
 /**
  * An execution context and a data structure to order tasks and schedule their
@@ -35950,7 +37790,7 @@ var Scheduler = (function () {
 }());
 exports.Scheduler = Scheduler;
 
-},{}],32:[function(require,module,exports){
+},{}],59:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -36119,7 +37959,7 @@ var AnonymousSubject = (function (_super) {
 }(Subject));
 exports.AnonymousSubject = AnonymousSubject;
 
-},{"./Observable":26,"./SubjectSubscription":33,"./Subscriber":34,"./Subscription":35,"./symbol/rxSubscriber":333,"./util/ObjectUnsubscribedError":346}],33:[function(require,module,exports){
+},{"./Observable":53,"./SubjectSubscription":60,"./Subscriber":61,"./Subscription":62,"./symbol/rxSubscriber":360,"./util/ObjectUnsubscribedError":373}],60:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -36160,7 +38000,7 @@ var SubjectSubscription = (function (_super) {
 }(Subscription_1.Subscription));
 exports.SubjectSubscription = SubjectSubscription;
 
-},{"./Subscription":35}],34:[function(require,module,exports){
+},{"./Subscription":62}],61:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -36425,7 +38265,7 @@ var SafeSubscriber = (function (_super) {
     return SafeSubscriber;
 }(Subscriber));
 
-},{"./Observer":27,"./Subscription":35,"./symbol/rxSubscriber":333,"./util/isFunction":356}],35:[function(require,module,exports){
+},{"./Observer":54,"./Subscription":62,"./symbol/rxSubscriber":360,"./util/isFunction":383}],62:[function(require,module,exports){
 "use strict";
 var isArray_1 = require('./util/isArray');
 var isObject_1 = require('./util/isObject');
@@ -36619,788 +38459,788 @@ function flattenUnsubscriptionErrors(errors) {
     return errors.reduce(function (errs, err) { return errs.concat((err instanceof UnsubscriptionError_1.UnsubscriptionError) ? err.errors : err); }, []);
 }
 
-},{"./util/UnsubscriptionError":349,"./util/errorObject":352,"./util/isArray":353,"./util/isFunction":356,"./util/isObject":358,"./util/tryCatch":366}],36:[function(require,module,exports){
+},{"./util/UnsubscriptionError":376,"./util/errorObject":379,"./util/isArray":380,"./util/isFunction":383,"./util/isObject":385,"./util/tryCatch":393}],63:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bindCallback_1 = require('../../observable/bindCallback');
 Observable_1.Observable.bindCallback = bindCallback_1.bindCallback;
 
-},{"../../Observable":26,"../../observable/bindCallback":189}],37:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/bindCallback":216}],64:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bindNodeCallback_1 = require('../../observable/bindNodeCallback');
 Observable_1.Observable.bindNodeCallback = bindNodeCallback_1.bindNodeCallback;
 
-},{"../../Observable":26,"../../observable/bindNodeCallback":190}],38:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/bindNodeCallback":217}],65:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var combineLatest_1 = require('../../observable/combineLatest');
 Observable_1.Observable.combineLatest = combineLatest_1.combineLatest;
 
-},{"../../Observable":26,"../../observable/combineLatest":191}],39:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/combineLatest":218}],66:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concat_1 = require('../../observable/concat');
 Observable_1.Observable.concat = concat_1.concat;
 
-},{"../../Observable":26,"../../observable/concat":192}],40:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/concat":219}],67:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var defer_1 = require('../../observable/defer');
 Observable_1.Observable.defer = defer_1.defer;
 
-},{"../../Observable":26,"../../observable/defer":193}],41:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/defer":220}],68:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../../Observable');
 var ajax_1 = require('../../../observable/dom/ajax');
 Observable_1.Observable.ajax = ajax_1.ajax;
 
-},{"../../../Observable":26,"../../../observable/dom/ajax":196}],42:[function(require,module,exports){
+},{"../../../Observable":53,"../../../observable/dom/ajax":223}],69:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../../Observable');
 var webSocket_1 = require('../../../observable/dom/webSocket');
 Observable_1.Observable.webSocket = webSocket_1.webSocket;
 
-},{"../../../Observable":26,"../../../observable/dom/webSocket":197}],43:[function(require,module,exports){
+},{"../../../Observable":53,"../../../observable/dom/webSocket":224}],70:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var empty_1 = require('../../observable/empty');
 Observable_1.Observable.empty = empty_1.empty;
 
-},{"../../Observable":26,"../../observable/empty":198}],44:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/empty":225}],71:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var forkJoin_1 = require('../../observable/forkJoin');
 Observable_1.Observable.forkJoin = forkJoin_1.forkJoin;
 
-},{"../../Observable":26,"../../observable/forkJoin":199}],45:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/forkJoin":226}],72:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var from_1 = require('../../observable/from');
 Observable_1.Observable.from = from_1.from;
 
-},{"../../Observable":26,"../../observable/from":200}],46:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/from":227}],73:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var fromEvent_1 = require('../../observable/fromEvent');
 Observable_1.Observable.fromEvent = fromEvent_1.fromEvent;
 
-},{"../../Observable":26,"../../observable/fromEvent":201}],47:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/fromEvent":228}],74:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var fromEventPattern_1 = require('../../observable/fromEventPattern');
 Observable_1.Observable.fromEventPattern = fromEventPattern_1.fromEventPattern;
 
-},{"../../Observable":26,"../../observable/fromEventPattern":202}],48:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/fromEventPattern":229}],75:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var fromPromise_1 = require('../../observable/fromPromise');
 Observable_1.Observable.fromPromise = fromPromise_1.fromPromise;
 
-},{"../../Observable":26,"../../observable/fromPromise":203}],49:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/fromPromise":230}],76:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var GenerateObservable_1 = require('../../observable/GenerateObservable');
 Observable_1.Observable.generate = GenerateObservable_1.GenerateObservable.create;
 
-},{"../../Observable":26,"../../observable/GenerateObservable":177}],50:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/GenerateObservable":204}],77:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var if_1 = require('../../observable/if');
 Observable_1.Observable.if = if_1._if;
 
-},{"../../Observable":26,"../../observable/if":204}],51:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/if":231}],78:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var interval_1 = require('../../observable/interval');
 Observable_1.Observable.interval = interval_1.interval;
 
-},{"../../Observable":26,"../../observable/interval":205}],52:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/interval":232}],79:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var merge_1 = require('../../observable/merge');
 Observable_1.Observable.merge = merge_1.merge;
 
-},{"../../Observable":26,"../../observable/merge":206}],53:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/merge":233}],80:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var never_1 = require('../../observable/never');
 Observable_1.Observable.never = never_1.never;
 
-},{"../../Observable":26,"../../observable/never":207}],54:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/never":234}],81:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var of_1 = require('../../observable/of');
 Observable_1.Observable.of = of_1.of;
 
-},{"../../Observable":26,"../../observable/of":208}],55:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/of":235}],82:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var onErrorResumeNext_1 = require('../../operator/onErrorResumeNext');
 Observable_1.Observable.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNextStatic;
 
-},{"../../Observable":26,"../../operator/onErrorResumeNext":267}],56:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/onErrorResumeNext":294}],83:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var pairs_1 = require('../../observable/pairs');
 Observable_1.Observable.pairs = pairs_1.pairs;
 
-},{"../../Observable":26,"../../observable/pairs":209}],57:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/pairs":236}],84:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var race_1 = require('../../operator/race');
 Observable_1.Observable.race = race_1.raceStatic;
 
-},{"../../Observable":26,"../../operator/race":275}],58:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/race":302}],85:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var range_1 = require('../../observable/range');
 Observable_1.Observable.range = range_1.range;
 
-},{"../../Observable":26,"../../observable/range":210}],59:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/range":237}],86:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var throw_1 = require('../../observable/throw');
 Observable_1.Observable.throw = throw_1._throw;
 
-},{"../../Observable":26,"../../observable/throw":211}],60:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/throw":238}],87:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timer_1 = require('../../observable/timer');
 Observable_1.Observable.timer = timer_1.timer;
 
-},{"../../Observable":26,"../../observable/timer":212}],61:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/timer":239}],88:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var using_1 = require('../../observable/using');
 Observable_1.Observable.using = using_1.using;
 
-},{"../../Observable":26,"../../observable/using":213}],62:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/using":240}],89:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var zip_1 = require('../../observable/zip');
 Observable_1.Observable.zip = zip_1.zip;
 
-},{"../../Observable":26,"../../observable/zip":214}],63:[function(require,module,exports){
+},{"../../Observable":53,"../../observable/zip":241}],90:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var audit_1 = require('../../operator/audit');
 Observable_1.Observable.prototype.audit = audit_1.audit;
 
-},{"../../Observable":26,"../../operator/audit":215}],64:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/audit":242}],91:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var auditTime_1 = require('../../operator/auditTime');
 Observable_1.Observable.prototype.auditTime = auditTime_1.auditTime;
 
-},{"../../Observable":26,"../../operator/auditTime":216}],65:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/auditTime":243}],92:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var buffer_1 = require('../../operator/buffer');
 Observable_1.Observable.prototype.buffer = buffer_1.buffer;
 
-},{"../../Observable":26,"../../operator/buffer":217}],66:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/buffer":244}],93:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bufferCount_1 = require('../../operator/bufferCount');
 Observable_1.Observable.prototype.bufferCount = bufferCount_1.bufferCount;
 
-},{"../../Observable":26,"../../operator/bufferCount":218}],67:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/bufferCount":245}],94:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bufferTime_1 = require('../../operator/bufferTime');
 Observable_1.Observable.prototype.bufferTime = bufferTime_1.bufferTime;
 
-},{"../../Observable":26,"../../operator/bufferTime":219}],68:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/bufferTime":246}],95:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bufferToggle_1 = require('../../operator/bufferToggle');
 Observable_1.Observable.prototype.bufferToggle = bufferToggle_1.bufferToggle;
 
-},{"../../Observable":26,"../../operator/bufferToggle":220}],69:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/bufferToggle":247}],96:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var bufferWhen_1 = require('../../operator/bufferWhen');
 Observable_1.Observable.prototype.bufferWhen = bufferWhen_1.bufferWhen;
 
-},{"../../Observable":26,"../../operator/bufferWhen":221}],70:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/bufferWhen":248}],97:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var catch_1 = require('../../operator/catch');
 Observable_1.Observable.prototype.catch = catch_1._catch;
 Observable_1.Observable.prototype._catch = catch_1._catch;
 
-},{"../../Observable":26,"../../operator/catch":222}],71:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/catch":249}],98:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var combineAll_1 = require('../../operator/combineAll');
 Observable_1.Observable.prototype.combineAll = combineAll_1.combineAll;
 
-},{"../../Observable":26,"../../operator/combineAll":223}],72:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/combineAll":250}],99:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var combineLatest_1 = require('../../operator/combineLatest');
 Observable_1.Observable.prototype.combineLatest = combineLatest_1.combineLatest;
 
-},{"../../Observable":26,"../../operator/combineLatest":224}],73:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/combineLatest":251}],100:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concat_1 = require('../../operator/concat');
 Observable_1.Observable.prototype.concat = concat_1.concat;
 
-},{"../../Observable":26,"../../operator/concat":225}],74:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/concat":252}],101:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concatAll_1 = require('../../operator/concatAll');
 Observable_1.Observable.prototype.concatAll = concatAll_1.concatAll;
 
-},{"../../Observable":26,"../../operator/concatAll":226}],75:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/concatAll":253}],102:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concatMap_1 = require('../../operator/concatMap');
 Observable_1.Observable.prototype.concatMap = concatMap_1.concatMap;
 
-},{"../../Observable":26,"../../operator/concatMap":227}],76:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/concatMap":254}],103:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var concatMapTo_1 = require('../../operator/concatMapTo');
 Observable_1.Observable.prototype.concatMapTo = concatMapTo_1.concatMapTo;
 
-},{"../../Observable":26,"../../operator/concatMapTo":228}],77:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/concatMapTo":255}],104:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var count_1 = require('../../operator/count');
 Observable_1.Observable.prototype.count = count_1.count;
 
-},{"../../Observable":26,"../../operator/count":229}],78:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/count":256}],105:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var debounce_1 = require('../../operator/debounce');
 Observable_1.Observable.prototype.debounce = debounce_1.debounce;
 
-},{"../../Observable":26,"../../operator/debounce":230}],79:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/debounce":257}],106:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var debounceTime_1 = require('../../operator/debounceTime');
 Observable_1.Observable.prototype.debounceTime = debounceTime_1.debounceTime;
 
-},{"../../Observable":26,"../../operator/debounceTime":231}],80:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/debounceTime":258}],107:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var defaultIfEmpty_1 = require('../../operator/defaultIfEmpty');
 Observable_1.Observable.prototype.defaultIfEmpty = defaultIfEmpty_1.defaultIfEmpty;
 
-},{"../../Observable":26,"../../operator/defaultIfEmpty":232}],81:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/defaultIfEmpty":259}],108:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var delay_1 = require('../../operator/delay');
 Observable_1.Observable.prototype.delay = delay_1.delay;
 
-},{"../../Observable":26,"../../operator/delay":233}],82:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/delay":260}],109:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var delayWhen_1 = require('../../operator/delayWhen');
 Observable_1.Observable.prototype.delayWhen = delayWhen_1.delayWhen;
 
-},{"../../Observable":26,"../../operator/delayWhen":234}],83:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/delayWhen":261}],110:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var dematerialize_1 = require('../../operator/dematerialize');
 Observable_1.Observable.prototype.dematerialize = dematerialize_1.dematerialize;
 
-},{"../../Observable":26,"../../operator/dematerialize":235}],84:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/dematerialize":262}],111:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var distinct_1 = require('../../operator/distinct');
 Observable_1.Observable.prototype.distinct = distinct_1.distinct;
 
-},{"../../Observable":26,"../../operator/distinct":236}],85:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/distinct":263}],112:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var distinctUntilChanged_1 = require('../../operator/distinctUntilChanged');
 Observable_1.Observable.prototype.distinctUntilChanged = distinctUntilChanged_1.distinctUntilChanged;
 
-},{"../../Observable":26,"../../operator/distinctUntilChanged":237}],86:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/distinctUntilChanged":264}],113:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var distinctUntilKeyChanged_1 = require('../../operator/distinctUntilKeyChanged');
 Observable_1.Observable.prototype.distinctUntilKeyChanged = distinctUntilKeyChanged_1.distinctUntilKeyChanged;
 
-},{"../../Observable":26,"../../operator/distinctUntilKeyChanged":238}],87:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/distinctUntilKeyChanged":265}],114:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var do_1 = require('../../operator/do');
 Observable_1.Observable.prototype.do = do_1._do;
 Observable_1.Observable.prototype._do = do_1._do;
 
-},{"../../Observable":26,"../../operator/do":239}],88:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/do":266}],115:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var elementAt_1 = require('../../operator/elementAt');
 Observable_1.Observable.prototype.elementAt = elementAt_1.elementAt;
 
-},{"../../Observable":26,"../../operator/elementAt":240}],89:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/elementAt":267}],116:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var every_1 = require('../../operator/every');
 Observable_1.Observable.prototype.every = every_1.every;
 
-},{"../../Observable":26,"../../operator/every":241}],90:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/every":268}],117:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var exhaust_1 = require('../../operator/exhaust');
 Observable_1.Observable.prototype.exhaust = exhaust_1.exhaust;
 
-},{"../../Observable":26,"../../operator/exhaust":242}],91:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/exhaust":269}],118:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var exhaustMap_1 = require('../../operator/exhaustMap');
 Observable_1.Observable.prototype.exhaustMap = exhaustMap_1.exhaustMap;
 
-},{"../../Observable":26,"../../operator/exhaustMap":243}],92:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/exhaustMap":270}],119:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var expand_1 = require('../../operator/expand');
 Observable_1.Observable.prototype.expand = expand_1.expand;
 
-},{"../../Observable":26,"../../operator/expand":244}],93:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/expand":271}],120:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var filter_1 = require('../../operator/filter');
 Observable_1.Observable.prototype.filter = filter_1.filter;
 
-},{"../../Observable":26,"../../operator/filter":245}],94:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/filter":272}],121:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var finally_1 = require('../../operator/finally');
 Observable_1.Observable.prototype.finally = finally_1._finally;
 Observable_1.Observable.prototype._finally = finally_1._finally;
 
-},{"../../Observable":26,"../../operator/finally":246}],95:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/finally":273}],122:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var find_1 = require('../../operator/find');
 Observable_1.Observable.prototype.find = find_1.find;
 
-},{"../../Observable":26,"../../operator/find":247}],96:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/find":274}],123:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var findIndex_1 = require('../../operator/findIndex');
 Observable_1.Observable.prototype.findIndex = findIndex_1.findIndex;
 
-},{"../../Observable":26,"../../operator/findIndex":248}],97:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/findIndex":275}],124:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var first_1 = require('../../operator/first');
 Observable_1.Observable.prototype.first = first_1.first;
 
-},{"../../Observable":26,"../../operator/first":249}],98:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/first":276}],125:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var groupBy_1 = require('../../operator/groupBy');
 Observable_1.Observable.prototype.groupBy = groupBy_1.groupBy;
 
-},{"../../Observable":26,"../../operator/groupBy":250}],99:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/groupBy":277}],126:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var ignoreElements_1 = require('../../operator/ignoreElements');
 Observable_1.Observable.prototype.ignoreElements = ignoreElements_1.ignoreElements;
 
-},{"../../Observable":26,"../../operator/ignoreElements":251}],100:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/ignoreElements":278}],127:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var isEmpty_1 = require('../../operator/isEmpty');
 Observable_1.Observable.prototype.isEmpty = isEmpty_1.isEmpty;
 
-},{"../../Observable":26,"../../operator/isEmpty":252}],101:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/isEmpty":279}],128:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var last_1 = require('../../operator/last');
 Observable_1.Observable.prototype.last = last_1.last;
 
-},{"../../Observable":26,"../../operator/last":253}],102:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/last":280}],129:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var let_1 = require('../../operator/let');
 Observable_1.Observable.prototype.let = let_1.letProto;
 Observable_1.Observable.prototype.letBind = let_1.letProto;
 
-},{"../../Observable":26,"../../operator/let":254}],103:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/let":281}],130:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var map_1 = require('../../operator/map');
 Observable_1.Observable.prototype.map = map_1.map;
 
-},{"../../Observable":26,"../../operator/map":255}],104:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/map":282}],131:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mapTo_1 = require('../../operator/mapTo');
 Observable_1.Observable.prototype.mapTo = mapTo_1.mapTo;
 
-},{"../../Observable":26,"../../operator/mapTo":256}],105:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/mapTo":283}],132:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var materialize_1 = require('../../operator/materialize');
 Observable_1.Observable.prototype.materialize = materialize_1.materialize;
 
-},{"../../Observable":26,"../../operator/materialize":257}],106:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/materialize":284}],133:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var max_1 = require('../../operator/max');
 Observable_1.Observable.prototype.max = max_1.max;
 
-},{"../../Observable":26,"../../operator/max":258}],107:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/max":285}],134:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var merge_1 = require('../../operator/merge');
 Observable_1.Observable.prototype.merge = merge_1.merge;
 
-},{"../../Observable":26,"../../operator/merge":259}],108:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/merge":286}],135:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeAll_1 = require('../../operator/mergeAll');
 Observable_1.Observable.prototype.mergeAll = mergeAll_1.mergeAll;
 
-},{"../../Observable":26,"../../operator/mergeAll":260}],109:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/mergeAll":287}],136:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeMap_1 = require('../../operator/mergeMap');
 Observable_1.Observable.prototype.mergeMap = mergeMap_1.mergeMap;
 Observable_1.Observable.prototype.flatMap = mergeMap_1.mergeMap;
 
-},{"../../Observable":26,"../../operator/mergeMap":261}],110:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/mergeMap":288}],137:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeMapTo_1 = require('../../operator/mergeMapTo');
 Observable_1.Observable.prototype.flatMapTo = mergeMapTo_1.mergeMapTo;
 Observable_1.Observable.prototype.mergeMapTo = mergeMapTo_1.mergeMapTo;
 
-},{"../../Observable":26,"../../operator/mergeMapTo":262}],111:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/mergeMapTo":289}],138:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeScan_1 = require('../../operator/mergeScan');
 Observable_1.Observable.prototype.mergeScan = mergeScan_1.mergeScan;
 
-},{"../../Observable":26,"../../operator/mergeScan":263}],112:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/mergeScan":290}],139:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var min_1 = require('../../operator/min');
 Observable_1.Observable.prototype.min = min_1.min;
 
-},{"../../Observable":26,"../../operator/min":264}],113:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/min":291}],140:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var multicast_1 = require('../../operator/multicast');
 Observable_1.Observable.prototype.multicast = multicast_1.multicast;
 
-},{"../../Observable":26,"../../operator/multicast":265}],114:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/multicast":292}],141:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var observeOn_1 = require('../../operator/observeOn');
 Observable_1.Observable.prototype.observeOn = observeOn_1.observeOn;
 
-},{"../../Observable":26,"../../operator/observeOn":266}],115:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/observeOn":293}],142:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var onErrorResumeNext_1 = require('../../operator/onErrorResumeNext');
 Observable_1.Observable.prototype.onErrorResumeNext = onErrorResumeNext_1.onErrorResumeNext;
 
-},{"../../Observable":26,"../../operator/onErrorResumeNext":267}],116:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/onErrorResumeNext":294}],143:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var pairwise_1 = require('../../operator/pairwise');
 Observable_1.Observable.prototype.pairwise = pairwise_1.pairwise;
 
-},{"../../Observable":26,"../../operator/pairwise":268}],117:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/pairwise":295}],144:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var partition_1 = require('../../operator/partition');
 Observable_1.Observable.prototype.partition = partition_1.partition;
 
-},{"../../Observable":26,"../../operator/partition":269}],118:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/partition":296}],145:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var pluck_1 = require('../../operator/pluck');
 Observable_1.Observable.prototype.pluck = pluck_1.pluck;
 
-},{"../../Observable":26,"../../operator/pluck":270}],119:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/pluck":297}],146:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var publish_1 = require('../../operator/publish');
 Observable_1.Observable.prototype.publish = publish_1.publish;
 
-},{"../../Observable":26,"../../operator/publish":271}],120:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/publish":298}],147:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var publishBehavior_1 = require('../../operator/publishBehavior');
 Observable_1.Observable.prototype.publishBehavior = publishBehavior_1.publishBehavior;
 
-},{"../../Observable":26,"../../operator/publishBehavior":272}],121:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/publishBehavior":299}],148:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var publishLast_1 = require('../../operator/publishLast');
 Observable_1.Observable.prototype.publishLast = publishLast_1.publishLast;
 
-},{"../../Observable":26,"../../operator/publishLast":273}],122:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/publishLast":300}],149:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var publishReplay_1 = require('../../operator/publishReplay');
 Observable_1.Observable.prototype.publishReplay = publishReplay_1.publishReplay;
 
-},{"../../Observable":26,"../../operator/publishReplay":274}],123:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/publishReplay":301}],150:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var race_1 = require('../../operator/race');
 Observable_1.Observable.prototype.race = race_1.race;
 
-},{"../../Observable":26,"../../operator/race":275}],124:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/race":302}],151:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var reduce_1 = require('../../operator/reduce');
 Observable_1.Observable.prototype.reduce = reduce_1.reduce;
 
-},{"../../Observable":26,"../../operator/reduce":276}],125:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/reduce":303}],152:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var repeat_1 = require('../../operator/repeat');
 Observable_1.Observable.prototype.repeat = repeat_1.repeat;
 
-},{"../../Observable":26,"../../operator/repeat":277}],126:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/repeat":304}],153:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var repeatWhen_1 = require('../../operator/repeatWhen');
 Observable_1.Observable.prototype.repeatWhen = repeatWhen_1.repeatWhen;
 
-},{"../../Observable":26,"../../operator/repeatWhen":278}],127:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/repeatWhen":305}],154:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var retry_1 = require('../../operator/retry');
 Observable_1.Observable.prototype.retry = retry_1.retry;
 
-},{"../../Observable":26,"../../operator/retry":279}],128:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/retry":306}],155:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var retryWhen_1 = require('../../operator/retryWhen');
 Observable_1.Observable.prototype.retryWhen = retryWhen_1.retryWhen;
 
-},{"../../Observable":26,"../../operator/retryWhen":280}],129:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/retryWhen":307}],156:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var sample_1 = require('../../operator/sample');
 Observable_1.Observable.prototype.sample = sample_1.sample;
 
-},{"../../Observable":26,"../../operator/sample":281}],130:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/sample":308}],157:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var sampleTime_1 = require('../../operator/sampleTime');
 Observable_1.Observable.prototype.sampleTime = sampleTime_1.sampleTime;
 
-},{"../../Observable":26,"../../operator/sampleTime":282}],131:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/sampleTime":309}],158:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var scan_1 = require('../../operator/scan');
 Observable_1.Observable.prototype.scan = scan_1.scan;
 
-},{"../../Observable":26,"../../operator/scan":283}],132:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/scan":310}],159:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var sequenceEqual_1 = require('../../operator/sequenceEqual');
 Observable_1.Observable.prototype.sequenceEqual = sequenceEqual_1.sequenceEqual;
 
-},{"../../Observable":26,"../../operator/sequenceEqual":284}],133:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/sequenceEqual":311}],160:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var share_1 = require('../../operator/share');
 Observable_1.Observable.prototype.share = share_1.share;
 
-},{"../../Observable":26,"../../operator/share":285}],134:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/share":312}],161:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var shareReplay_1 = require('../../operator/shareReplay');
 Observable_1.Observable.prototype.shareReplay = shareReplay_1.shareReplay;
 
-},{"../../Observable":26,"../../operator/shareReplay":286}],135:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/shareReplay":313}],162:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var single_1 = require('../../operator/single');
 Observable_1.Observable.prototype.single = single_1.single;
 
-},{"../../Observable":26,"../../operator/single":287}],136:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/single":314}],163:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var skip_1 = require('../../operator/skip');
 Observable_1.Observable.prototype.skip = skip_1.skip;
 
-},{"../../Observable":26,"../../operator/skip":288}],137:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/skip":315}],164:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var skipLast_1 = require('../../operator/skipLast');
 Observable_1.Observable.prototype.skipLast = skipLast_1.skipLast;
 
-},{"../../Observable":26,"../../operator/skipLast":289}],138:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/skipLast":316}],165:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var skipUntil_1 = require('../../operator/skipUntil');
 Observable_1.Observable.prototype.skipUntil = skipUntil_1.skipUntil;
 
-},{"../../Observable":26,"../../operator/skipUntil":290}],139:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/skipUntil":317}],166:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var skipWhile_1 = require('../../operator/skipWhile');
 Observable_1.Observable.prototype.skipWhile = skipWhile_1.skipWhile;
 
-},{"../../Observable":26,"../../operator/skipWhile":291}],140:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/skipWhile":318}],167:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var startWith_1 = require('../../operator/startWith');
 Observable_1.Observable.prototype.startWith = startWith_1.startWith;
 
-},{"../../Observable":26,"../../operator/startWith":292}],141:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/startWith":319}],168:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var subscribeOn_1 = require('../../operator/subscribeOn');
 Observable_1.Observable.prototype.subscribeOn = subscribeOn_1.subscribeOn;
 
-},{"../../Observable":26,"../../operator/subscribeOn":293}],142:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/subscribeOn":320}],169:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var switch_1 = require('../../operator/switch');
 Observable_1.Observable.prototype.switch = switch_1._switch;
 Observable_1.Observable.prototype._switch = switch_1._switch;
 
-},{"../../Observable":26,"../../operator/switch":294}],143:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/switch":321}],170:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var switchMap_1 = require('../../operator/switchMap');
 Observable_1.Observable.prototype.switchMap = switchMap_1.switchMap;
 
-},{"../../Observable":26,"../../operator/switchMap":295}],144:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/switchMap":322}],171:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var switchMapTo_1 = require('../../operator/switchMapTo');
 Observable_1.Observable.prototype.switchMapTo = switchMapTo_1.switchMapTo;
 
-},{"../../Observable":26,"../../operator/switchMapTo":296}],145:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/switchMapTo":323}],172:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var take_1 = require('../../operator/take');
 Observable_1.Observable.prototype.take = take_1.take;
 
-},{"../../Observable":26,"../../operator/take":297}],146:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/take":324}],173:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var takeLast_1 = require('../../operator/takeLast');
 Observable_1.Observable.prototype.takeLast = takeLast_1.takeLast;
 
-},{"../../Observable":26,"../../operator/takeLast":298}],147:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/takeLast":325}],174:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var takeUntil_1 = require('../../operator/takeUntil');
 Observable_1.Observable.prototype.takeUntil = takeUntil_1.takeUntil;
 
-},{"../../Observable":26,"../../operator/takeUntil":299}],148:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/takeUntil":326}],175:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var takeWhile_1 = require('../../operator/takeWhile');
 Observable_1.Observable.prototype.takeWhile = takeWhile_1.takeWhile;
 
-},{"../../Observable":26,"../../operator/takeWhile":300}],149:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/takeWhile":327}],176:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var throttle_1 = require('../../operator/throttle');
 Observable_1.Observable.prototype.throttle = throttle_1.throttle;
 
-},{"../../Observable":26,"../../operator/throttle":301}],150:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/throttle":328}],177:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var throttleTime_1 = require('../../operator/throttleTime');
 Observable_1.Observable.prototype.throttleTime = throttleTime_1.throttleTime;
 
-},{"../../Observable":26,"../../operator/throttleTime":302}],151:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/throttleTime":329}],178:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timeInterval_1 = require('../../operator/timeInterval');
 Observable_1.Observable.prototype.timeInterval = timeInterval_1.timeInterval;
 
-},{"../../Observable":26,"../../operator/timeInterval":303}],152:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/timeInterval":330}],179:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timeout_1 = require('../../operator/timeout');
 Observable_1.Observable.prototype.timeout = timeout_1.timeout;
 
-},{"../../Observable":26,"../../operator/timeout":304}],153:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/timeout":331}],180:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timeoutWith_1 = require('../../operator/timeoutWith');
 Observable_1.Observable.prototype.timeoutWith = timeoutWith_1.timeoutWith;
 
-},{"../../Observable":26,"../../operator/timeoutWith":305}],154:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/timeoutWith":332}],181:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var timestamp_1 = require('../../operator/timestamp');
 Observable_1.Observable.prototype.timestamp = timestamp_1.timestamp;
 
-},{"../../Observable":26,"../../operator/timestamp":306}],155:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/timestamp":333}],182:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var toArray_1 = require('../../operator/toArray');
 Observable_1.Observable.prototype.toArray = toArray_1.toArray;
 
-},{"../../Observable":26,"../../operator/toArray":307}],156:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/toArray":334}],183:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var toPromise_1 = require('../../operator/toPromise');
 Observable_1.Observable.prototype.toPromise = toPromise_1.toPromise;
 
-},{"../../Observable":26,"../../operator/toPromise":308}],157:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/toPromise":335}],184:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var window_1 = require('../../operator/window');
 Observable_1.Observable.prototype.window = window_1.window;
 
-},{"../../Observable":26,"../../operator/window":309}],158:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/window":336}],185:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var windowCount_1 = require('../../operator/windowCount');
 Observable_1.Observable.prototype.windowCount = windowCount_1.windowCount;
 
-},{"../../Observable":26,"../../operator/windowCount":310}],159:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/windowCount":337}],186:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var windowTime_1 = require('../../operator/windowTime');
 Observable_1.Observable.prototype.windowTime = windowTime_1.windowTime;
 
-},{"../../Observable":26,"../../operator/windowTime":311}],160:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/windowTime":338}],187:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var windowToggle_1 = require('../../operator/windowToggle');
 Observable_1.Observable.prototype.windowToggle = windowToggle_1.windowToggle;
 
-},{"../../Observable":26,"../../operator/windowToggle":312}],161:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/windowToggle":339}],188:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var windowWhen_1 = require('../../operator/windowWhen');
 Observable_1.Observable.prototype.windowWhen = windowWhen_1.windowWhen;
 
-},{"../../Observable":26,"../../operator/windowWhen":313}],162:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/windowWhen":340}],189:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var withLatestFrom_1 = require('../../operator/withLatestFrom');
 Observable_1.Observable.prototype.withLatestFrom = withLatestFrom_1.withLatestFrom;
 
-},{"../../Observable":26,"../../operator/withLatestFrom":314}],163:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/withLatestFrom":341}],190:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var zip_1 = require('../../operator/zip');
 Observable_1.Observable.prototype.zip = zip_1.zipProto;
 
-},{"../../Observable":26,"../../operator/zip":315}],164:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/zip":342}],191:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var zipAll_1 = require('../../operator/zipAll');
 Observable_1.Observable.prototype.zipAll = zipAll_1.zipAll;
 
-},{"../../Observable":26,"../../operator/zipAll":316}],165:[function(require,module,exports){
+},{"../../Observable":53,"../../operator/zipAll":343}],192:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -37471,7 +39311,7 @@ var ArrayLikeObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayLikeObservable = ArrayLikeObservable;
 
-},{"../Observable":26,"./EmptyObservable":171,"./ScalarObservable":185}],166:[function(require,module,exports){
+},{"../Observable":53,"./EmptyObservable":198,"./ScalarObservable":212}],193:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -37594,7 +39434,7 @@ var ArrayObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayObservable = ArrayObservable;
 
-},{"../Observable":26,"../util/isScheduler":360,"./EmptyObservable":171,"./ScalarObservable":185}],167:[function(require,module,exports){
+},{"../Observable":53,"../util/isScheduler":387,"./EmptyObservable":198,"./ScalarObservable":212}],194:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -37863,7 +39703,7 @@ function dispatchError(arg) {
     subject.error(err);
 }
 
-},{"../AsyncSubject":22,"../Observable":26,"../util/errorObject":352,"../util/tryCatch":366}],168:[function(require,module,exports){
+},{"../AsyncSubject":49,"../Observable":53,"../util/errorObject":379,"../util/tryCatch":393}],195:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -38127,7 +39967,7 @@ function dispatchError(arg) {
     subject.error(err);
 }
 
-},{"../AsyncSubject":22,"../Observable":26,"../util/errorObject":352,"../util/tryCatch":366}],169:[function(require,module,exports){
+},{"../AsyncSubject":49,"../Observable":53,"../util/errorObject":379,"../util/tryCatch":393}],196:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -38297,7 +40137,7 @@ var RefCountSubscriber = (function (_super) {
     return RefCountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Observable":26,"../Subject":32,"../Subscriber":34,"../Subscription":35}],170:[function(require,module,exports){
+},{"../Observable":53,"../Subject":59,"../Subscriber":61,"../Subscription":62}],197:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -38397,7 +40237,7 @@ var DeferSubscriber = (function (_super) {
     return DeferSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../Observable":26,"../OuterSubscriber":28,"../util/subscribeToResult":364}],171:[function(require,module,exports){
+},{"../Observable":53,"../OuterSubscriber":55,"../util/subscribeToResult":391}],198:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -38479,7 +40319,7 @@ var EmptyObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.EmptyObservable = EmptyObservable;
 
-},{"../Observable":26}],172:[function(require,module,exports){
+},{"../Observable":53}],199:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -38563,7 +40403,7 @@ var ErrorObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ErrorObservable = ErrorObservable;
 
-},{"../Observable":26}],173:[function(require,module,exports){
+},{"../Observable":53}],200:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -38676,7 +40516,7 @@ var ForkJoinSubscriber = (function (_super) {
     return ForkJoinSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../Observable":26,"../OuterSubscriber":28,"../util/isArray":353,"../util/subscribeToResult":364,"./EmptyObservable":171}],174:[function(require,module,exports){
+},{"../Observable":53,"../OuterSubscriber":55,"../util/isArray":380,"../util/subscribeToResult":391,"./EmptyObservable":198}],201:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -38817,7 +40657,7 @@ var FromEventObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.FromEventObservable = FromEventObservable;
 
-},{"../Observable":26,"../Subscription":35,"../util/errorObject":352,"../util/isFunction":356,"../util/tryCatch":366}],175:[function(require,module,exports){
+},{"../Observable":53,"../Subscription":62,"../util/errorObject":379,"../util/isFunction":383,"../util/tryCatch":393}],202:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -38931,7 +40771,7 @@ var FromEventPatternObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.FromEventPatternObservable = FromEventPatternObservable;
 
-},{"../Observable":26,"../Subscription":35,"../util/isFunction":356}],176:[function(require,module,exports){
+},{"../Observable":53,"../Subscription":62,"../util/isFunction":383}],203:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39054,7 +40894,7 @@ var FromObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.FromObservable = FromObservable;
 
-},{"../Observable":26,"../operator/observeOn":266,"../symbol/iterator":331,"../symbol/observable":332,"../util/isArray":353,"../util/isArrayLike":354,"../util/isPromise":359,"./ArrayLikeObservable":165,"./ArrayObservable":166,"./IteratorObservable":180,"./PromiseObservable":183}],177:[function(require,module,exports){
+},{"../Observable":53,"../operator/observeOn":293,"../symbol/iterator":358,"../symbol/observable":359,"../util/isArray":380,"../util/isArrayLike":381,"../util/isPromise":386,"./ArrayLikeObservable":192,"./ArrayObservable":193,"./IteratorObservable":207,"./PromiseObservable":210}],204:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39190,7 +41030,7 @@ var GenerateObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.GenerateObservable = GenerateObservable;
 
-},{"../Observable":26,"../util/isScheduler":360}],178:[function(require,module,exports){
+},{"../Observable":53,"../util/isScheduler":387}],205:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39252,7 +41092,7 @@ var IfSubscriber = (function (_super) {
     return IfSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../Observable":26,"../OuterSubscriber":28,"../util/subscribeToResult":364}],179:[function(require,module,exports){
+},{"../Observable":53,"../OuterSubscriber":55,"../util/subscribeToResult":391}],206:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39341,7 +41181,7 @@ var IntervalObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.IntervalObservable = IntervalObservable;
 
-},{"../Observable":26,"../scheduler/async":329,"../util/isNumeric":357}],180:[function(require,module,exports){
+},{"../Observable":53,"../scheduler/async":356,"../util/isNumeric":384}],207:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39505,7 +41345,7 @@ function sign(value) {
     return valueAsNumber < 0 ? -1 : 1;
 }
 
-},{"../Observable":26,"../symbol/iterator":331,"../util/root":363}],181:[function(require,module,exports){
+},{"../Observable":53,"../symbol/iterator":358,"../util/root":390}],208:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39565,7 +41405,7 @@ var NeverObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.NeverObservable = NeverObservable;
 
-},{"../Observable":26,"../util/noop":361}],182:[function(require,module,exports){
+},{"../Observable":53,"../util/noop":388}],209:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39651,7 +41491,7 @@ var PairsObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.PairsObservable = PairsObservable;
 
-},{"../Observable":26}],183:[function(require,module,exports){
+},{"../Observable":53}],210:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39773,7 +41613,7 @@ function dispatchError(arg) {
     }
 }
 
-},{"../Observable":26,"../util/root":363}],184:[function(require,module,exports){
+},{"../Observable":53,"../util/root":390}],211:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39870,7 +41710,7 @@ var RangeObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.RangeObservable = RangeObservable;
 
-},{"../Observable":26}],185:[function(require,module,exports){
+},{"../Observable":53}],212:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39929,7 +41769,7 @@ var ScalarObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ScalarObservable = ScalarObservable;
 
-},{"../Observable":26}],186:[function(require,module,exports){
+},{"../Observable":53}],213:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -39981,7 +41821,7 @@ var SubscribeOnObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.SubscribeOnObservable = SubscribeOnObservable;
 
-},{"../Observable":26,"../scheduler/asap":328,"../util/isNumeric":357}],187:[function(require,module,exports){
+},{"../Observable":53,"../scheduler/asap":355,"../util/isNumeric":384}],214:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -40089,7 +41929,7 @@ var TimerObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.TimerObservable = TimerObservable;
 
-},{"../Observable":26,"../scheduler/async":329,"../util/isDate":355,"../util/isNumeric":357,"../util/isScheduler":360}],188:[function(require,module,exports){
+},{"../Observable":53,"../scheduler/async":356,"../util/isDate":382,"../util/isNumeric":384,"../util/isScheduler":387}],215:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -40151,17 +41991,17 @@ var UsingSubscriber = (function (_super) {
     return UsingSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../Observable":26,"../OuterSubscriber":28,"../util/subscribeToResult":364}],189:[function(require,module,exports){
+},{"../Observable":53,"../OuterSubscriber":55,"../util/subscribeToResult":391}],216:[function(require,module,exports){
 "use strict";
 var BoundCallbackObservable_1 = require('./BoundCallbackObservable');
 exports.bindCallback = BoundCallbackObservable_1.BoundCallbackObservable.create;
 
-},{"./BoundCallbackObservable":167}],190:[function(require,module,exports){
+},{"./BoundCallbackObservable":194}],217:[function(require,module,exports){
 "use strict";
 var BoundNodeCallbackObservable_1 = require('./BoundNodeCallbackObservable');
 exports.bindNodeCallback = BoundNodeCallbackObservable_1.BoundNodeCallbackObservable.create;
 
-},{"./BoundNodeCallbackObservable":168}],191:[function(require,module,exports){
+},{"./BoundNodeCallbackObservable":195}],218:[function(require,module,exports){
 "use strict";
 var isScheduler_1 = require('../util/isScheduler');
 var isArray_1 = require('../util/isArray');
@@ -40298,17 +42138,17 @@ function combineLatest() {
 }
 exports.combineLatest = combineLatest;
 
-},{"../operator/combineLatest":224,"../util/isArray":353,"../util/isScheduler":360,"./ArrayObservable":166}],192:[function(require,module,exports){
+},{"../operator/combineLatest":251,"../util/isArray":380,"../util/isScheduler":387,"./ArrayObservable":193}],219:[function(require,module,exports){
 "use strict";
 var concat_1 = require('../operator/concat');
 exports.concat = concat_1.concatStatic;
 
-},{"../operator/concat":225}],193:[function(require,module,exports){
+},{"../operator/concat":252}],220:[function(require,module,exports){
 "use strict";
 var DeferObservable_1 = require('./DeferObservable');
 exports.defer = DeferObservable_1.DeferObservable.create;
 
-},{"./DeferObservable":170}],194:[function(require,module,exports){
+},{"./DeferObservable":197}],221:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -40724,7 +42564,7 @@ var AjaxTimeoutError = (function (_super) {
 }(AjaxError));
 exports.AjaxTimeoutError = AjaxTimeoutError;
 
-},{"../../Observable":26,"../../Subscriber":34,"../../operator/map":255,"../../util/errorObject":352,"../../util/root":363,"../../util/tryCatch":366}],195:[function(require,module,exports){
+},{"../../Observable":53,"../../Subscriber":61,"../../operator/map":282,"../../util/errorObject":379,"../../util/root":390,"../../util/tryCatch":393}],222:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -40975,102 +42815,102 @@ var WebSocketSubject = (function (_super) {
 }(Subject_1.AnonymousSubject));
 exports.WebSocketSubject = WebSocketSubject;
 
-},{"../../Observable":26,"../../ReplaySubject":29,"../../Subject":32,"../../Subscriber":34,"../../Subscription":35,"../../util/assign":351,"../../util/errorObject":352,"../../util/root":363,"../../util/tryCatch":366}],196:[function(require,module,exports){
+},{"../../Observable":53,"../../ReplaySubject":56,"../../Subject":59,"../../Subscriber":61,"../../Subscription":62,"../../util/assign":378,"../../util/errorObject":379,"../../util/root":390,"../../util/tryCatch":393}],223:[function(require,module,exports){
 "use strict";
 var AjaxObservable_1 = require('./AjaxObservable');
 exports.ajax = AjaxObservable_1.AjaxObservable.create;
 
-},{"./AjaxObservable":194}],197:[function(require,module,exports){
+},{"./AjaxObservable":221}],224:[function(require,module,exports){
 "use strict";
 var WebSocketSubject_1 = require('./WebSocketSubject');
 exports.webSocket = WebSocketSubject_1.WebSocketSubject.create;
 
-},{"./WebSocketSubject":195}],198:[function(require,module,exports){
+},{"./WebSocketSubject":222}],225:[function(require,module,exports){
 "use strict";
 var EmptyObservable_1 = require('./EmptyObservable');
 exports.empty = EmptyObservable_1.EmptyObservable.create;
 
-},{"./EmptyObservable":171}],199:[function(require,module,exports){
+},{"./EmptyObservable":198}],226:[function(require,module,exports){
 "use strict";
 var ForkJoinObservable_1 = require('./ForkJoinObservable');
 exports.forkJoin = ForkJoinObservable_1.ForkJoinObservable.create;
 
-},{"./ForkJoinObservable":173}],200:[function(require,module,exports){
+},{"./ForkJoinObservable":200}],227:[function(require,module,exports){
 "use strict";
 var FromObservable_1 = require('./FromObservable');
 exports.from = FromObservable_1.FromObservable.create;
 
-},{"./FromObservable":176}],201:[function(require,module,exports){
+},{"./FromObservable":203}],228:[function(require,module,exports){
 "use strict";
 var FromEventObservable_1 = require('./FromEventObservable');
 exports.fromEvent = FromEventObservable_1.FromEventObservable.create;
 
-},{"./FromEventObservable":174}],202:[function(require,module,exports){
+},{"./FromEventObservable":201}],229:[function(require,module,exports){
 "use strict";
 var FromEventPatternObservable_1 = require('./FromEventPatternObservable');
 exports.fromEventPattern = FromEventPatternObservable_1.FromEventPatternObservable.create;
 
-},{"./FromEventPatternObservable":175}],203:[function(require,module,exports){
+},{"./FromEventPatternObservable":202}],230:[function(require,module,exports){
 "use strict";
 var PromiseObservable_1 = require('./PromiseObservable');
 exports.fromPromise = PromiseObservable_1.PromiseObservable.create;
 
-},{"./PromiseObservable":183}],204:[function(require,module,exports){
+},{"./PromiseObservable":210}],231:[function(require,module,exports){
 "use strict";
 var IfObservable_1 = require('./IfObservable');
 exports._if = IfObservable_1.IfObservable.create;
 
-},{"./IfObservable":178}],205:[function(require,module,exports){
+},{"./IfObservable":205}],232:[function(require,module,exports){
 "use strict";
 var IntervalObservable_1 = require('./IntervalObservable');
 exports.interval = IntervalObservable_1.IntervalObservable.create;
 
-},{"./IntervalObservable":179}],206:[function(require,module,exports){
+},{"./IntervalObservable":206}],233:[function(require,module,exports){
 "use strict";
 var merge_1 = require('../operator/merge');
 exports.merge = merge_1.mergeStatic;
 
-},{"../operator/merge":259}],207:[function(require,module,exports){
+},{"../operator/merge":286}],234:[function(require,module,exports){
 "use strict";
 var NeverObservable_1 = require('./NeverObservable');
 exports.never = NeverObservable_1.NeverObservable.create;
 
-},{"./NeverObservable":181}],208:[function(require,module,exports){
+},{"./NeverObservable":208}],235:[function(require,module,exports){
 "use strict";
 var ArrayObservable_1 = require('./ArrayObservable');
 exports.of = ArrayObservable_1.ArrayObservable.of;
 
-},{"./ArrayObservable":166}],209:[function(require,module,exports){
+},{"./ArrayObservable":193}],236:[function(require,module,exports){
 "use strict";
 var PairsObservable_1 = require('./PairsObservable');
 exports.pairs = PairsObservable_1.PairsObservable.create;
 
-},{"./PairsObservable":182}],210:[function(require,module,exports){
+},{"./PairsObservable":209}],237:[function(require,module,exports){
 "use strict";
 var RangeObservable_1 = require('./RangeObservable');
 exports.range = RangeObservable_1.RangeObservable.create;
 
-},{"./RangeObservable":184}],211:[function(require,module,exports){
+},{"./RangeObservable":211}],238:[function(require,module,exports){
 "use strict";
 var ErrorObservable_1 = require('./ErrorObservable');
 exports._throw = ErrorObservable_1.ErrorObservable.create;
 
-},{"./ErrorObservable":172}],212:[function(require,module,exports){
+},{"./ErrorObservable":199}],239:[function(require,module,exports){
 "use strict";
 var TimerObservable_1 = require('./TimerObservable');
 exports.timer = TimerObservable_1.TimerObservable.create;
 
-},{"./TimerObservable":187}],213:[function(require,module,exports){
+},{"./TimerObservable":214}],240:[function(require,module,exports){
 "use strict";
 var UsingObservable_1 = require('./UsingObservable');
 exports.using = UsingObservable_1.UsingObservable.create;
 
-},{"./UsingObservable":188}],214:[function(require,module,exports){
+},{"./UsingObservable":215}],241:[function(require,module,exports){
 "use strict";
 var zip_1 = require('../operator/zip');
 exports.zip = zip_1.zipStatic;
 
-},{"../operator/zip":315}],215:[function(require,module,exports){
+},{"../operator/zip":342}],242:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -41187,7 +43027,7 @@ var AuditSubscriber = (function (_super) {
     return AuditSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/errorObject":352,"../util/subscribeToResult":364,"../util/tryCatch":366}],216:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/errorObject":379,"../util/subscribeToResult":391,"../util/tryCatch":393}],243:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -41292,7 +43132,7 @@ function dispatchNext(subscriber) {
     subscriber.clearThrottle();
 }
 
-},{"../Subscriber":34,"../scheduler/async":329}],217:[function(require,module,exports){
+},{"../Subscriber":61,"../scheduler/async":356}],244:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -41369,7 +43209,7 @@ var BufferSubscriber = (function (_super) {
     return BufferSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],218:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],245:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -41510,7 +43350,7 @@ var BufferSkipCountSubscriber = (function (_super) {
     return BufferSkipCountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],219:[function(require,module,exports){
+},{"../Subscriber":61}],246:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -41710,7 +43550,7 @@ function dispatchBufferClose(arg) {
     subscriber.closeContext(context);
 }
 
-},{"../Subscriber":34,"../scheduler/async":329,"../util/isScheduler":360}],220:[function(require,module,exports){
+},{"../Subscriber":61,"../scheduler/async":356,"../util/isScheduler":387}],247:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -41863,7 +43703,7 @@ var BufferToggleSubscriber = (function (_super) {
     return BufferToggleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../Subscription":35,"../util/subscribeToResult":364}],221:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../Subscription":62,"../util/subscribeToResult":391}],248:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -41986,7 +43826,7 @@ var BufferWhenSubscriber = (function (_super) {
     return BufferWhenSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../Subscription":35,"../util/errorObject":352,"../util/subscribeToResult":364,"../util/tryCatch":366}],222:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../Subscription":62,"../util/errorObject":379,"../util/subscribeToResult":391,"../util/tryCatch":393}],249:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -42103,7 +43943,7 @@ var CatchSubscriber = (function (_super) {
     return CatchSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],223:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],250:[function(require,module,exports){
 "use strict";
 var combineLatest_1 = require('./combineLatest');
 /**
@@ -42151,7 +43991,7 @@ function combineAll(project) {
 }
 exports.combineAll = combineAll;
 
-},{"./combineLatest":224}],224:[function(require,module,exports){
+},{"./combineLatest":251}],251:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -42304,7 +44144,7 @@ var CombineLatestSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.CombineLatestSubscriber = CombineLatestSubscriber;
 
-},{"../OuterSubscriber":28,"../observable/ArrayObservable":166,"../util/isArray":353,"../util/subscribeToResult":364}],225:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../observable/ArrayObservable":193,"../util/isArray":380,"../util/subscribeToResult":391}],252:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../Observable');
 var isScheduler_1 = require('../util/isScheduler');
@@ -42479,7 +44319,7 @@ function concatStatic() {
 }
 exports.concatStatic = concatStatic;
 
-},{"../Observable":26,"../observable/ArrayObservable":166,"../util/isScheduler":360,"./mergeAll":260}],226:[function(require,module,exports){
+},{"../Observable":53,"../observable/ArrayObservable":193,"../util/isScheduler":387,"./mergeAll":287}],253:[function(require,module,exports){
 "use strict";
 var mergeAll_1 = require('./mergeAll');
 /* tslint:enable:max-line-length */
@@ -42536,7 +44376,7 @@ function concatAll() {
 }
 exports.concatAll = concatAll;
 
-},{"./mergeAll":260}],227:[function(require,module,exports){
+},{"./mergeAll":287}],254:[function(require,module,exports){
 "use strict";
 var mergeMap_1 = require('./mergeMap');
 /* tslint:enable:max-line-length */
@@ -42604,7 +44444,7 @@ function concatMap(project, resultSelector) {
 }
 exports.concatMap = concatMap;
 
-},{"./mergeMap":261}],228:[function(require,module,exports){
+},{"./mergeMap":288}],255:[function(require,module,exports){
 "use strict";
 var mergeMapTo_1 = require('./mergeMapTo');
 /* tslint:enable:max-line-length */
@@ -42669,7 +44509,7 @@ function concatMapTo(innerObservable, resultSelector) {
 }
 exports.concatMapTo = concatMapTo;
 
-},{"./mergeMapTo":262}],229:[function(require,module,exports){
+},{"./mergeMapTo":289}],256:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -42781,7 +44621,7 @@ var CountSubscriber = (function (_super) {
     return CountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],230:[function(require,module,exports){
+},{"../Subscriber":61}],257:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -42909,7 +44749,7 @@ var DebounceSubscriber = (function (_super) {
     return DebounceSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],231:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],258:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -43026,7 +44866,7 @@ function dispatchNext(subscriber) {
     subscriber.debouncedNext();
 }
 
-},{"../Subscriber":34,"../scheduler/async":329}],232:[function(require,module,exports){
+},{"../Subscriber":61,"../scheduler/async":356}],259:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -43104,7 +44944,7 @@ var DefaultIfEmptySubscriber = (function (_super) {
     return DefaultIfEmptySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],233:[function(require,module,exports){
+},{"../Subscriber":61}],260:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -43240,7 +45080,7 @@ var DelayMessage = (function () {
     return DelayMessage;
 }());
 
-},{"../Notification":25,"../Subscriber":34,"../scheduler/async":329,"../util/isDate":355}],234:[function(require,module,exports){
+},{"../Notification":52,"../Subscriber":61,"../scheduler/async":356,"../util/isDate":382}],261:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -43433,7 +45273,7 @@ var SubscriptionDelaySubscriber = (function (_super) {
     return SubscriptionDelaySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Observable":26,"../OuterSubscriber":28,"../Subscriber":34,"../util/subscribeToResult":364}],235:[function(require,module,exports){
+},{"../Observable":53,"../OuterSubscriber":55,"../Subscriber":61,"../util/subscribeToResult":391}],262:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -43509,7 +45349,7 @@ var DeMaterializeSubscriber = (function (_super) {
     return DeMaterializeSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],236:[function(require,module,exports){
+},{"../Subscriber":61}],263:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -43630,7 +45470,7 @@ var DistinctSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.DistinctSubscriber = DistinctSubscriber;
 
-},{"../OuterSubscriber":28,"../util/Set":347,"../util/subscribeToResult":364}],237:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/Set":374,"../util/subscribeToResult":391}],264:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -43739,7 +45579,7 @@ var DistinctUntilChangedSubscriber = (function (_super) {
     return DistinctUntilChangedSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../util/errorObject":352,"../util/tryCatch":366}],238:[function(require,module,exports){
+},{"../Subscriber":61,"../util/errorObject":379,"../util/tryCatch":393}],265:[function(require,module,exports){
 "use strict";
 var distinctUntilChanged_1 = require('./distinctUntilChanged');
 /* tslint:enable:max-line-length */
@@ -43810,7 +45650,7 @@ function distinctUntilKeyChanged(key, compare) {
 }
 exports.distinctUntilKeyChanged = distinctUntilKeyChanged;
 
-},{"./distinctUntilChanged":237}],239:[function(require,module,exports){
+},{"./distinctUntilChanged":264}],266:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -43924,7 +45764,7 @@ var DoSubscriber = (function (_super) {
     return DoSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],240:[function(require,module,exports){
+},{"../Subscriber":61}],267:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -44025,7 +45865,7 @@ var ElementAtSubscriber = (function (_super) {
     return ElementAtSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../util/ArgumentOutOfRangeError":340}],241:[function(require,module,exports){
+},{"../Subscriber":61,"../util/ArgumentOutOfRangeError":367}],268:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -44100,7 +45940,7 @@ var EverySubscriber = (function (_super) {
     return EverySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],242:[function(require,module,exports){
+},{"../Subscriber":61}],269:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -44190,7 +46030,7 @@ var SwitchFirstSubscriber = (function (_super) {
     return SwitchFirstSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],243:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],270:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -44329,7 +46169,7 @@ var SwitchFirstMapSubscriber = (function (_super) {
     return SwitchFirstMapSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],244:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],271:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -44481,7 +46321,7 @@ var ExpandSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.ExpandSubscriber = ExpandSubscriber;
 
-},{"../OuterSubscriber":28,"../util/errorObject":352,"../util/subscribeToResult":364,"../util/tryCatch":366}],245:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/errorObject":379,"../util/subscribeToResult":391,"../util/tryCatch":393}],272:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -44575,7 +46415,7 @@ var FilterSubscriber = (function (_super) {
     return FilterSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],246:[function(require,module,exports){
+},{"../Subscriber":61}],273:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -44619,7 +46459,7 @@ var FinallySubscriber = (function (_super) {
     return FinallySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../Subscription":35}],247:[function(require,module,exports){
+},{"../Subscriber":61,"../Subscription":62}],274:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -44721,7 +46561,7 @@ var FindValueSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.FindValueSubscriber = FindValueSubscriber;
 
-},{"../Subscriber":34}],248:[function(require,module,exports){
+},{"../Subscriber":61}],275:[function(require,module,exports){
 "use strict";
 var find_1 = require('./find');
 /**
@@ -44763,7 +46603,7 @@ function findIndex(predicate, thisArg) {
 }
 exports.findIndex = findIndex;
 
-},{"./find":247}],249:[function(require,module,exports){
+},{"./find":274}],276:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -44916,7 +46756,7 @@ var FirstSubscriber = (function (_super) {
     return FirstSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../util/EmptyError":341}],250:[function(require,module,exports){
+},{"../Subscriber":61,"../util/EmptyError":368}],277:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -45191,7 +47031,7 @@ var InnerRefCountSubscription = (function (_super) {
     return InnerRefCountSubscription;
 }(Subscription_1.Subscription));
 
-},{"../Observable":26,"../Subject":32,"../Subscriber":34,"../Subscription":35,"../util/FastMap":342,"../util/Map":344}],251:[function(require,module,exports){
+},{"../Observable":53,"../Subject":59,"../Subscriber":61,"../Subscription":62,"../util/FastMap":369,"../util/Map":371}],278:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -45239,7 +47079,7 @@ var IgnoreElementsSubscriber = (function (_super) {
     return IgnoreElementsSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../util/noop":361}],252:[function(require,module,exports){
+},{"../Subscriber":61,"../util/noop":388}],279:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -45292,7 +47132,7 @@ var IsEmptySubscriber = (function (_super) {
     return IsEmptySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],253:[function(require,module,exports){
+},{"../Subscriber":61}],280:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -45412,7 +47252,7 @@ var LastSubscriber = (function (_super) {
     return LastSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../util/EmptyError":341}],254:[function(require,module,exports){
+},{"../Subscriber":61,"../util/EmptyError":368}],281:[function(require,module,exports){
 "use strict";
 /**
  * @param func
@@ -45425,7 +47265,7 @@ function letProto(func) {
 }
 exports.letProto = letProto;
 
-},{}],255:[function(require,module,exports){
+},{}],282:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -45513,7 +47353,7 @@ var MapSubscriber = (function (_super) {
     return MapSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],256:[function(require,module,exports){
+},{"../Subscriber":61}],283:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -45577,7 +47417,7 @@ var MapToSubscriber = (function (_super) {
     return MapToSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],257:[function(require,module,exports){
+},{"../Subscriber":61}],284:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -45668,7 +47508,7 @@ var MaterializeSubscriber = (function (_super) {
     return MaterializeSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Notification":25,"../Subscriber":34}],258:[function(require,module,exports){
+},{"../Notification":52,"../Subscriber":61}],285:[function(require,module,exports){
 "use strict";
 var reduce_1 = require('./reduce');
 /**
@@ -45710,7 +47550,7 @@ function max(comparer) {
 }
 exports.max = max;
 
-},{"./reduce":276}],259:[function(require,module,exports){
+},{"./reduce":303}],286:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../Observable');
 var ArrayObservable_1 = require('../observable/ArrayObservable');
@@ -45856,7 +47696,7 @@ function mergeStatic() {
 }
 exports.mergeStatic = mergeStatic;
 
-},{"../Observable":26,"../observable/ArrayObservable":166,"../util/isScheduler":360,"./mergeAll":260}],260:[function(require,module,exports){
+},{"../Observable":53,"../observable/ArrayObservable":193,"../util/isScheduler":387,"./mergeAll":287}],287:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -45968,7 +47808,7 @@ var MergeAllSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeAllSubscriber = MergeAllSubscriber;
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],261:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],288:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -46140,7 +47980,7 @@ var MergeMapSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeMapSubscriber = MergeMapSubscriber;
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],262:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],289:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -46296,7 +48136,7 @@ var MergeMapToSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeMapToSubscriber = MergeMapToSubscriber;
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],263:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],290:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -46426,7 +48266,7 @@ var MergeScanSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeScanSubscriber = MergeScanSubscriber;
 
-},{"../OuterSubscriber":28,"../util/errorObject":352,"../util/subscribeToResult":364,"../util/tryCatch":366}],264:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/errorObject":379,"../util/subscribeToResult":391,"../util/tryCatch":393}],291:[function(require,module,exports){
 "use strict";
 var reduce_1 = require('./reduce');
 /**
@@ -46468,7 +48308,7 @@ function min(comparer) {
 }
 exports.min = min;
 
-},{"./reduce":276}],265:[function(require,module,exports){
+},{"./reduce":303}],292:[function(require,module,exports){
 "use strict";
 var ConnectableObservable_1 = require('../observable/ConnectableObservable');
 /* tslint:enable:max-line-length */
@@ -46526,7 +48366,7 @@ var MulticastOperator = (function () {
 }());
 exports.MulticastOperator = MulticastOperator;
 
-},{"../observable/ConnectableObservable":169}],266:[function(require,module,exports){
+},{"../observable/ConnectableObservable":196}],293:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -46640,7 +48480,7 @@ var ObserveOnMessage = (function () {
 }());
 exports.ObserveOnMessage = ObserveOnMessage;
 
-},{"../Notification":25,"../Subscriber":34}],267:[function(require,module,exports){
+},{"../Notification":52,"../Subscriber":61}],294:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -46778,7 +48618,7 @@ var OnErrorResumeNextSubscriber = (function (_super) {
     return OnErrorResumeNextSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../observable/FromObservable":176,"../util/isArray":353,"../util/subscribeToResult":364}],268:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../observable/FromObservable":203,"../util/isArray":380,"../util/subscribeToResult":391}],295:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -46856,7 +48696,7 @@ var PairwiseSubscriber = (function (_super) {
     return PairwiseSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],269:[function(require,module,exports){
+},{"../Subscriber":61}],296:[function(require,module,exports){
 "use strict";
 var not_1 = require('../util/not');
 var filter_1 = require('./filter');
@@ -46909,7 +48749,7 @@ function partition(predicate, thisArg) {
 }
 exports.partition = partition;
 
-},{"../util/not":362,"./filter":245}],270:[function(require,module,exports){
+},{"../util/not":389,"./filter":272}],297:[function(require,module,exports){
 "use strict";
 var map_1 = require('./map');
 /**
@@ -46967,7 +48807,7 @@ function plucker(props, length) {
     return mapper;
 }
 
-},{"./map":255}],271:[function(require,module,exports){
+},{"./map":282}],298:[function(require,module,exports){
 "use strict";
 var Subject_1 = require('../Subject');
 var multicast_1 = require('./multicast');
@@ -46991,7 +48831,7 @@ function publish(selector) {
 }
 exports.publish = publish;
 
-},{"../Subject":32,"./multicast":265}],272:[function(require,module,exports){
+},{"../Subject":59,"./multicast":292}],299:[function(require,module,exports){
 "use strict";
 var BehaviorSubject_1 = require('../BehaviorSubject');
 var multicast_1 = require('./multicast');
@@ -47006,7 +48846,7 @@ function publishBehavior(value) {
 }
 exports.publishBehavior = publishBehavior;
 
-},{"../BehaviorSubject":23,"./multicast":265}],273:[function(require,module,exports){
+},{"../BehaviorSubject":50,"./multicast":292}],300:[function(require,module,exports){
 "use strict";
 var AsyncSubject_1 = require('../AsyncSubject');
 var multicast_1 = require('./multicast');
@@ -47020,7 +48860,7 @@ function publishLast() {
 }
 exports.publishLast = publishLast;
 
-},{"../AsyncSubject":22,"./multicast":265}],274:[function(require,module,exports){
+},{"../AsyncSubject":49,"./multicast":292}],301:[function(require,module,exports){
 "use strict";
 var ReplaySubject_1 = require('../ReplaySubject');
 var multicast_1 = require('./multicast');
@@ -47039,7 +48879,7 @@ function publishReplay(bufferSize, windowTime, scheduler) {
 }
 exports.publishReplay = publishReplay;
 
-},{"../ReplaySubject":29,"./multicast":265}],275:[function(require,module,exports){
+},{"../ReplaySubject":56,"./multicast":292}],302:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47151,7 +48991,7 @@ var RaceSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.RaceSubscriber = RaceSubscriber;
 
-},{"../OuterSubscriber":28,"../observable/ArrayObservable":166,"../util/isArray":353,"../util/subscribeToResult":364}],276:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../observable/ArrayObservable":193,"../util/isArray":380,"../util/subscribeToResult":391}],303:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47278,7 +49118,7 @@ var ReduceSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.ReduceSubscriber = ReduceSubscriber;
 
-},{"../Subscriber":34}],277:[function(require,module,exports){
+},{"../Subscriber":61}],304:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47349,7 +49189,7 @@ var RepeatSubscriber = (function (_super) {
     return RepeatSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../observable/EmptyObservable":171}],278:[function(require,module,exports){
+},{"../Subscriber":61,"../observable/EmptyObservable":198}],305:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47458,7 +49298,7 @@ var RepeatWhenSubscriber = (function (_super) {
     return RepeatWhenSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../Subject":32,"../util/errorObject":352,"../util/subscribeToResult":364,"../util/tryCatch":366}],279:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../Subject":59,"../util/errorObject":379,"../util/subscribeToResult":391,"../util/tryCatch":393}],306:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47524,7 +49364,7 @@ var RetrySubscriber = (function (_super) {
     return RetrySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],280:[function(require,module,exports){
+},{"../Subscriber":61}],307:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47626,7 +49466,7 @@ var RetryWhenSubscriber = (function (_super) {
     return RetryWhenSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../Subject":32,"../util/errorObject":352,"../util/subscribeToResult":364,"../util/tryCatch":366}],281:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../Subject":59,"../util/errorObject":379,"../util/subscribeToResult":391,"../util/tryCatch":393}],308:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47715,7 +49555,7 @@ var SampleSubscriber = (function (_super) {
     return SampleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],282:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],309:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47807,7 +49647,7 @@ function dispatchNotification(state) {
     this.schedule(state, period);
 }
 
-},{"../Subscriber":34,"../scheduler/async":329}],283:[function(require,module,exports){
+},{"../Subscriber":61,"../scheduler/async":356}],310:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47927,7 +49767,7 @@ var ScanSubscriber = (function (_super) {
     return ScanSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],284:[function(require,module,exports){
+},{"../Subscriber":61}],311:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48092,7 +49932,7 @@ var SequenceEqualCompareToSubscriber = (function (_super) {
     return SequenceEqualCompareToSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../util/errorObject":352,"../util/tryCatch":366}],285:[function(require,module,exports){
+},{"../Subscriber":61,"../util/errorObject":379,"../util/tryCatch":393}],312:[function(require,module,exports){
 "use strict";
 var multicast_1 = require('./multicast');
 var Subject_1 = require('../Subject');
@@ -48117,7 +49957,7 @@ function share() {
 exports.share = share;
 ;
 
-},{"../Subject":32,"./multicast":265}],286:[function(require,module,exports){
+},{"../Subject":59,"./multicast":292}],313:[function(require,module,exports){
 "use strict";
 var multicast_1 = require('./multicast');
 var ReplaySubject_1 = require('../ReplaySubject');
@@ -48140,7 +49980,7 @@ function shareReplay(bufferSize, windowTime, scheduler) {
 exports.shareReplay = shareReplay;
 ;
 
-},{"../ReplaySubject":29,"./multicast":265}],287:[function(require,module,exports){
+},{"../ReplaySubject":56,"./multicast":292}],314:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48234,7 +50074,7 @@ var SingleSubscriber = (function (_super) {
     return SingleSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../util/EmptyError":341}],288:[function(require,module,exports){
+},{"../Subscriber":61,"../util/EmptyError":368}],315:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48286,7 +50126,7 @@ var SkipSubscriber = (function (_super) {
     return SkipSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],289:[function(require,module,exports){
+},{"../Subscriber":61}],316:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48380,7 +50220,7 @@ var SkipLastSubscriber = (function (_super) {
     return SkipLastSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../util/ArgumentOutOfRangeError":340}],290:[function(require,module,exports){
+},{"../Subscriber":61,"../util/ArgumentOutOfRangeError":367}],317:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48452,7 +50292,7 @@ var SkipUntilSubscriber = (function (_super) {
     return SkipUntilSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],291:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],318:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48519,7 +50359,7 @@ var SkipWhileSubscriber = (function (_super) {
     return SkipWhileSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],292:[function(require,module,exports){
+},{"../Subscriber":61}],319:[function(require,module,exports){
 "use strict";
 var ArrayObservable_1 = require('../observable/ArrayObservable');
 var ScalarObservable_1 = require('../observable/ScalarObservable');
@@ -48566,7 +50406,7 @@ function startWith() {
 }
 exports.startWith = startWith;
 
-},{"../observable/ArrayObservable":166,"../observable/EmptyObservable":171,"../observable/ScalarObservable":185,"../util/isScheduler":360,"./concat":225}],293:[function(require,module,exports){
+},{"../observable/ArrayObservable":193,"../observable/EmptyObservable":198,"../observable/ScalarObservable":212,"../util/isScheduler":387,"./concat":252}],320:[function(require,module,exports){
 "use strict";
 var SubscribeOnObservable_1 = require('../observable/SubscribeOnObservable');
 /**
@@ -48596,7 +50436,7 @@ var SubscribeOnOperator = (function () {
     return SubscribeOnOperator;
 }());
 
-},{"../observable/SubscribeOnObservable":186}],294:[function(require,module,exports){
+},{"../observable/SubscribeOnObservable":213}],321:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48705,7 +50545,7 @@ var SwitchSubscriber = (function (_super) {
     return SwitchSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],295:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],322:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48846,7 +50686,7 @@ var SwitchMapSubscriber = (function (_super) {
     return SwitchMapSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],296:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],323:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48972,7 +50812,7 @@ var SwitchMapToSubscriber = (function (_super) {
     return SwitchMapToSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],297:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],324:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49062,7 +50902,7 @@ var TakeSubscriber = (function (_super) {
     return TakeSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../observable/EmptyObservable":171,"../util/ArgumentOutOfRangeError":340}],298:[function(require,module,exports){
+},{"../Subscriber":61,"../observable/EmptyObservable":198,"../util/ArgumentOutOfRangeError":367}],325:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49170,7 +51010,7 @@ var TakeLastSubscriber = (function (_super) {
     return TakeLastSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../observable/EmptyObservable":171,"../util/ArgumentOutOfRangeError":340}],299:[function(require,module,exports){
+},{"../Subscriber":61,"../observable/EmptyObservable":198,"../util/ArgumentOutOfRangeError":367}],326:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49246,7 +51086,7 @@ var TakeUntilSubscriber = (function (_super) {
     return TakeUntilSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],300:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],327:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49339,7 +51179,7 @@ var TakeWhileSubscriber = (function (_super) {
     return TakeWhileSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],301:[function(require,module,exports){
+},{"../Subscriber":61}],328:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49482,7 +51322,7 @@ var ThrottleSubscriber = (function (_super) {
     return ThrottleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],302:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],329:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49599,7 +51439,7 @@ function dispatchNext(arg) {
     subscriber.clearThrottle();
 }
 
-},{"../Subscriber":34,"../scheduler/async":329,"./throttle":301}],303:[function(require,module,exports){
+},{"../Subscriber":61,"../scheduler/async":356,"./throttle":328}],330:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49659,7 +51499,7 @@ var TimeIntervalSubscriber = (function (_super) {
     return TimeIntervalSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../scheduler/async":329}],304:[function(require,module,exports){
+},{"../Subscriber":61,"../scheduler/async":356}],331:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49743,7 +51583,7 @@ var TimeoutSubscriber = (function (_super) {
     return TimeoutSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../scheduler/async":329,"../util/TimeoutError":348,"../util/isDate":355}],305:[function(require,module,exports){
+},{"../Subscriber":61,"../scheduler/async":356,"../util/TimeoutError":375,"../util/isDate":382}],332:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49831,7 +51671,7 @@ var TimeoutWithSubscriber = (function (_super) {
     return TimeoutWithSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../scheduler/async":329,"../util/isDate":355,"../util/subscribeToResult":364}],306:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../scheduler/async":356,"../util/isDate":382,"../util/subscribeToResult":391}],333:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49882,7 +51722,7 @@ var TimestampSubscriber = (function (_super) {
     return TimestampSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34,"../scheduler/async":329}],307:[function(require,module,exports){
+},{"../Subscriber":61,"../scheduler/async":356}],334:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49928,7 +51768,7 @@ var ToArraySubscriber = (function (_super) {
     return ToArraySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":34}],308:[function(require,module,exports){
+},{"../Subscriber":61}],335:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 /* tslint:enable:max-line-length */
@@ -50001,7 +51841,7 @@ function toPromise(PromiseCtor) {
 }
 exports.toPromise = toPromise;
 
-},{"../util/root":363}],309:[function(require,module,exports){
+},{"../util/root":390}],336:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -50112,7 +51952,7 @@ var WindowSubscriber = (function (_super) {
     return WindowSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../Subject":32,"../util/subscribeToResult":364}],310:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../Subject":59,"../util/subscribeToResult":391}],337:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -50244,7 +52084,7 @@ var WindowCountSubscriber = (function (_super) {
     return WindowCountSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subject":32,"../Subscriber":34}],311:[function(require,module,exports){
+},{"../Subject":59,"../Subscriber":61}],338:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -50406,7 +52246,7 @@ function dispatchWindowClose(state) {
     subscriber.closeWindow(window);
 }
 
-},{"../Subject":32,"../Subscriber":34,"../scheduler/async":329,"../util/isNumeric":357,"../util/isScheduler":360}],312:[function(require,module,exports){
+},{"../Subject":59,"../Subscriber":61,"../scheduler/async":356,"../util/isNumeric":384,"../util/isScheduler":387}],339:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -50587,7 +52427,7 @@ var WindowToggleSubscriber = (function (_super) {
     return WindowToggleSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../Subject":32,"../Subscription":35,"../util/errorObject":352,"../util/subscribeToResult":364,"../util/tryCatch":366}],313:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../Subject":59,"../Subscription":62,"../util/errorObject":379,"../util/subscribeToResult":391,"../util/tryCatch":393}],340:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -50715,7 +52555,7 @@ var WindowSubscriber = (function (_super) {
     return WindowSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../Subject":32,"../util/errorObject":352,"../util/subscribeToResult":364,"../util/tryCatch":366}],314:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../Subject":59,"../util/errorObject":379,"../util/subscribeToResult":391,"../util/tryCatch":393}],341:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -50846,7 +52686,7 @@ var WithLatestFromSubscriber = (function (_super) {
     return WithLatestFromSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../util/subscribeToResult":364}],315:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../util/subscribeToResult":391}],342:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51126,7 +52966,7 @@ var ZipBufferIterator = (function (_super) {
     return ZipBufferIterator;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../OuterSubscriber":28,"../Subscriber":34,"../observable/ArrayObservable":166,"../symbol/iterator":331,"../util/isArray":353,"../util/subscribeToResult":364}],316:[function(require,module,exports){
+},{"../OuterSubscriber":55,"../Subscriber":61,"../observable/ArrayObservable":193,"../symbol/iterator":358,"../util/isArray":380,"../util/subscribeToResult":391}],343:[function(require,module,exports){
 "use strict";
 var zip_1 = require('./zip');
 /**
@@ -51140,7 +52980,7 @@ function zipAll(project) {
 }
 exports.zipAll = zipAll;
 
-},{"./zip":315}],317:[function(require,module,exports){
+},{"./zip":342}],344:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51185,7 +53025,7 @@ var Action = (function (_super) {
 }(Subscription_1.Subscription));
 exports.Action = Action;
 
-},{"../Subscription":35}],318:[function(require,module,exports){
+},{"../Subscription":62}],345:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51241,7 +53081,7 @@ var AnimationFrameAction = (function (_super) {
 }(AsyncAction_1.AsyncAction));
 exports.AnimationFrameAction = AnimationFrameAction;
 
-},{"../util/AnimationFrame":339,"./AsyncAction":322}],319:[function(require,module,exports){
+},{"../util/AnimationFrame":366,"./AsyncAction":349}],346:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51279,7 +53119,7 @@ var AnimationFrameScheduler = (function (_super) {
 }(AsyncScheduler_1.AsyncScheduler));
 exports.AnimationFrameScheduler = AnimationFrameScheduler;
 
-},{"./AsyncScheduler":323}],320:[function(require,module,exports){
+},{"./AsyncScheduler":350}],347:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51335,7 +53175,7 @@ var AsapAction = (function (_super) {
 }(AsyncAction_1.AsyncAction));
 exports.AsapAction = AsapAction;
 
-},{"../util/Immediate":343,"./AsyncAction":322}],321:[function(require,module,exports){
+},{"../util/Immediate":370,"./AsyncAction":349}],348:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51373,7 +53213,7 @@ var AsapScheduler = (function (_super) {
 }(AsyncScheduler_1.AsyncScheduler));
 exports.AsapScheduler = AsapScheduler;
 
-},{"./AsyncScheduler":323}],322:[function(require,module,exports){
+},{"./AsyncScheduler":350}],349:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51516,7 +53356,7 @@ var AsyncAction = (function (_super) {
 }(Action_1.Action));
 exports.AsyncAction = AsyncAction;
 
-},{"../util/root":363,"./Action":317}],323:[function(require,module,exports){
+},{"../util/root":390,"./Action":344}],350:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51568,7 +53408,7 @@ var AsyncScheduler = (function (_super) {
 }(Scheduler_1.Scheduler));
 exports.AsyncScheduler = AsyncScheduler;
 
-},{"../Scheduler":31}],324:[function(require,module,exports){
+},{"../Scheduler":58}],351:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51618,7 +53458,7 @@ var QueueAction = (function (_super) {
 }(AsyncAction_1.AsyncAction));
 exports.QueueAction = QueueAction;
 
-},{"./AsyncAction":322}],325:[function(require,module,exports){
+},{"./AsyncAction":349}],352:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51635,7 +53475,7 @@ var QueueScheduler = (function (_super) {
 }(AsyncScheduler_1.AsyncScheduler));
 exports.QueueScheduler = QueueScheduler;
 
-},{"./AsyncScheduler":323}],326:[function(require,module,exports){
+},{"./AsyncScheduler":350}],353:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -51749,7 +53589,7 @@ var VirtualAction = (function (_super) {
 }(AsyncAction_1.AsyncAction));
 exports.VirtualAction = VirtualAction;
 
-},{"./AsyncAction":322,"./AsyncScheduler":323}],327:[function(require,module,exports){
+},{"./AsyncAction":349,"./AsyncScheduler":350}],354:[function(require,module,exports){
 "use strict";
 var AnimationFrameAction_1 = require('./AnimationFrameAction');
 var AnimationFrameScheduler_1 = require('./AnimationFrameScheduler');
@@ -51785,7 +53625,7 @@ var AnimationFrameScheduler_1 = require('./AnimationFrameScheduler');
  */
 exports.animationFrame = new AnimationFrameScheduler_1.AnimationFrameScheduler(AnimationFrameAction_1.AnimationFrameAction);
 
-},{"./AnimationFrameAction":318,"./AnimationFrameScheduler":319}],328:[function(require,module,exports){
+},{"./AnimationFrameAction":345,"./AnimationFrameScheduler":346}],355:[function(require,module,exports){
 "use strict";
 var AsapAction_1 = require('./AsapAction');
 var AsapScheduler_1 = require('./AsapScheduler');
@@ -51825,7 +53665,7 @@ var AsapScheduler_1 = require('./AsapScheduler');
  */
 exports.asap = new AsapScheduler_1.AsapScheduler(AsapAction_1.AsapAction);
 
-},{"./AsapAction":320,"./AsapScheduler":321}],329:[function(require,module,exports){
+},{"./AsapAction":347,"./AsapScheduler":348}],356:[function(require,module,exports){
 "use strict";
 var AsyncAction_1 = require('./AsyncAction');
 var AsyncScheduler_1 = require('./AsyncScheduler');
@@ -51873,7 +53713,7 @@ var AsyncScheduler_1 = require('./AsyncScheduler');
  */
 exports.async = new AsyncScheduler_1.AsyncScheduler(AsyncAction_1.AsyncAction);
 
-},{"./AsyncAction":322,"./AsyncScheduler":323}],330:[function(require,module,exports){
+},{"./AsyncAction":349,"./AsyncScheduler":350}],357:[function(require,module,exports){
 "use strict";
 var QueueAction_1 = require('./QueueAction');
 var QueueScheduler_1 = require('./QueueScheduler');
@@ -51940,7 +53780,7 @@ var QueueScheduler_1 = require('./QueueScheduler');
  */
 exports.queue = new QueueScheduler_1.QueueScheduler(QueueAction_1.QueueAction);
 
-},{"./QueueAction":324,"./QueueScheduler":325}],331:[function(require,module,exports){
+},{"./QueueAction":351,"./QueueScheduler":352}],358:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 function symbolIteratorPonyfill(root) {
@@ -51979,7 +53819,7 @@ exports.iterator = symbolIteratorPonyfill(root_1.root);
  */
 exports.$$iterator = exports.iterator;
 
-},{"../util/root":363}],332:[function(require,module,exports){
+},{"../util/root":390}],359:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 function getSymbolObservable(context) {
@@ -52006,7 +53846,7 @@ exports.observable = getSymbolObservable(root_1.root);
  */
 exports.$$observable = exports.observable;
 
-},{"../util/root":363}],333:[function(require,module,exports){
+},{"../util/root":390}],360:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 var Symbol = root_1.root.Symbol;
@@ -52017,7 +53857,7 @@ exports.rxSubscriber = (typeof Symbol === 'function' && typeof Symbol.for === 'f
  */
 exports.$$rxSubscriber = exports.rxSubscriber;
 
-},{"../util/root":363}],334:[function(require,module,exports){
+},{"../util/root":390}],361:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -52064,7 +53904,7 @@ var ColdObservable = (function (_super) {
 exports.ColdObservable = ColdObservable;
 applyMixins_1.applyMixins(ColdObservable, [SubscriptionLoggable_1.SubscriptionLoggable]);
 
-},{"../Observable":26,"../Subscription":35,"../util/applyMixins":350,"./SubscriptionLoggable":337}],335:[function(require,module,exports){
+},{"../Observable":53,"../Subscription":62,"../util/applyMixins":377,"./SubscriptionLoggable":364}],362:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -52113,7 +53953,7 @@ var HotObservable = (function (_super) {
 exports.HotObservable = HotObservable;
 applyMixins_1.applyMixins(HotObservable, [SubscriptionLoggable_1.SubscriptionLoggable]);
 
-},{"../Subject":32,"../Subscription":35,"../util/applyMixins":350,"./SubscriptionLoggable":337}],336:[function(require,module,exports){
+},{"../Subject":59,"../Subscription":62,"../util/applyMixins":377,"./SubscriptionLoggable":364}],363:[function(require,module,exports){
 "use strict";
 var SubscriptionLog = (function () {
     function SubscriptionLog(subscribedFrame, unsubscribedFrame) {
@@ -52125,7 +53965,7 @@ var SubscriptionLog = (function () {
 }());
 exports.SubscriptionLog = SubscriptionLog;
 
-},{}],337:[function(require,module,exports){
+},{}],364:[function(require,module,exports){
 "use strict";
 var SubscriptionLog_1 = require('./SubscriptionLog');
 var SubscriptionLoggable = (function () {
@@ -52145,7 +53985,7 @@ var SubscriptionLoggable = (function () {
 }());
 exports.SubscriptionLoggable = SubscriptionLoggable;
 
-},{"./SubscriptionLog":336}],338:[function(require,module,exports){
+},{"./SubscriptionLog":363}],365:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -52369,7 +54209,7 @@ var TestScheduler = (function (_super) {
 }(VirtualTimeScheduler_1.VirtualTimeScheduler));
 exports.TestScheduler = TestScheduler;
 
-},{"../Notification":25,"../Observable":26,"../scheduler/VirtualTimeScheduler":326,"./ColdObservable":334,"./HotObservable":335,"./SubscriptionLog":336}],339:[function(require,module,exports){
+},{"../Notification":52,"../Observable":53,"../scheduler/VirtualTimeScheduler":353,"./ColdObservable":361,"./HotObservable":362,"./SubscriptionLog":363}],366:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 var RequestAnimationFrameDefinition = (function () {
@@ -52404,7 +54244,7 @@ var RequestAnimationFrameDefinition = (function () {
 exports.RequestAnimationFrameDefinition = RequestAnimationFrameDefinition;
 exports.AnimationFrame = new RequestAnimationFrameDefinition(root_1.root);
 
-},{"./root":363}],340:[function(require,module,exports){
+},{"./root":390}],367:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -52433,7 +54273,7 @@ var ArgumentOutOfRangeError = (function (_super) {
 }(Error));
 exports.ArgumentOutOfRangeError = ArgumentOutOfRangeError;
 
-},{}],341:[function(require,module,exports){
+},{}],368:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -52462,7 +54302,7 @@ var EmptyError = (function (_super) {
 }(Error));
 exports.EmptyError = EmptyError;
 
-},{}],342:[function(require,module,exports){
+},{}],369:[function(require,module,exports){
 "use strict";
 var FastMap = (function () {
     function FastMap() {
@@ -52494,7 +54334,7 @@ var FastMap = (function () {
 }());
 exports.FastMap = FastMap;
 
-},{}],343:[function(require,module,exports){
+},{}],370:[function(require,module,exports){
 /**
 Some credit for this helper goes to http://github.com/YuzuJS/setImmediate
 */
@@ -52704,13 +54544,13 @@ var ImmediateDefinition = (function () {
 exports.ImmediateDefinition = ImmediateDefinition;
 exports.Immediate = new ImmediateDefinition(root_1.root);
 
-},{"./root":363}],344:[function(require,module,exports){
+},{"./root":390}],371:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 var MapPolyfill_1 = require('./MapPolyfill');
 exports.Map = root_1.root.Map || (function () { return MapPolyfill_1.MapPolyfill; })();
 
-},{"./MapPolyfill":345,"./root":363}],345:[function(require,module,exports){
+},{"./MapPolyfill":372,"./root":390}],372:[function(require,module,exports){
 "use strict";
 var MapPolyfill = (function () {
     function MapPolyfill() {
@@ -52758,7 +54598,7 @@ var MapPolyfill = (function () {
 }());
 exports.MapPolyfill = MapPolyfill;
 
-},{}],346:[function(require,module,exports){
+},{}],373:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -52786,7 +54626,7 @@ var ObjectUnsubscribedError = (function (_super) {
 }(Error));
 exports.ObjectUnsubscribedError = ObjectUnsubscribedError;
 
-},{}],347:[function(require,module,exports){
+},{}],374:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 function minimalSetImpl() {
@@ -52820,7 +54660,7 @@ function minimalSetImpl() {
 exports.minimalSetImpl = minimalSetImpl;
 exports.Set = root_1.root.Set || minimalSetImpl();
 
-},{"./root":363}],348:[function(require,module,exports){
+},{"./root":390}],375:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -52846,7 +54686,7 @@ var TimeoutError = (function (_super) {
 }(Error));
 exports.TimeoutError = TimeoutError;
 
-},{}],349:[function(require,module,exports){
+},{}],376:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -52872,7 +54712,7 @@ var UnsubscriptionError = (function (_super) {
 }(Error));
 exports.UnsubscriptionError = UnsubscriptionError;
 
-},{}],350:[function(require,module,exports){
+},{}],377:[function(require,module,exports){
 "use strict";
 function applyMixins(derivedCtor, baseCtors) {
     for (var i = 0, len = baseCtors.length; i < len; i++) {
@@ -52886,7 +54726,7 @@ function applyMixins(derivedCtor, baseCtors) {
 }
 exports.applyMixins = applyMixins;
 
-},{}],351:[function(require,module,exports){
+},{}],378:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 function assignImpl(target) {
@@ -52913,34 +54753,34 @@ function getAssign(root) {
 exports.getAssign = getAssign;
 exports.assign = getAssign(root_1.root);
 
-},{"./root":363}],352:[function(require,module,exports){
+},{"./root":390}],379:[function(require,module,exports){
 "use strict";
 // typeof any so that it we don't have to cast when comparing a result to the error object
 exports.errorObject = { e: {} };
 
-},{}],353:[function(require,module,exports){
+},{}],380:[function(require,module,exports){
 "use strict";
 exports.isArray = Array.isArray || (function (x) { return x && typeof x.length === 'number'; });
 
-},{}],354:[function(require,module,exports){
+},{}],381:[function(require,module,exports){
 "use strict";
 exports.isArrayLike = (function (x) { return x && typeof x.length === 'number'; });
 
-},{}],355:[function(require,module,exports){
+},{}],382:[function(require,module,exports){
 "use strict";
 function isDate(value) {
     return value instanceof Date && !isNaN(+value);
 }
 exports.isDate = isDate;
 
-},{}],356:[function(require,module,exports){
+},{}],383:[function(require,module,exports){
 "use strict";
 function isFunction(x) {
     return typeof x === 'function';
 }
 exports.isFunction = isFunction;
 
-},{}],357:[function(require,module,exports){
+},{}],384:[function(require,module,exports){
 "use strict";
 var isArray_1 = require('../util/isArray');
 function isNumeric(val) {
@@ -52953,34 +54793,34 @@ function isNumeric(val) {
 exports.isNumeric = isNumeric;
 ;
 
-},{"../util/isArray":353}],358:[function(require,module,exports){
+},{"../util/isArray":380}],385:[function(require,module,exports){
 "use strict";
 function isObject(x) {
     return x != null && typeof x === 'object';
 }
 exports.isObject = isObject;
 
-},{}],359:[function(require,module,exports){
+},{}],386:[function(require,module,exports){
 "use strict";
 function isPromise(value) {
     return value && typeof value.subscribe !== 'function' && typeof value.then === 'function';
 }
 exports.isPromise = isPromise;
 
-},{}],360:[function(require,module,exports){
+},{}],387:[function(require,module,exports){
 "use strict";
 function isScheduler(value) {
     return value && typeof value.schedule === 'function';
 }
 exports.isScheduler = isScheduler;
 
-},{}],361:[function(require,module,exports){
+},{}],388:[function(require,module,exports){
 "use strict";
 /* tslint:disable:no-empty */
 function noop() { }
 exports.noop = noop;
 
-},{}],362:[function(require,module,exports){
+},{}],389:[function(require,module,exports){
 "use strict";
 function not(pred, thisArg) {
     function notPred() {
@@ -52992,7 +54832,7 @@ function not(pred, thisArg) {
 }
 exports.not = not;
 
-},{}],363:[function(require,module,exports){
+},{}],390:[function(require,module,exports){
 (function (global){
 "use strict";
 // CommonJS / Node have global context exposed as "global" variable.
@@ -53014,7 +54854,7 @@ exports.root = _root;
 })();
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],364:[function(require,module,exports){
+},{}],391:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 var isArrayLike_1 = require('./isArrayLike');
@@ -53093,7 +54933,7 @@ function subscribeToResult(outerSubscriber, result, outerValue, outerIndex) {
 }
 exports.subscribeToResult = subscribeToResult;
 
-},{"../InnerSubscriber":24,"../Observable":26,"../symbol/iterator":331,"../symbol/observable":332,"./isArrayLike":354,"./isObject":358,"./isPromise":359,"./root":363}],365:[function(require,module,exports){
+},{"../InnerSubscriber":51,"../Observable":53,"../symbol/iterator":358,"../symbol/observable":359,"./isArrayLike":381,"./isObject":385,"./isPromise":386,"./root":390}],392:[function(require,module,exports){
 "use strict";
 var Subscriber_1 = require('../Subscriber');
 var rxSubscriber_1 = require('../symbol/rxSubscriber');
@@ -53114,7 +54954,7 @@ function toSubscriber(nextOrObserver, error, complete) {
 }
 exports.toSubscriber = toSubscriber;
 
-},{"../Observer":27,"../Subscriber":34,"../symbol/rxSubscriber":333}],366:[function(require,module,exports){
+},{"../Observer":54,"../Subscriber":61,"../symbol/rxSubscriber":360}],393:[function(require,module,exports){
 "use strict";
 var errorObject_1 = require('./errorObject');
 var tryCatchTarget;
@@ -53134,4 +54974,4 @@ function tryCatch(fn) {
 exports.tryCatch = tryCatch;
 ;
 
-},{"./errorObject":352}]},{},[6]);
+},{"./errorObject":379}]},{},[6]);

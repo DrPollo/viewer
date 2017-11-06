@@ -4,18 +4,55 @@ module.exports = (map, status, utils, env) => {
     // temporal utils
     const moment = require('moment');
 
+    const axios = require('axios');
 
-    // dev
-    let markerUrl = 'https://loggerproxy.firstlife.org/events/{x}/{y}/{z}';
-    // env management
-    switch (env){
-        case 'pt2': markerUrl = 'https://loggerproxy-pt2.firstlife.org/events/{x}/{y}/{z}'; break;
-        case 'pt3': markerUrl = 'https://loggerproxy-pt3.firstlife.org/events/{x}/{y}/{z}'; break;
-        case 'sandona': markerUrl = 'https://loggerproxy-sandona.firstlife.org/events/{x}/{y}/{z}'; break;
-        case 'torino': markerUrl = 'https://loggerproxy-torino.firstlife.org/events/{x}/{y}/{z}'; break;
-        case 'southwark': markerUrl = 'https://loggerproxy-southwark.firstlife.org/events/{x}/{y}/{z}'; break;
+    // dev env
+    let token = 'ZmI5MzNmNjQtOWMxNC00ZjNiLTg3ZmYtZGViOWQ0MmI3NTAx';
+    let otmUrl = "https://api.ontomap.eu/api/v1/";
+    let loggerUrl = "https://api.ontomap.eu/api/v1/logger/";
+
+    // featureGroup
+    const mGrid = L.featureGroup();
+
+
+
+// environment management
+    switch (env) {
+        case 'sandona':
+            otmUrl = "https://sandona.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://sandona.api.ontomap.eu/api/v1/logger/";
+            token = 'ZmI5MzNmNjQtOWMxNC00ZjNiLTg3ZmYtZGViOWQ0MmI3NTAx';
+            break;
+        case 'torino':
+            otmUrl = "https://torino.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://torino.api.ontomap.eu/api/v1/logger/";
+            token = 'YzFiYjQzYjEtODRjNS00ZDk5LWJlOGEtZDQwYzdhMjkwYzk3';
+            break;
+        case 'southwark':
+            otmUrl = "https://southwark.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://southwark.api.ontomap.eu/api/v1/logger/";
+            break;
+        case 'pt3':
+            otmUrl = "https://p3.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://p3.api.ontomap.eu/api/v1/logger/";
+            token = 'OTM5MTg2NzgtYWQzMy00YzI1LWIzZmQtOWM1NmM0ZTU2ZjJl';
+            break;
+        case 'pt2':
+            otmUrl = "https://p2.api.ontomap.eu/api/v1/";
+            loggerUrl = "https://p2.api.ontomap.eu/api/v1/logger/";
+            token = 'NWNkNDEzYjktOTZiYS00NGE0LThjZDQtMTI0MDE5OWE5YzBh';
+            break;
         default:
+            break;
     }
+
+
+    // DEV DEV DEV
+    otmUrl = "http://localhost:3085/";
+
+
+    const http = axios.create({baseURL:otmUrl});
+
 
     // default zoom_level
     const defaultZoomLevel = 20;
@@ -80,22 +117,12 @@ module.exports = (map, status, utils, env) => {
 
     // query params
     // start_time and end_time > UTC
-    let qParams = "";
+    let qParams = "?token="+token;
     if(date.from && date.from.utc()){
-        if(qParams === ""){
-            qParams = qParams.concat("?");
-        } else {
-            qParams = qParams.concat("&");
-        }
-        qParams = qParams.concat("start_time=",date.from.utc().format('x'));
+        qParams = qParams.concat("&start_time=",date.from.utc().format('x'));
     }
     if(date.to && date.to.utc()){
-        if(qParams === ""){
-            qParams = qParams.concat("?");
-        } else {
-            qParams = qParams.concat("&");
-        }
-        qParams = qParams.concat("end_time=",date.to.utc().format('x'));
+        qParams = qParams.concat("&end_time=",date.to.utc().format('x'));
     }
 
 
@@ -176,7 +203,14 @@ module.exports = (map, status, utils, env) => {
     let focusGeometry = null;
 
     const getZoomLevel = (feature) => {
-        if(feature && feature.properties && feature.properties.zoom_level) {return feature && feature.properties && feature.properties.zoom_level;}
+        // console.debug('getZoomLevel',feature);
+
+      if(feature && feature.properties && feature.properties.zoom_level) {
+          return feature.properties.zoom_level < 1 || feature.properties.zoom_level > 20 ? defaultZoomLevel : feature.properties.zoom_level;
+      }
+      if(feature && feature.properties && feature.properties.additionalProperties && feature.properties.additionalProperties.zoom_level) {
+          return feature.properties.additionalProperties.zoom_level < 1 || feature.properties.additionalProperties.zoom_level > 20 ? defaultZoomLevel : feature.properties.additionalProperties.zoom_level;
+      }
 
         // zoom considering hasType
         if(feature && feature.properties && feature.properties.hasType) {
@@ -194,59 +228,33 @@ module.exports = (map, status, utils, env) => {
         return defaultZoomLevel;
     };
 
-    // configuration of geojson grid level: it must have "layers":{ "default":{ } }
-    const markerLayers = {
-        "layers": {
-            "default": {
-                pointToLayer: function (feature, latlng) {
-                   return getMarker(feature,latlng);
-                }
-            }
-        }
-    };
-    let mGrid = L.geoJsonGridLayer(markerUrl+qParams, markerLayers);
 
-    mGrid.update = () => {
-        console.log('grid update');
-        let layer = mGrid.getLayers()[0];
-        if(!layer){return;}
-        // console.log(layer);
-        let features = layer['_layers'];
-        let zoom = map.getZoom();
-        // console.log('nuovo raggio: ',scale(zoom));
-        for (let i in features) {
-            let feat = features[i];
-            // console.log(feat.feature);
-            let level = getZoomLevel(feat.feature);
-            let radius = scale(zoom, level);
-            let weight = Math.min(radius, maxWeight);
-            // get type
-            let type = getType(feat.feature);
-            // if background set cap to backgroundMaxRadius
-            if(priority.background.indexOf(type) > -1) {
-                radius = Math.min(radius, backgroundMaxRadius);
-            }
-            // console.debug('check marker',feat);
+    const update = () => {
+        // console.debug('grid update', mGrid.getLayers());
+        let markers = mGrid.getLayers();
+        if(!markers || !Array.isArray(markers) || markers.length < 1){return;}
+        markers.map ((marker) => {
+            // console.debug('updating marker:',marker);
             // refresh icon
-            feat.setIcon(getMarkerIcon(feat.feature));
-        }
+            marker.setIcon(getMarkerIcon(marker.options));
+        });
     };
-
-
-    // cambia il focus
-    mGrid.setStyle = (focus) => {
-        if(!focus) {return;}
-        // console.debug('setting focus on ',focus);
-        focusId = focus.id;
-        focusGeometry = {type:"featureCollection", features:focus.features};
-        mGrid.update();
-    };
-    // reset il focus
-    mGrid.resetStyle = () => {
-        focusId = null;
-        focusGeometry = null;
-        mGrid.update();
-    };
+    //
+    //
+    // // cambia il focus
+    // mGrid.setStyle = (focus) => {
+    //     if(!focus) {return;}
+    //     // console.debug('setting focus on ',focus);
+    //     focusId = focus.id;
+    //     focusGeometry = {type:"featureCollection", features:focus.features};
+    //     mGrid.update();
+    // };
+    // // reset il focus
+    // mGrid.resetStyle = () => {
+    //     focusId = null;
+    //     focusGeometry = null;
+    //     mGrid.update();
+    // };
 
 
 
@@ -256,10 +264,38 @@ module.exports = (map, status, utils, env) => {
 
 
     // set default style
-    status.observe.filter(state => 'features' in state).subscribe(focus => mGrid.setStyle(focus));
+    status.observe.filter(state => 'features' in state).subscribe(focus => {
+    // mGrid.setStyle(focus)
+        // todo set marker style
+    });
 
+    // on exit focus mode > reset markers style
     status.observe.filter(state => 'reset' in state).subscribe(() => {
-        mGrid.resetStyle();
+        // mGrid.resetStyle();
+        // todo reset marker style
+    });
+
+    status.observe.filter(state => "bounds" in state).map(state => state.bounds).subscribe( bounds => {
+        console.debug('datasource, new bounds ',bounds);
+
+        console.log('get markers to update',mGrid);
+
+        // call to OTM logger > add events to mGrid
+        getEvents(bounds);
+
+        // todo call to OTM > add to mGrid
+    });
+
+
+    // fine cambio di zoom
+    map.on('zoomend', (e) => {
+        // aggiorno stile marker
+        update();
+    });
+
+    status.observe.filter(state => 'priority' in state).map(state => state.priority).subscribe((prioritySettings) => {
+        // console.log('setting priority', prioritySettings, priority);
+        priority = prioritySettings;
     });
 
     status.observe.filter(state => 'date' in state).filter(state => state.date).subscribe((newDate) => {
@@ -268,25 +304,13 @@ module.exports = (map, status, utils, env) => {
         date.from = newDate.from || date.from;
         date.to = newDate.to || date.to;
         // change q params
-        qParams = ("?start_time=").concat(date.from.utc().format('x')).concat("&end_time=",date.to.utc().format('x'));
+        qParams = ("?token="+token).concat("&start_time=",date.from.utc().format('x')).concat("&end_time=",date.to.utc().format('x'));
         // remove layer
-        mGrid.remove();
-        // new instance of mGrid
-        mGrid = L.geoJsonGridLayer(markerUrl+qParams, markerLayers);
-        mGrid.addTo(map);
+        // mGrid.remove();
+        // // new instance of mGrid
+        // mGrid = L.geoJsonGridLayer(markerUrl+qParams, markerLayers);
+        // mGrid.addTo(map);
     });
-
-    // fine cambio di zoom
-    map.on('zoomend', (e) => {
-        // aggiorno stile marker
-        mGrid.update();
-    });
-
-    status.observe.filter(state => 'priority' in state).map(state => state.priority).subscribe((prioritySettings) => {
-        // console.log('setting priority', prioritySettings, priority);
-        priority = prioritySettings;
-    });
-
 
 
     function getMarkerIcon(feature){
@@ -425,14 +449,56 @@ module.exports = (map, status, utils, env) => {
         }
     }
 
-    function getMarker(feature, latlng){
-        // console.debug('get marker',feature, latlng);
+    function getMarker(feature){
+
+        if(!feature.geometry || !feature.geometry.type === 'point') {return }
+        let latlng = [feature.geometry.coordinates[1],feature.geometry.coordinates[0]];
+        // console.debug('creating marker',latlng,feature);
         let markerIcon = getMarkerIcon(feature);
         if(!markerIcon){return null;}
-        return L.marker(latlng, {icon:markerIcon, interactive: false, pane:"customMarkerPane"});
+
+        console.log('adding',feature.id,"in",mGrid.getLayers());
+        let marker = L.marker(latlng, {icon:markerIcon, interactive: false, pane:"customMarkerPane", properties:feature.properties });
+        marker._leaflet_id = feature.id;
+        return marker;
         // let circle = L.circleMarker(latlng, style);
         // console.debug('check circle',circle);
         // return circle;
+    }
+
+    // retrieve events from OTM logger
+    function getEvents(bbox){
+        // boundingbox=bbox
+        // loggerUrl
+        let url = ('proxy').concat(qParams,'&boundingbox=',bbox);
+        // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
+        http.get(url)
+            .then(function (response) {
+                // console.debug('getEvents, response',response.data);
+                if(!response.data || !response.data.event_list ) {return console.error('getEvents, wrong format from OTM');}
+                let events = response.data.event_list;
+                let markers = events.reduce( (r, event) => {
+                    // console.debug(r,event);
+                    if(!event.activity_objects || !Array.isArray(event.activity_objects) || event.activity_objects.length < 1) {
+                        // console.debug('skip',r);
+                        return r;
+                    }
+                    let tmp = Object.assign({},event);
+                    delete tmp.activity_objects;
+                    let feature = Object.assign(tmp,event.activity_objects[0]);
+                    let marker = getMarker(feature);
+                    console.debug('check',mGrid.hasLayer(marker));
+                    if(mGrid.hasLayer(marker)) {return r;}
+                    mGrid.addLayer(marker);
+                    return r.concat(marker);
+                }, []);
+                // mGrid.addLayer(markers);
+                // map.removeLayer(mGrid)
+                // mGrid.addTo(map)
+                console.debug('getEvents, markers',mGrid.getLayers());
+            }).catch(function (error) {
+                console.error('getEvents, errror',error);
+            });
     }
 
 

@@ -44,7 +44,17 @@ module.exports = (map) => {
 
     let current = "explorer";
 
-    // state actions
+    /* state actions
+     * focus > enter focus mode
+     * move > change viewport
+     * restore > enter explore mode (exit focus mode)
+     * lang > change language
+     * contrast > change map base layer
+     * priority > change highlight, exclude and background lists
+     * date > chage date_from and date_to (interval) in entries query
+     * observe > returns the channel
+     * current > current state
+    */
     const status = {
         "focus": null,
         "move": null,
@@ -285,12 +295,13 @@ module.exports = (map) => {
         };
         status.focus = focusHandler(observer);
         status.move = (params) => {
-
+            let bounds = params.bounds;
             // update current map center
             store["view"]["c"] = params.center.lat+":"+params.center.lng+":"+params.zoom;
+            store["view"]["bounds"] = ("").concat(bounds.getNorthEast().lng,",",bounds.getNorthEast().lat,",",bounds.getSouthWest().lng,",",bounds.getSouthWest().lat);
             observer.next(store["view"]);
 
-            let bounds = params.bounds;
+
             // console.log('saving? ',current);
             switch (current) {
                 case "focus":

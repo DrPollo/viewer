@@ -272,6 +272,7 @@ const AreaViewer = () => {
 
     // prima del cambio di zoom
     map.on('moveend', (e) => {
+        // console.debug('main, moveend',e);
         // update della posizione nello stato
         status.move({bounds:map.getBounds(),center:map.getCenter(),zoom:map.getZoom()});
     });
