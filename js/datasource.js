@@ -18,27 +18,22 @@ module.exports = (map, status, utils, env) => {
 // environment management
     switch (env) {
         case 'sandona':
-            otmUrl = "https://sandona.api.ontomap.eu/api/v1/";
-            loggerUrl = "https://sandona.api.ontomap.eu/api/v1/logger/";
+            otmUrl = "https://sandona.api.ontomap.eu/api/v1";
             token = 'ZmI5MzNmNjQtOWMxNC00ZjNiLTg3ZmYtZGViOWQ0MmI3NTAx';
             break;
         case 'torino':
-            otmUrl = "https://torino.api.ontomap.eu/api/v1/";
-            loggerUrl = "https://torino.api.ontomap.eu/api/v1/logger/";
+            otmUrl = "https://torino.api.ontomap.eu/api/v1";
             token = 'YzFiYjQzYjEtODRjNS00ZDk5LWJlOGEtZDQwYzdhMjkwYzk3';
             break;
         case 'southwark':
-            otmUrl = "https://southwark.api.ontomap.eu/api/v1/";
-            loggerUrl = "https://southwark.api.ontomap.eu/api/v1/logger/";
+            otmUrl = "https://southwark.api.ontomap.eu/api/v1";
             break;
         case 'pt3':
-            otmUrl = "https://p3.api.ontomap.eu/api/v1/";
-            loggerUrl = "https://p3.api.ontomap.eu/api/v1/logger/";
+            otmUrl = "https://p3.api.ontomap.eu/api/v1";
             token = 'OTM5MTg2NzgtYWQzMy00YzI1LWIzZmQtOWM1NmM0ZTU2ZjJl';
             break;
         case 'pt2':
-            otmUrl = "https://p2.api.ontomap.eu/api/v1/";
-            loggerUrl = "https://p2.api.ontomap.eu/api/v1/logger/";
+            otmUrl = "https://p2.api.ontomap.eu/api/v1";
             token = 'NWNkNDEzYjktOTZiYS00NGE0LThjZDQtMTI0MDE5OWE5YzBh';
             break;
         default:
@@ -47,7 +42,7 @@ module.exports = (map, status, utils, env) => {
 
 
     // DEV DEV DEV
-    otmUrl = "http://localhost:3085/";
+    otmUrl = "http://localhost:3085";
 
 
     const http = axios.create({baseURL: otmUrl});
@@ -298,6 +293,7 @@ module.exports = (map, status, utils, env) => {
         getEvents(bounds);
 
         // todo call to OTM > add to mGrid
+        // getOpenData(bounds);
     });
 
 
@@ -498,7 +494,48 @@ module.exports = (map, status, utils, env) => {
     function getEvents(bbox) {
         // boundingbox=bbox
         // loggerUrl
-        let url = ('proxy').concat(qParams, '&boundingbox=', bbox);
+        let url = ('/proxy').concat(qParams, '&boundingbox=', bbox);
+        // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
+        http.get(url)
+            .then(function (response) {
+                // console.debug('getEvents, response',response.data);
+                if (!response.data || !response.data.event_list) {
+                    return console.error('getEvents, wrong format from OTM');
+                }
+                let events = response.data.event_list;
+                let markers = events.reduce((r, event) => {
+                    // console.debug(r,event);
+                    if (!event.activity_objects || !Array.isArray(event.activity_objects) || event.activity_objects.length < 1) {
+                        // console.debug('skip',r);
+                        return r;
+                    }
+                    let tmp = Object.assign({}, event);
+                    delete tmp.activity_objects;
+                    let feature = Object.assign(tmp, event.activity_objects[0]);
+                    let marker = getMarker(feature);
+                    // console.debug('check',mGrid.hasLayer(marker));
+                    if (mGrid.hasLayer(marker)) {
+                        return r;
+                    }
+                    mGrid.addLayer(marker);
+                    return r.concat(marker);
+                }, []);
+                // mGrid.addLayer(markers);
+                // map.removeLayer(mGrid)
+                // mGrid.addTo(map)
+                console.debug('getEvents, markers', mGrid.getLayers());
+            }).catch(function (error) {
+            console.error('getEvents, errror', error);
+        });
+    }
+
+
+
+    // todo get OTM opendata
+    function getOpenData(bbox) {
+        // boundingbox=bbox
+        // loggerUrl
+        let url = ('otm?token=').concat(token, '&boundingbox=', bbox);
         // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
         http.get(url)
             .then(function (response) {
