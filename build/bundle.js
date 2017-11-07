@@ -823,7 +823,7 @@ module.exports = function (status, map) {
 },{}],3:[function(require,module,exports){
 'use strict';
 
-module.exports = function (status) {
+module.exports = function (status, env) {
     // colori
     var colors = {
         'FL_GROUPS': '#3F7F91',
@@ -836,6 +836,7 @@ module.exports = function (status) {
         pink = "#E91E63",
         deeporange = "#FF5722",
         blue = "#82b1ff",
+        lightblue = "#03a9f3",
         deeppurle = "#673AB7",
         cyan = "#00BCD4",
         teal = "#009688",
@@ -851,15 +852,37 @@ module.exports = function (status) {
         red = "#F44336",
         wgnred = '#c32630',
         gray = "#9E9E9E",
+        darkgray = '#666',
         brown = "#795548",
         bluegray = "#607D8B";
 
+    // env color
+    var primaryColor = wgnred;
+    var secondaryColor = darkgray;
+    switch (env) {
+        case 'pt3':
+            primaryColor = blue;
+            secondaryColor = green;
+            break;
+        case 'southwark':
+            break;
+        case 'sandona':
+            primaryColor = blue;
+            secondaryColor = lightblue;
+            break;
+        case 'torino':
+            primaryColor = indingo;
+            secondaryColor = bluegray;
+            break;
+        default:
+    }
+
     var focusStyle = {
         style: {
-            color: wgnred,
+            color: primaryColor,
             weight: 2,
             fill: true,
-            fillColor: wgnred,
+            fillColor: primaryColor,
             opacity: 1,
             fillOpacity: 0.35,
             dashArray: '10'
@@ -1172,12 +1195,13 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, idFea
 },{"jquery":45,"moment":47}],5:[function(require,module,exports){
 "use strict";
 
-module.exports = function () {
+module.exports = function (env) {
 
     var orange = "#FF9800",
         pink = "#E91E63",
         deeporange = "#FF5722",
         blue = "#82b1ff",
+        lightblue = "#03a9f3",
         deeppurle = "#673AB7",
         cyan = "#00BCD4",
         teal = "#009688",
@@ -1193,20 +1217,43 @@ module.exports = function () {
         red = "#F44336",
         wgnred = '#c32630',
         gray = "#9E9E9E",
+        darkgray = '#666',
         brown = "#795548",
         bluegray = "#607D8B";
 
+    // env color
+    var primaryColor = wgnred;
+    var secondaryColor = darkgray;
+    switch (env) {
+        case 'pt3':
+            primaryColor = blue;
+            secondaryColor = green;
+            break;
+        case 'southwark':
+            break;
+        case 'sandona':
+            primaryColor = blue;
+            secondaryColor = lightblue;
+            break;
+        case 'torino':
+            primaryColor = indingo;
+            secondaryColor = bluegray;
+            break;
+        default:
+    }
+
     // reset styles
     var resetStyle = {
-        color: 'transparent',
-        weight: 0,
-        fillColor: 'transparent'
+        color: secondaryColor,
+        weight: 1,
+        fillColor: 'transparent',
+        fill: false
     };
     var highlightStyle = {
-        color: wgnred,
+        color: primaryColor,
         weight: 2,
         fill: false,
-        fillColor: wgnred,
+        fillColor: primaryColor,
         opacity: 1,
         fillOpacity: 0.5
     };
@@ -1215,16 +1262,9 @@ module.exports = function () {
         // console.log(feature,zoom);
         return {
             fill: false,
-            weight: 0
+            weight: 1,
+            color: secondaryColor
         };
-        // debug purpose
-        // return {
-        //     fill: true,
-        //     color: lime,
-        //     fillColor: lime,
-        //     fillOpacity:0.35,
-        //     weight: 1
-        // };
     };
 
     var vectorMapStyling = {
@@ -1373,7 +1413,7 @@ var AreaViewer = function AreaViewer() {
     var $ = require('jquery');
 
     // environment
-    var env = "dev";
+    var env = "pt3";
     console.log('current environment:', env);
 
     /*
@@ -1448,10 +1488,10 @@ var AreaViewer = function AreaViewer() {
     var markerGrid = require('./datasource.js');
     // Interactive layer
     var vectorGrid = require('./interactive.js');
-    var vGrid = vectorGrid();
+    var vGrid = vectorGrid(env);
     // focus layer
     var focusLayer = require('./focus');
-    var fLayer = focusLayer(status);
+    var fLayer = focusLayer(status, env);
     // infobox
     var InfoBox = require('./infobox');
     var infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeader, utils, lang);

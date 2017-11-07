@@ -14,7 +14,7 @@ const AreaViewer = () => {
     const $ = require('jquery');
 
     // environment
-    const env = "dev";
+    const env = "pt3";
     console.log('current environment:',env);
 
     /*
@@ -90,10 +90,10 @@ const AreaViewer = () => {
     const markerGrid = require('./datasource.js');
     // Interactive layer
     const vectorGrid = require('./interactive.js');
-    const vGrid = vectorGrid();
+    const vGrid = vectorGrid(env);
     // focus layer
     const focusLayer = require('./focus');
-    const fLayer = focusLayer(status);
+    const fLayer = focusLayer(status, env);
     // infobox
     const InfoBox = require('./infobox');
     const infoBox = InfoBox(status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeader, utils, lang);

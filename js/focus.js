@@ -1,4 +1,4 @@
-module.exports = (status) => {
+module.exports = (status, env) => {
     // colori
     const colors = {
         'FL_GROUPS': '#3F7F91',
@@ -11,6 +11,7 @@ module.exports = (status) => {
         pink = "#E91E63",
         deeporange = "#FF5722",
         blue = "#82b1ff",
+        lightblue = "#03a9f3",
         deeppurle = "#673AB7",
         cyan = "#00BCD4",
         teal = "#009688",
@@ -26,15 +27,38 @@ module.exports = (status) => {
         red = "#F44336",
         wgnred = '#c32630',
         gray = "#9E9E9E",
+        darkgray = '#666',
         brown = "#795548",
         bluegray = "#607D8B";
 
+
+    // env color
+    let primaryColor = wgnred;
+    let secondaryColor = darkgray;
+    switch(env){
+        case 'pt3':
+            primaryColor = blue;
+            secondaryColor = green;
+            break;
+        case 'southwark':
+            break;
+        case 'sandona':
+            primaryColor = blue;
+            secondaryColor = lightblue;
+            break;
+        case 'torino':
+            primaryColor = indingo;
+            secondaryColor = bluegray;
+            break;
+        default:
+    }
+
     const focusStyle = {
         style: {
-            color: wgnred,
+            color: primaryColor,
             weight: 2,
             fill: true,
-            fillColor: wgnred,
+            fillColor: primaryColor,
             opacity: 1,
             fillOpacity: 0.35,
             dashArray: '10'

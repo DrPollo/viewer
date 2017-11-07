@@ -1,9 +1,10 @@
-module.exports = () => {
+module.exports = (env) => {
 
     const orange = "#FF9800",
         pink = "#E91E63",
         deeporange = "#FF5722",
         blue = "#82b1ff",
+        lightblue = "#03a9f3",
         deeppurle = "#673AB7",
         cyan = "#00BCD4",
         teal = "#009688",
@@ -19,39 +20,59 @@ module.exports = () => {
         red = "#F44336",
         wgnred = '#c32630',
         gray = "#9E9E9E",
+        darkgray = '#666',
         brown = "#795548",
         bluegray = "#607D8B";
 
+
+    // env color
+    let primaryColor = wgnred;
+    let secondaryColor = darkgray;
+    switch(env){
+        case 'pt3':
+            primaryColor = blue;
+            secondaryColor = green;
+            break;
+        case 'southwark':
+            break;
+        case 'sandona':
+            primaryColor = blue;
+            secondaryColor = lightblue;
+            break;
+        case 'torino':
+            primaryColor = indingo;
+            secondaryColor = bluegray;
+            break;
+        default:
+    }
+
+
 // reset styles
     const resetStyle = {
-        color: 'transparent',
-        weight: 0,
-        fillColor: 'transparent'
+        color: secondaryColor,
+        weight: 1,
+        fillColor: 'transparent',
+        fill:false
     };
     const highlightStyle = {
-        color: wgnred,
+        color: primaryColor,
         weight: 2,
         fill: false,
-        fillColor: wgnred,
+        fillColor: primaryColor,
         opacity: 1,
         fillOpacity: 0.5
     };
+
+
 
 
     const featureStyle = function (feature, zoom) {
         // console.log(feature,zoom);
         return {
             fill: false,
-            weight: 0
+            weight: 1,
+            color: secondaryColor
         };
-        // debug purpose
-        // return {
-        //     fill: true,
-        //     color: lime,
-        //     fillColor: lime,
-        //     fillOpacity:0.35,
-        //     weight: 1
-        // };
     };
 
     const vectorMapStyling = {
