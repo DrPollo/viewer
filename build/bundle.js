@@ -42,9 +42,6 @@ module.exports = function (map, status, utils, env) {
             break;
     }
 
-    // DEV DEV DEV
-    otmUrl = "http://localhost:3085";
-
     var http = axios.create({ baseURL: otmUrl });
 
     // default zoom_level
@@ -267,7 +264,7 @@ module.exports = function (map, status, utils, env) {
         if (!focus) {
             return;
         }
-        // console.debug('setting focus on ',focus);
+        console.debug('setting focus on ', focus);
         focusId = focus.id;
         focusGeometry = { type: "featureCollection", features: focus.features };
         update();
@@ -491,8 +488,7 @@ module.exports = function (map, status, utils, env) {
     function getEvents(bbox) {
         // boundingbox=bbox
         // loggerUrl
-        var url = '/proxy'.concat(qParams, '&boundingbox=', bbox);
-        // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
+        var url = '/logger/events?'.concat('boundingbox=', bbox, '&token=', token);
         http.get(url).then(function (response) {
             // console.debug('getEvents, response',response.data);
             if (!response.data || !response.data.event_list) {
@@ -529,7 +525,7 @@ module.exports = function (map, status, utils, env) {
     function getOpenData(bbox) {
         // boundingbox=bbox
         // loggerUrl
-        var url = 'otm?token='.concat(token, '&boundingbox=', bbox);
+        var url = 'SchemaThing?subconcepts=true&descriptions=true&geometries=true&token='.concat(token, '&boundingbox=', bbox);
         // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
         http.get(url).then(function (response) {
             // console.debug('getEvents, response',response.data);
@@ -1247,7 +1243,7 @@ module.exports = function (env) {
         color: secondaryColor,
         weight: 1,
         fillColor: 'transparent',
-        fill: false
+        fill: true
     };
     var highlightStyle = {
         color: primaryColor,
@@ -1372,7 +1368,7 @@ module.exports = function (env) {
         layersOrdering: ordering
     };
     // const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
-    //     const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
+    // const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
     var vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
     var vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
     var hightlightId = null;
@@ -1628,12 +1624,13 @@ var AreaViewer = function AreaViewer() {
      * 2) click on map as fallback in case of empty areas
      */
     vGrid.on('click', function (e) {
+        console.debug('vGrid click', e);
         if (e.originalEvent.defaultPrevented) {
             return;
         }
         e.originalEvent.preventDefault();
 
-        // console.debug('click event at', e.latlng, e.layer.properties);
+        console.debug('click event at', e.latlng, e.layer.properties);
         // recupero focus se attuale
         var focus = status.getFocus();
         console.debug('is focus?', focus);
@@ -1656,12 +1653,13 @@ var AreaViewer = function AreaViewer() {
                 return;
             }
         } else {
+            console.debug('check focus on ', e.layer);
             // azione focus
             status.focus({ feature: e.layer.properties, id: e.layer.properties.id });
         }
     });
     map.on('click', function (e) {
-        // console.debug('click on map, it should be handled?',!e.originalEvent.defaultPrevented);
+        console.debug('click on map, it should be handled?', !e.originalEvent.defaultPrevented);
         // fallback click outside
         if (e.originalEvent.defaultPrevented) {
             return;

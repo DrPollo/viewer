@@ -216,12 +216,13 @@ const AreaViewer = () => {
      * 2) click on map as fallback in case of empty areas
      */
     vGrid.on('click', e => {
+        console.debug('vGrid click',e);
         if (e.originalEvent.defaultPrevented) {
             return;
         }
         e.originalEvent.preventDefault();
 
-        // console.debug('click event at', e.latlng, e.layer.properties);
+        console.debug('click event at', e.latlng, e.layer.properties);
         // recupero focus se attuale
         let focus = status.getFocus();
         console.debug('is focus?',focus);
@@ -245,12 +246,13 @@ const AreaViewer = () => {
             }
 
         } else {
+            console.debug('check focus on ',e.layer);
             // azione focus
             status.focus({feature: e.layer.properties, id: e.layer.properties.id});
         }
     });
     map.on('click',(e)=>{
-        // console.debug('click on map, it should be handled?',!e.originalEvent.defaultPrevented);
+        console.debug('click on map, it should be handled?',!e.originalEvent.defaultPrevented);
         // fallback click outside
         if (e.originalEvent.defaultPrevented) {
             return;

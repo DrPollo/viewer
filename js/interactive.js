@@ -28,7 +28,7 @@ module.exports = (env) => {
     // env color
     let primaryColor = wgnred;
     let secondaryColor = darkgray;
-    switch(env){
+    switch (env) {
         case 'pt3':
             primaryColor = blue;
             secondaryColor = green;
@@ -52,7 +52,7 @@ module.exports = (env) => {
         color: secondaryColor,
         weight: 1,
         fillColor: 'transparent',
-        fill:false
+        fill: true
     };
     const highlightStyle = {
         color: primaryColor,
@@ -62,8 +62,6 @@ module.exports = (env) => {
         opacity: 1,
         fillOpacity: 0.5
     };
-
-
 
 
     const featureStyle = function (feature, zoom) {
@@ -206,25 +204,24 @@ module.exports = (env) => {
      */
 
 
-
     L.Path.mergeOptions(resetStyle);
     L.Polyline.mergeOptions(resetStyle);
     L.Polygon.mergeOptions(resetStyle);
     L.Rectangle.mergeOptions(resetStyle);
     L.Circle.mergeOptions(resetStyle);
     L.CircleMarker.mergeOptions(resetStyle);
-// end reset styles
+    // end reset styles
 
 
-// Monkey-patch some properties for mapzen layer names, because
-// instead of "building" the data layer is called "buildings" and so on
+    // Monkey-patch some properties for mapzen layer names, because
+    // instead of "building" the data layer is called "buildings" and so on
     vectorMapStyling.buildings = vectorMapStyling.building;
     vectorMapStyling.boundaries = vectorMapStyling.boundary;
     vectorMapStyling.places = vectorMapStyling.place;
     vectorMapStyling.pois = vectorMapStyling.poi;
     vectorMapStyling.roads = vectorMapStyling.road;
 
-// config del layer
+    // config del layer
     const vectormapConfig = {
         rendererFactory: L.svg.tile,
         attribution: false,
@@ -236,22 +233,22 @@ module.exports = (env) => {
         },
         layersOrdering: ordering
     };
-// const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
-//     const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
-const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
+    // const vectormapUrl = "http://localhost:3095/tile/{z}/{x}/{y}";
+    // const vectormapUrl = "https://tiles.fldev.di.unito.it/tile/{z}/{x}/{y}";
+    const vectormapUrl = "https://tiles.firstlife.org/tile/{z}/{x}/{y}";
     const vGrid = L.vectorGrid.protobuf(vectormapUrl, vectormapConfig);
     let hightlightId = null;
     vGrid.highlight = (id = null) => {
-        if(hightlightId){
+        if (hightlightId) {
             vGrid.resetFeatureStyle(hightlightId);
         }
-        if(id) {
+        if (id) {
             hightlightId = id;
             vGrid.setFeatureStyle(id, highlightStyle);
         }
     };
     vGrid.resetStyle = () => {
-        if(hightlightId) {
+        if (hightlightId) {
             vGrid.resetFeatureStyle(hightlightId);
             hightlightId = null;
         }

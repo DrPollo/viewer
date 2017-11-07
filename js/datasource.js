@@ -41,9 +41,6 @@ module.exports = (map, status, utils, env) => {
     }
 
 
-    // DEV DEV DEV
-    otmUrl = "http://localhost:3085";
-
 
     const http = axios.create({baseURL: otmUrl});
 
@@ -270,7 +267,7 @@ module.exports = (map, status, utils, env) => {
         if (!focus) {
             return;
         }
-        // console.debug('setting focus on ',focus);
+        console.debug('setting focus on ',focus);
         focusId = focus.id;
         focusGeometry = {type: "featureCollection", features: focus.features};
         update();
@@ -494,8 +491,7 @@ module.exports = (map, status, utils, env) => {
     function getEvents(bbox) {
         // boundingbox=bbox
         // loggerUrl
-        let url = ('/proxy').concat(qParams, '&boundingbox=', bbox);
-        // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
+        let url = ('/logger/events?').concat('boundingbox=',bbox,'&token=',token);
         http.get(url)
             .then(function (response) {
                 // console.debug('getEvents, response',response.data);
@@ -535,7 +531,7 @@ module.exports = (map, status, utils, env) => {
     function getOpenData(bbox) {
         // boundingbox=bbox
         // loggerUrl
-        let url = ('otm?token=').concat(token, '&boundingbox=', bbox);
+        let url = ('SchemaThing?subconcepts=true&descriptions=true&geometries=true&token=').concat(token, '&boundingbox=', bbox);
         // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
         http.get(url)
             .then(function (response) {
