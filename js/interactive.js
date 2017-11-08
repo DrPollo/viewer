@@ -51,13 +51,14 @@ module.exports = (env) => {
     const resetStyle = {
         color: secondaryColor,
         weight: 1,
+        // fillColor: primaryColor,
         fillColor: 'transparent',
         fill: true
     };
     const highlightStyle = {
         color: primaryColor,
         weight: 2,
-        fill: false,
+        fill: true,
         fillColor: primaryColor,
         opacity: 1,
         fillOpacity: 0.5
@@ -67,7 +68,7 @@ module.exports = (env) => {
     const featureStyle = function (feature, zoom) {
         // console.log(feature,zoom);
         return {
-            fill: false,
+            fill: true,
             weight: 1,
             color: secondaryColor
         };

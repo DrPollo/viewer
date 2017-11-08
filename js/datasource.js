@@ -9,10 +9,28 @@ module.exports = (map, status, utils, env) => {
     // dev env
     let token = 'ZmI5MzNmNjQtOWMxNC00ZjNiLTg3ZmYtZGViOWQ0MmI3NTAx';
     let otmUrl = "https://api.ontomap.eu/api/v1/";
-    let loggerUrl = "https://api.ontomap.eu/api/v1/logger/";
 
     // featureGroup
     const mGrid = L.featureGroup();
+    // rewrite of getLayers > combine getLayers of each featureGroup layer
+    mGrid.getLayers = () => {
+        // console.log("getLayers",mGrid._layers);
+        return Object.keys(mGrid._layers).reduce((r,l) =>{
+            let layer = mGrid._layers[l];
+            return r.concat(layer.getLayers());
+        }, []);
+    };
+
+    const overlays = {};
+    // layer controller
+    const layersController = L.control.layers(null,overlays, {sortLayers: true, collapsed: false});
+    layersController.addTo(map);
+    // todo definition of overlays
+    // overlayMaps = {L.featureGroup(), L.featureGroup(), ...}
+    // todo add overlays to map
+    // L.control.layers(overlayMaps).addTo(map);
+    // todo function to change overlays in map controller
+
 
 
 // environment management
@@ -94,8 +112,9 @@ module.exports = (map, status, utils, env) => {
         if (type.includes('firstlife')) return orange;
         if (type.includes('geokey')) return red;
         if (type.includes('communitymaps')) return teal;
+        if (type.includes('ontomap.eu')) return amber;
 
-        console.debug('wgnred?', type);
+        // console.debug('wgnred?', type);
         return wgnred;
     };
 
@@ -161,7 +180,8 @@ module.exports = (map, status, utils, env) => {
      * Markers
      */
     const getType = (feature) => {
-        let type = feature.properties.entity_type || feature.application || feature.properties.hasType;
+        if(!feature || !feature.properties){return null;}
+        let type = feature.properties.entity_type || feature.application || feature.properties.hasType || null;
         // console.debug('check type',type);
         return type;
     };
@@ -182,6 +202,7 @@ module.exports = (map, status, utils, env) => {
     const geojsonMarkerStyle = (feature) => {
         // console.debug('check default style',feature);
         let type = getType(feature);
+
         let color = colors(type);
         // console.debug(type,color);
         return {
@@ -232,6 +253,7 @@ module.exports = (map, status, utils, env) => {
         if (!markers || !Array.isArray(markers) || markers.length < 1) {
             return;
         }
+        // console.log('updating layers',markers);
         markers.map((marker) => {
             // console.debug('updating marker:',marker);
             // refresh icon
@@ -325,7 +347,7 @@ module.exports = (map, status, utils, env) => {
     function getMarkerIcon(feature) {
         let currentZoom = map.getZoom();
         // if(feature.area_id)
-        // console.log(feature);
+        console.log(feature);
         let type = getType(feature);
         let className = getIconName(type);
         let radius = scale(currentZoom, getZoomLevel(feature));
@@ -464,21 +486,29 @@ module.exports = (map, status, utils, env) => {
 
     function getMarker(feature) {
 
-        if (!feature.geometry || !feature.geometry.type === 'point') {
+        if (!feature.geometry || feature.geometry.type !== 'Point') {
             return
         }
+        // console.log('is point?',feature.geometry.type === 'Point');
         let latlng = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
-        console.debug('creating marker', latlng, feature);
+        // console.debug('creating marker', latlng, feature);
         let markerIcon = getMarkerIcon(feature);
         if (!markerIcon) {
             return null;
         }
+
+        let layer = check4Overlay(feature);
+
+
+        if(!layer){return null;}
+
         // console.log('adding',feature.id,"in",mGrid.getLayers());
         let marker = L.marker(latlng, {
             icon: markerIcon,
             interactive: false,
             pane: "customMarkerPane",
-            feature: feature
+            feature: feature,
+            layer: layer
         });
         marker._leaflet_id = feature.id;
         return marker;
@@ -508,18 +538,23 @@ module.exports = (map, status, utils, env) => {
                     let tmp = Object.assign({}, event);
                     delete tmp.activity_objects;
                     let feature = Object.assign(tmp, event.activity_objects[0]);
-                    let marker = getMarker(feature);
+
+                    let marker = getGeometry(feature);
                     // console.debug('check',mGrid.hasLayer(marker));
-                    if (mGrid.hasLayer(marker)) {
-                        return r;
-                    }
-                    mGrid.addLayer(marker);
+                    // if (mGrid.hasLayer(marker)) {
+                    //     return r;
+                    // }
+
+                    // console.debug('check', overlays, marker);
+                    // adding the marker to the right overlay
+                    overlays[marker.options.layer].addLayer(marker);
+                    // mGrid.addLayer(marker);
                     return r.concat(marker);
                 }, []);
                 // mGrid.addLayer(markers);
                 // map.removeLayer(mGrid)
                 // mGrid.addTo(map)
-                console.debug('getEvents, markers', mGrid.getLayers());
+                // console.debug('getEvents, markers', mGrid.getLayers());
             }).catch(function (error) {
             console.error('getEvents, errror', error);
         });
@@ -527,43 +562,67 @@ module.exports = (map, status, utils, env) => {
 
 
 
-    // todo get OTM opendata
+    // get OTM opendata
     function getOpenData(bbox) {
         // boundingbox=bbox
         // loggerUrl
-        let url = ('SchemaThing?subconcepts=true&descriptions=true&geometries=true&token=').concat(token, '&boundingbox=', bbox);
+        let url = ('instances/SchemaThing?subconcepts=true&descriptions=true&geometries=true&token=').concat(token, '&boundingbox=', bbox);
         // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
         http.get(url)
             .then(function (response) {
-                // console.debug('getEvents, response',response.data);
-                if (!response.data || !response.data.event_list) {
-                    return console.error('getEvents, wrong format from OTM');
+                console.debug('getOpenData, response',response.data);
+                if (!response.data || !response.data.features) {
+                    return console.error('getOpenData, wrong format from OTM');
                 }
-                let events = response.data.event_list;
-                let markers = events.reduce((r, event) => {
-                    // console.debug(r,event);
-                    if (!event.activity_objects || !Array.isArray(event.activity_objects) || event.activity_objects.length < 1) {
-                        // console.debug('skip',r);
-                        return r;
-                    }
-                    let tmp = Object.assign({}, event);
-                    delete tmp.activity_objects;
-                    let feature = Object.assign(tmp, event.activity_objects[0]);
-                    let marker = getMarker(feature);
-                    // console.debug('check',mGrid.hasLayer(marker));
-                    if (mGrid.hasLayer(marker)) {
-                        return r;
-                    }
-                    mGrid.addLayer(marker);
-                    return r.concat(marker);
+                let features = response.data.features;
+                //todo manage all type of geometry
+                let geometries = features.reduce((r, feature) => {
+                    // get layer
+                    let layer = check4Overlay(feature);
+                    if(!layer){return r;}
+
+                    let geometry = getGeometry(feature);
+
+                    if(!geometry){return r;}
+                    console.log(feature,geometry);
+                    overlays[layer].addLayer(geometry);
+                    return r.concat(geometry);
                 }, []);
+
+
                 // mGrid.addLayer(markers);
                 // map.removeLayer(mGrid)
                 // mGrid.addTo(map)
-                console.debug('getEvents, markers', mGrid.getLayers());
+
+                console.debug('getOepn, markers', mGrid.getLayers());
             }).catch(function (error) {
             console.error('getEvents, errror', error);
         });
+    }
+
+    // generate right geometry from feature
+    function getGeometry(feature) {
+        if(feature.geometry.type === "Point"){
+            return getMarker(feature);
+        }
+        return null
+    }
+
+    // check for new overlay
+    // layer > application source
+    function check4Overlay(feature){
+        if (!feature.applicationName || !feature.application){ return false;}
+        // console.log('check4Overlay, feature to check', feature);
+        let layer = feature.applicationName || feature.application;
+        if(layer in overlays) {return layer; }
+
+        overlays[layer] = L.featureGroup();
+
+        // console.debug('new overlays',overlays);
+
+        layersController.addOverlay(overlays[layer], layer);
+        mGrid.addLayer(overlays[layer]);
+        return layer;
     }
 
 

@@ -14,7 +14,7 @@ const AreaViewer = () => {
     const $ = require('jquery');
 
     // environment
-    const env = "pt3";
+    const env = "dev";
     console.log('current environment:',env);
 
     /*
@@ -215,19 +215,20 @@ const AreaViewer = () => {
      * 1) click su vGrid is top priority
      * 2) click on map as fallback in case of empty areas
      */
+    // console.debug('click event on vGrid');
     vGrid.on('click', e => {
-        console.debug('vGrid click',e);
+        // console.debug('vGrid click',e);
         if (e.originalEvent.defaultPrevented) {
             return;
         }
         e.originalEvent.preventDefault();
 
-        console.debug('click event at', e.latlng, e.layer.properties);
+        // console.debug('click event at', e.latlng, e.layer.properties);
         // recupero focus se attuale
         let focus = status.getFocus();
-        console.debug('is focus?',focus);
+        // console.debug('is focus?',focus);
         if (focus) {
-            console.debug('click inside focus area',focus);
+            // console.debug('click inside focus area',focus);
             let pt = turf.point([e.latlng.lng, e.latlng.lat]);
             let geoJSON = {type: "FeatureCollection", features: focus.features};
             // console.debug('within?', pt, geoJSON);

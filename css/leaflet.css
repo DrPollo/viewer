@@ -22,10 +22,11 @@
 .leaflet-control-geocoder-alternatives li a, .leaflet-control-geocoder-alternatives li a:hover {
     line-height: 1.2em;
 }
-.leaflet-touch .leaflet-control-geocoder{
-    box-shadow: 1px 1px 5px rgba(0,0,0,0.35);
+.leaflet-touch .leaflet-control-geocoder, .leaflet-control-layers{
+    box-shadow: 1px 1px 5px rgba(0,0,0,0.35) !important;
+
 }
-.leaflet-control-geocoder button{
+.leaflet-control-geocoder button, .leaflet-control-layers{
     border-radius: 2px;
 }
 .leaflet-control-zoom {

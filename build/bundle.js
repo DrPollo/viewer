@@ -12,10 +12,28 @@ module.exports = function (map, status, utils, env) {
     // dev env
     var token = 'ZmI5MzNmNjQtOWMxNC00ZjNiLTg3ZmYtZGViOWQ0MmI3NTAx';
     var otmUrl = "https://api.ontomap.eu/api/v1/";
-    var loggerUrl = "https://api.ontomap.eu/api/v1/logger/";
 
     // featureGroup
     var mGrid = L.featureGroup();
+    // rewrite of getLayers > combine getLayers of each featureGroup layer
+    mGrid.getLayers = function () {
+        // console.log("getLayers",mGrid._layers);
+        return Object.keys(mGrid._layers).reduce(function (r, l) {
+            var layer = mGrid._layers[l];
+            return r.concat(layer.getLayers());
+        }, []);
+    };
+
+    var overlays = {};
+    // layer controller
+    var layersController = L.control.layers(null, overlays, { sortLayers: true, collapsed: false });
+    layersController.addTo(map);
+    // todo definition of overlays
+    // overlayMaps = {L.featureGroup(), L.featureGroup(), ...}
+    // todo add overlays to map
+    // L.control.layers(overlayMaps).addTo(map);
+    // todo function to change overlays in map controller
+
 
     // environment management
     switch (env) {
@@ -93,8 +111,9 @@ module.exports = function (map, status, utils, env) {
         if (type.includes('firstlife')) return orange;
         if (type.includes('geokey')) return red;
         if (type.includes('communitymaps')) return teal;
+        if (type.includes('ontomap.eu')) return amber;
 
-        console.debug('wgnred?', type);
+        // console.debug('wgnred?', type);
         return wgnred;
     };
 
@@ -159,7 +178,10 @@ module.exports = function (map, status, utils, env) {
      * Markers
      */
     var getType = function getType(feature) {
-        var type = feature.properties.entity_type || feature.application || feature.properties.hasType;
+        if (!feature || !feature.properties) {
+            return null;
+        }
+        var type = feature.properties.entity_type || feature.application || feature.properties.hasType || null;
         // console.debug('check type',type);
         return type;
     };
@@ -180,6 +202,7 @@ module.exports = function (map, status, utils, env) {
     var geojsonMarkerStyle = function geojsonMarkerStyle(feature) {
         // console.debug('check default style',feature);
         var type = getType(feature);
+
         var color = colors(type);
         // console.debug(type,color);
         return {
@@ -228,6 +251,7 @@ module.exports = function (map, status, utils, env) {
         if (!markers || !Array.isArray(markers) || markers.length < 1) {
             return;
         }
+        // console.log('updating layers',markers);
         markers.map(function (marker) {
             // console.debug('updating marker:',marker);
             // refresh icon
@@ -334,7 +358,7 @@ module.exports = function (map, status, utils, env) {
     function getMarkerIcon(feature) {
         var currentZoom = map.getZoom();
         // if(feature.area_id)
-        // console.log(feature);
+        console.log(feature);
         var type = getType(feature);
         var className = getIconName(type);
         var radius = scale(currentZoom, getZoomLevel(feature));
@@ -461,21 +485,30 @@ module.exports = function (map, status, utils, env) {
 
     function getMarker(feature) {
 
-        if (!feature.geometry || !feature.geometry.type === 'point') {
+        if (!feature.geometry || feature.geometry.type !== 'Point') {
             return;
         }
+        // console.log('is point?',feature.geometry.type === 'Point');
         var latlng = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
-        console.debug('creating marker', latlng, feature);
+        // console.debug('creating marker', latlng, feature);
         var markerIcon = getMarkerIcon(feature);
         if (!markerIcon) {
             return null;
         }
+
+        var layer = check4Overlay(feature);
+
+        if (!layer) {
+            return null;
+        }
+
         // console.log('adding',feature.id,"in",mGrid.getLayers());
         var marker = L.marker(latlng, {
             icon: markerIcon,
             interactive: false,
             pane: "customMarkerPane",
-            feature: feature
+            feature: feature,
+            layer: layer
         });
         marker._leaflet_id = feature.id;
         return marker;
@@ -504,59 +537,95 @@ module.exports = function (map, status, utils, env) {
                 var tmp = Object.assign({}, event);
                 delete tmp.activity_objects;
                 var feature = Object.assign(tmp, event.activity_objects[0]);
-                var marker = getMarker(feature);
+
+                var marker = getGeometry(feature);
                 // console.debug('check',mGrid.hasLayer(marker));
-                if (mGrid.hasLayer(marker)) {
-                    return r;
-                }
-                mGrid.addLayer(marker);
+                // if (mGrid.hasLayer(marker)) {
+                //     return r;
+                // }
+
+                // console.debug('check', overlays, marker);
+                // adding the marker to the right overlay
+                overlays[marker.options.layer].addLayer(marker);
+                // mGrid.addLayer(marker);
                 return r.concat(marker);
             }, []);
             // mGrid.addLayer(markers);
             // map.removeLayer(mGrid)
             // mGrid.addTo(map)
-            console.debug('getEvents, markers', mGrid.getLayers());
+            // console.debug('getEvents, markers', mGrid.getLayers());
         }).catch(function (error) {
             console.error('getEvents, errror', error);
         });
     }
 
-    // todo get OTM opendata
+    // get OTM opendata
     function getOpenData(bbox) {
         // boundingbox=bbox
         // loggerUrl
-        var url = 'SchemaThing?subconcepts=true&descriptions=true&geometries=true&token='.concat(token, '&boundingbox=', bbox);
+        var url = 'instances/SchemaThing?subconcepts=true&descriptions=true&geometries=true&token='.concat(token, '&boundingbox=', bbox);
         // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
         http.get(url).then(function (response) {
-            // console.debug('getEvents, response',response.data);
-            if (!response.data || !response.data.event_list) {
-                return console.error('getEvents, wrong format from OTM');
+            console.debug('getOpenData, response', response.data);
+            if (!response.data || !response.data.features) {
+                return console.error('getOpenData, wrong format from OTM');
             }
-            var events = response.data.event_list;
-            var markers = events.reduce(function (r, event) {
-                // console.debug(r,event);
-                if (!event.activity_objects || !Array.isArray(event.activity_objects) || event.activity_objects.length < 1) {
-                    // console.debug('skip',r);
+            var features = response.data.features;
+            //todo manage all type of geometry
+            var geometries = features.reduce(function (r, feature) {
+                // get layer
+                var layer = check4Overlay(feature);
+                if (!layer) {
                     return r;
                 }
-                var tmp = Object.assign({}, event);
-                delete tmp.activity_objects;
-                var feature = Object.assign(tmp, event.activity_objects[0]);
-                var marker = getMarker(feature);
-                // console.debug('check',mGrid.hasLayer(marker));
-                if (mGrid.hasLayer(marker)) {
+
+                var geometry = getGeometry(feature);
+
+                if (!geometry) {
                     return r;
                 }
-                mGrid.addLayer(marker);
-                return r.concat(marker);
+                console.log(feature, geometry);
+                overlays[layer].addLayer(geometry);
+                return r.concat(geometry);
             }, []);
+
             // mGrid.addLayer(markers);
             // map.removeLayer(mGrid)
             // mGrid.addTo(map)
-            console.debug('getEvents, markers', mGrid.getLayers());
+
+            console.debug('getOepn, markers', mGrid.getLayers());
         }).catch(function (error) {
             console.error('getEvents, errror', error);
         });
+    }
+
+    // generate right geometry from feature
+    function getGeometry(feature) {
+        if (feature.geometry.type === "Point") {
+            return getMarker(feature);
+        }
+        return null;
+    }
+
+    // check for new overlay
+    // layer > application source
+    function check4Overlay(feature) {
+        if (!feature.applicationName || !feature.application) {
+            return false;
+        }
+        // console.log('check4Overlay, feature to check', feature);
+        var layer = feature.applicationName || feature.application;
+        if (layer in overlays) {
+            return layer;
+        }
+
+        overlays[layer] = L.featureGroup();
+
+        // console.debug('new overlays',overlays);
+
+        layersController.addOverlay(overlays[layer], layer);
+        mGrid.addLayer(overlays[layer]);
+        return layer;
     }
 
     // inizializzazione markerGrid layer
@@ -1242,13 +1311,14 @@ module.exports = function (env) {
     var resetStyle = {
         color: secondaryColor,
         weight: 1,
+        // fillColor: primaryColor,
         fillColor: 'transparent',
         fill: true
     };
     var highlightStyle = {
         color: primaryColor,
         weight: 2,
-        fill: false,
+        fill: true,
         fillColor: primaryColor,
         opacity: 1,
         fillOpacity: 0.5
@@ -1257,7 +1327,7 @@ module.exports = function (env) {
     var featureStyle = function featureStyle(feature, zoom) {
         // console.log(feature,zoom);
         return {
-            fill: false,
+            fill: true,
             weight: 1,
             color: secondaryColor
         };
@@ -1409,7 +1479,7 @@ var AreaViewer = function AreaViewer() {
     var $ = require('jquery');
 
     // environment
-    var env = "pt3";
+    var env = "dev";
     console.log('current environment:', env);
 
     /*
@@ -1623,19 +1693,20 @@ var AreaViewer = function AreaViewer() {
      * 1) click su vGrid is top priority
      * 2) click on map as fallback in case of empty areas
      */
+    // console.debug('click event on vGrid');
     vGrid.on('click', function (e) {
-        console.debug('vGrid click', e);
+        // console.debug('vGrid click',e);
         if (e.originalEvent.defaultPrevented) {
             return;
         }
         e.originalEvent.preventDefault();
 
-        console.debug('click event at', e.latlng, e.layer.properties);
+        // console.debug('click event at', e.latlng, e.layer.properties);
         // recupero focus se attuale
         var focus = status.getFocus();
-        console.debug('is focus?', focus);
+        // console.debug('is focus?',focus);
         if (focus) {
-            console.debug('click inside focus area', focus);
+            // console.debug('click inside focus area',focus);
             var pt = turf.point([e.latlng.lng, e.latlng.lat]);
             var geoJSON = { type: "FeatureCollection", features: focus.features };
             // console.debug('within?', pt, geoJSON);
