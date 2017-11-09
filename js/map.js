@@ -92,10 +92,10 @@ module.exports = (idMapBox, env) => {
     // focusPane > focus geometry
     map.getPane('focusPane').style.zIndex = 9;
     // overlayPane > markers
-    map.getPane('overlayPane').style.zIndex = 10;
-    map.getPane('customMarkerPane').style.zIndex = 10;
+    map.getPane('overlayPane').style.zIndex = 11;
+    map.getPane('customMarkerPane').style.zIndex = 11;
     // vectorGridPane > vector tile
-    map.getPane('vectorGridPane').style.zIndex = 11;
+    map.getPane('vectorGridPane').style.zIndex = 10;
 
 
     // cartography

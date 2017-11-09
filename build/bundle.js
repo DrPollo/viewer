@@ -12,6 +12,7 @@ module.exports = function (map, status, utils, env) {
     // dev env
     var token = 'ZmI5MzNmNjQtOWMxNC00ZjNiLTg3ZmYtZGViOWQ0MmI3NTAx';
     var otmUrl = "https://api.ontomap.eu/api/v1/";
+    var bbox = false;
 
     // featureGroup
     var mGrid = L.featureGroup();
@@ -35,28 +36,43 @@ module.exports = function (map, status, utils, env) {
     // todo function to change overlays in map controller
 
 
-    // environment management
+    // environment
+    // bbox > boundingbox=NE_lng, NE_lat, SW_lng, SW_lat
+    // http://boundingbox.klokantech.com/
     switch (env) {
         case 'sandona':
+            // sw 12.5237862,45.5549117
+            // ne 12.6604179,45.6971641
             otmUrl = "https://sandona.api.ontomap.eu/api/v1";
             token = 'ZmI5MzNmNjQtOWMxNC00ZjNiLTg3ZmYtZGViOWQ0MmI3NTAx';
+            bbox = '12.6604179,45.6971641,12.5237862,45.5549117';
             break;
         case 'torino':
+            // sw 7.5778502,45.0067766
+            // ne 7.7733629,45.1402009
             otmUrl = "https://torino.api.ontomap.eu/api/v1";
             token = 'YzFiYjQzYjEtODRjNS00ZDk5LWJlOGEtZDQwYzdhMjkwYzk3';
+            bbox = '7.7733629,45.1402009,7.5778502,45.0067766';
             break;
         case 'southwark':
+            // sw -0.1114424,51.4206091
+            // ne -0.0293726,51.5099093
             otmUrl = "https://southwark.api.ontomap.eu/api/v1";
+            bbox = '-0.0293726,51.5099093,-0.1114424,51.4206091';
             break;
         case 'pt3':
+            // sw 7.5778502,45.0067766
+            // ne 7.7733629,45.1402009
             otmUrl = "https://p3.api.ontomap.eu/api/v1";
             token = 'OTM5MTg2NzgtYWQzMy00YzI1LWIzZmQtOWM1NmM0ZTU2ZjJl';
+            bbox = '7.7733629,45.1402009,7.5778502,45.0067766';
             break;
         case 'pt2':
             otmUrl = "https://p2.api.ontomap.eu/api/v1";
             token = 'NWNkNDEzYjktOTZiYS00NGE0LThjZDQtMTI0MDE5OWE5YzBh';
             break;
         default:
+            bbox = '12.6604179,45.6971641,12.5237862,45.5549117';
             break;
     }
 
@@ -143,6 +159,38 @@ module.exports = function (map, status, utils, env) {
     };
 
     /*
+     * Init OpenData layer
+     * if env bbox param is defined: load open data once
+     */
+    var odLayer = null;
+    // console.log('check radius',scale(map.getZoom(), 19),Math.min(1, scale(map.getZoom(), 19)));
+    var geojsonMarkerOptions = {
+        radius: scale(map.getZoom(), defaultZoomLevel),
+        fillColor: amber,
+        color: amber,
+        weight: Math.min(1, scale(map.getZoom(), defaultZoomLevel)),
+        opacity: 1,
+        fillOpacity: 0.5
+    };
+    var odLayerConfig = {
+        pointToLayer: function pointToLayer(feature, latlng) {
+            return L.circleMarker(latlng, geojsonMarkerOptions);
+        }
+    };
+    // if env box is defined
+    if (bbox) {
+        odLayer = L.geoJSON(null, odLayerConfig);
+
+        // add layer to layer control
+        layersController.addOverlay(odLayer, 'OpenData');
+
+        // since it is not added to map it starts turned off
+        // mGrid.addLayer(odLayer);
+
+        getOpenData(bbox);
+    }
+
+    /*
      * Gaussian
      * https://www.desmos.com/calculator/oihvoxtriz
      * a = max radius
@@ -151,28 +199,32 @@ module.exports = function (map, status, utils, env) {
      * code diverse per lo zoom in e zoom out dalla media
      */
     var maxWeight = 2,
-        maxRadius = 10,
         backgroundMaxRadius = 8,
         backgroundOpacity = 0.6,
-        cRight = 1.4,
-        cLeft = 3,
-        minRadius = 2.5,
 
 
     // related to material icon size
     minIconRadius = 14,
         defOpacity = 0.8;
-    var scale = function scale(x, level) {
+    function scale(x, level, min) {
+        var maxRadius = 10,
+            minRadius = 2.5,
+            cRight = 1.4,
+            cLeft = 3;
         var c = x < level ? cLeft : cRight;
         var k = Math.pow(x - level, 2) * -1;
         var q = 2 * Math.pow(c, 2);
         var z = k / q;
         var radius = Math.floor(maxRadius * Math.exp(z));
-        // console.log(radius);
+        // console.log(x, level, radius);
         // senza soglia
-        return Math.max(radius, minRadius);
+
         // con soglia
-        // return radius;
+        if (min) {
+            return Math.max(radius, minRadius);
+        } else {
+            return radius;
+        }
     };
     /*
      * Markers
@@ -218,7 +270,7 @@ module.exports = function (map, status, utils, env) {
     var focusId = null;
     var focusGeometry = null;
 
-    var getZoomLevel = function getZoomLevel(feature) {
+    function getZoomLevel(feature) {
         // console.debug('getZoomLevel',feature);
 
         if (feature && feature.properties && feature.properties.zoom_level) {
@@ -246,6 +298,13 @@ module.exports = function (map, status, utils, env) {
     };
 
     var update = function update() {
+        // update of geojson layer
+        if (odLayer) {
+            odLayer.setStyle({
+                radius: scale(map.getZoom(), defaultZoomLevel)
+            });
+        }
+
         // console.debug('grid update', mGrid.getLayers());
         var markers = mGrid.getLayers();
         if (!markers || !Array.isArray(markers) || markers.length < 1) {
@@ -315,9 +374,6 @@ module.exports = function (map, status, utils, env) {
 
         // call to OTM logger > add events to mGrid
         getEvents(bounds);
-
-        // todo call to OTM > add to mGrid
-        // getOpenData(bounds);
     });
 
     // fine cambio di zoom
@@ -358,10 +414,10 @@ module.exports = function (map, status, utils, env) {
     function getMarkerIcon(feature) {
         var currentZoom = map.getZoom();
         // if(feature.area_id)
-        console.log(feature);
+        // console.log(feature);
         var type = getType(feature);
         var className = getIconName(type);
-        var radius = scale(currentZoom, getZoomLevel(feature));
+        var radius = scale(currentZoom, getZoomLevel(feature), true);
         var weight = Math.min(radius, maxWeight);
         var style = Object.assign({
             interactive: false
@@ -566,34 +622,15 @@ module.exports = function (map, status, utils, env) {
         var url = 'instances/SchemaThing?subconcepts=true&descriptions=true&geometries=true&token='.concat(token, '&boundingbox=', bbox);
         // let url = ('/events?').concat('boundingbox=',bbox,'&token=',token);
         http.get(url).then(function (response) {
-            console.debug('getOpenData, response', response.data);
+            // console.debug('getOpenData, response',response.data);
             if (!response.data || !response.data.features) {
                 return console.error('getOpenData, wrong format from OTM');
             }
-            var features = response.data.features;
-            //todo manage all type of geometry
-            var geometries = features.reduce(function (r, feature) {
-                // get layer
-                var layer = check4Overlay(feature);
-                if (!layer) {
-                    return r;
-                }
+            var geojson = response.data.features;
 
-                var geometry = getGeometry(feature);
+            odLayer.addData(geojson);
 
-                if (!geometry) {
-                    return r;
-                }
-                console.log(feature, geometry);
-                overlays[layer].addLayer(geometry);
-                return r.concat(geometry);
-            }, []);
-
-            // mGrid.addLayer(markers);
-            // map.removeLayer(mGrid)
-            // mGrid.addTo(map)
-
-            console.debug('getOepn, markers', mGrid.getLayers());
+            // console.debug('getOepn, markers', mGrid.getLayers());
         }).catch(function (error) {
             console.error('getEvents, errror', error);
         });
@@ -1877,10 +1914,10 @@ module.exports = function (idMapBox, env) {
     // focusPane > focus geometry
     map.getPane('focusPane').style.zIndex = 9;
     // overlayPane > markers
-    map.getPane('overlayPane').style.zIndex = 10;
-    map.getPane('customMarkerPane').style.zIndex = 10;
+    map.getPane('overlayPane').style.zIndex = 11;
+    map.getPane('customMarkerPane').style.zIndex = 11;
     // vectorGridPane > vector tile
-    map.getPane('vectorGridPane').style.zIndex = 11;
+    map.getPane('vectorGridPane').style.zIndex = 10;
 
     // cartography
     var baseLayer = layers['base'].addTo(map);
