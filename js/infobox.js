@@ -49,6 +49,14 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
         it: "Indietro",
         en: 'Back'
     };
+    const locateLabel = {
+        it: "Localizza:",
+        en: "Locate:"
+    };
+    const goToLabel = {
+        it: "Vai a:",
+        en: "Go to:"
+    };
     const headerText = {
       empty:{
           it: "Nessun contenuto",
@@ -178,10 +186,13 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
             // console.debug('check entry to append',e);
             if (e) {
                 featureBox.append(e);
+                document.getElementById(entry.id).addEventListener('click',()=>{map.goToLocationByID(entry.id)});
             }
         });
         setFocusHeader(content);
     });
+
+
 
 
     // parsing label infobox
@@ -215,6 +226,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
 
     // parsing and building content entries
     function parseEntry(entry) {
+        console.debug("check entry",entry);
         let i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="mdl-list__item-primary-content">';
         let c = '</li>';
         let name = null;
@@ -226,7 +238,14 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
 
         if (entry.properties.name || entry.properties.hasName || entry.details.name) {
             name = entry.properties.name || entry.properties.hasName || entry.details.name;
-            i = i.concat('<span class="name">', name, '</span>');
+            let titleName = name;
+            // if there is an URI >  action: go to content
+            if (entry.properties.reference_external_url || entry.properties.external_url) {
+                let url = entry.properties.reference_external_url || entry.properties.external_url;
+                titleName = ("").concat('<a title="',goToLabel[currentLang],' ',name,'" class="mdl-list__item-secondary-action" target="_top" href="', url, '">',name,'</a>');
+            }
+
+            i = i.concat('<span class="name">', titleName, '</span>');
         }
         // timestamp > UTC, calculate duration
         if (entry.timestamp) {
@@ -234,16 +253,14 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
             i = i.concat('<span class="mdl-list__item-sub-title">', duration, '</span>');
         }
 
-        // action: go to content
-        if (entry.properties.reference_external_url || entry.properties.external_url) {
-            let url = entry.properties.reference_external_url || entry.properties.external_url;
-            c = ('</span>').concat('<span class="mdl-list__item-secondary-content">',
-                '<a class="mdl-list__item-secondary-action" target="_top" href="', url, '">',
-                '<i class="material-icons">',
-                'launch',
-                '</i>',
-                '</a></span>', c);
-        }
+        // action: locate marker
+        let url = entry.properties.reference_external_url || entry.properties.external_url;
+        c = ('</span>').concat('<span class="mdl-list__item-secondary-content">',
+            '<button id="',entry.id,'" title="',locateLabel[currentLang]," ",name,'" class="mdl-list__item-secondary-action mdl-button mdl-js-button mdl-button--accent">',
+            '<i class="material-icons">',
+            'location_searching',
+            '</i>',
+            '</button></span>', c);
 
         // if it has a name
         if (name) {
@@ -263,6 +280,7 @@ module.exports = (status, map, idInfoBox, idFeatureBox, idMapBox, idFeatureHeade
         // todo build header
         return featureHeader.append('<span>'+headerText.full[currentLang]+'</span>');
     }
+
 
 
     // inits

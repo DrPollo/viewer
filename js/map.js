@@ -41,6 +41,7 @@ module.exports = (idMapBox, env) => {
     let initZoom = 14;
     let initLat = 45.630373;
     let initLon = 12.566082;
+    let locateZoom = 19;
 
     switch (env){
         case 'pt1':
@@ -113,7 +114,16 @@ module.exports = (idMapBox, env) => {
 
 
 
+    map.goToLocationByID = (id) => {
+        if(!map._layers[id]){return false;}
 
+        let layer = map._layers[id];
+        let latlng = layer._latlng;
+
+        console.debug("layer to locate",layer, latlng);
+
+        map.setView(latlng,locateZoom);
+    };
 
 
 

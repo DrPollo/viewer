@@ -1066,6 +1066,14 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, idFea
         it: "Indietro",
         en: 'Back'
     };
+    var locateLabel = {
+        it: "Localizza:",
+        en: "Locate:"
+    };
+    var goToLabel = {
+        it: "Vai a:",
+        en: "Go to:"
+    };
     var headerText = {
         empty: {
             it: "Nessun contenuto",
@@ -1210,6 +1218,9 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, idFea
             // console.debug('check entry to append',e);
             if (e) {
                 featureBox.append(e);
+                document.getElementById(entry.id).addEventListener('click', function () {
+                    map.goToLocationByID(entry.id);
+                });
             }
         });
         setFocusHeader(content);
@@ -1246,6 +1257,7 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, idFea
 
     // parsing and building content entries
     function parseEntry(entry) {
+        console.debug("check entry", entry);
         var i = '<li class="mdl-list__item mdl-list__item--two-line"><span class="mdl-list__item-primary-content">';
         var c = '</li>';
         var name = null;
@@ -1256,7 +1268,14 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, idFea
 
         if (entry.properties.name || entry.properties.hasName || entry.details.name) {
             name = entry.properties.name || entry.properties.hasName || entry.details.name;
-            i = i.concat('<span class="name">', name, '</span>');
+            var titleName = name;
+            // if there is an URI >  action: go to content
+            if (entry.properties.reference_external_url || entry.properties.external_url) {
+                var _url = entry.properties.reference_external_url || entry.properties.external_url;
+                titleName = "".concat('<a title="', goToLabel[currentLang], ' ', name, '" class="mdl-list__item-secondary-action" target="_top" href="', _url, '">', name, '</a>');
+            }
+
+            i = i.concat('<span class="name">', titleName, '</span>');
         }
         // timestamp > UTC, calculate duration
         if (entry.timestamp) {
@@ -1264,11 +1283,9 @@ module.exports = function (status, map, idInfoBox, idFeatureBox, idMapBox, idFea
             i = i.concat('<span class="mdl-list__item-sub-title">', duration, '</span>');
         }
 
-        // action: go to content
-        if (entry.properties.reference_external_url || entry.properties.external_url) {
-            var url = entry.properties.reference_external_url || entry.properties.external_url;
-            c = '</span>'.concat('<span class="mdl-list__item-secondary-content">', '<a class="mdl-list__item-secondary-action" target="_top" href="', url, '">', '<i class="material-icons">', 'launch', '</i>', '</a></span>', c);
-        }
+        // action: locate marker
+        var url = entry.properties.reference_external_url || entry.properties.external_url;
+        c = '</span>'.concat('<span class="mdl-list__item-secondary-content">', '<button id="', entry.id, '" title="', locateLabel[currentLang], " ", name, '" class="mdl-list__item-secondary-action mdl-button mdl-js-button mdl-button--accent">', '<i class="material-icons">', 'location_searching', '</i>', '</button></span>', c);
 
         // if it has a name
         if (name) {
@@ -1684,13 +1701,13 @@ var AreaViewer = function AreaViewer() {
     // reset del focus
     status.observe.filter(function (state) {
         return 'reset' in state;
-    }).subscribe(function () {
+    }).subscribe(function (state) {
         $('body').removeClass(focusClass[interactive]);
         map.invalidateSize();
         // mGrid.resetStyle();
         vGrid.resetStyle();
         // remove geometry
-        console.debug('check fLayer', fLayer);
+        // console.debug('check fLayer',fLayer);
         fLayer.clearLayers();
     });
 
@@ -1864,6 +1881,7 @@ module.exports = function (idMapBox, env) {
     var initZoom = 14;
     var initLat = 45.630373;
     var initLon = 12.566082;
+    var locateZoom = 19;
 
     switch (env) {
         case 'pt1':
@@ -1930,6 +1948,19 @@ module.exports = function (idMapBox, env) {
         baseLayer = layers[basemap] || layers['base'];
 
         map.addLayer(baseLayer);
+    };
+
+    map.goToLocationByID = function (id) {
+        if (!map._layers[id]) {
+            return false;
+        }
+
+        var layer = map._layers[id];
+        var latlng = layer._latlng;
+
+        console.debug("layer to locate", layer, latlng);
+
+        map.setView(latlng, locateZoom);
     };
 
     return map;
@@ -2045,11 +2076,13 @@ module.exports = function (map) {
         }
         // console.debug('extractContent',map, focusGeometry);
         var focusFeatures = Object.keys(map._layers).reduce(function (res, key) {
+            // if it is a marker it has a feature (geojson) description in its options field
             var feature = map._layers[key].options.feature;
             // console.debug("check feature",feature);
             if (!feature) {
                 return res;
             }
+            // if it has an explicit relation with the focus area
             if (feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id) {
                 return res.concat(feature);
             }
@@ -2257,7 +2290,7 @@ module.exports = function (map) {
             store["view"]["bounds"] = "".concat(bounds.getNorthEast().lng, ",", bounds.getNorthEast().lat, ",", bounds.getSouthWest().lng, ",", bounds.getSouthWest().lat);
             observer.next(store["view"]);
 
-            // console.log('saving? ',current);
+            // console.log('saving? ',current !== 'focus');
             switch (_current) {
                 case "focus":
                     break;
@@ -2268,10 +2301,15 @@ module.exports = function (map) {
             }
         };
         status.restore = function () {
-            console.debug('to restore?', _current !== "explorer");
-            if (_current === "explorer") return;
+            // console.debug('to restore?', current !== "explorer");
+            if (_current === "explorer") {
+                return;
+            }
 
             _current = "explorer";
+            // restore previous position
+            map.fitBounds(store["explorer"].bounds);
+            // new state
             observer.next(store["explorer"]);
         };
     }).share(); // observable hot

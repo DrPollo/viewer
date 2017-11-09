@@ -174,13 +174,13 @@ const AreaViewer = () => {
     // add focus layer
     // status.observe.filter(state => 'features' in state).map(state => state.features).subscribe(features => fLayer.setLayer(features));
     // reset del focus
-    status.observe.filter(state => 'reset' in state).subscribe(() => {
+    status.observe.filter(state => 'reset' in state).subscribe((state) => {
         $('body').removeClass(focusClass[interactive]);
         map.invalidateSize();
         // mGrid.resetStyle();
         vGrid.resetStyle();
         // remove geometry
-        console.debug('check fLayer',fLayer);
+        // console.debug('check fLayer',fLayer);
         fLayer.clearLayers();
     });
 

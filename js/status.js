@@ -101,9 +101,11 @@ module.exports = (map) => {
         if(typeof map._layers === 'undefined' || !map._layers ){return [];}
         // console.debug('extractContent',map, focusGeometry);
         let focusFeatures = Object.keys(map._layers).reduce((res,key) => {
+            // if it is a marker it has a feature (geojson) description in its options field
             let feature = map._layers[key].options.feature;
             // console.debug("check feature",feature);
             if(!feature){return res;}
+            // if it has an explicit relation with the focus area
             if(feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id){
                 return res.concat(feature);
             }
@@ -305,7 +307,7 @@ module.exports = (map) => {
             observer.next(store["view"]);
 
 
-            // console.log('saving? ',current);
+            // console.log('saving? ',current !== 'focus');
             switch (current) {
                 case "focus":
                     break;
@@ -316,11 +318,13 @@ module.exports = (map) => {
             }
         };
         status.restore = () => {
-            console.debug('to restore?', current !== "explorer");
-            if(current === "explorer")
-                return;
+            // console.debug('to restore?', current !== "explorer");
+            if(current === "explorer"){return;}
 
             current = "explorer";
+            // restore previous position
+            map.fitBounds(store["explorer"].bounds);
+            // new state
             observer.next(store["explorer"]);
         };
     }).share(); // observable hot
