@@ -2043,9 +2043,10 @@ module.exports = function (map) {
         if (typeof map._layers === 'undefined' || !map._layers) {
             return [];
         }
-        console.debug('extractContent', map, focusGeometry);
-        return Object.keys(map._layers).reduce(function (res, key) {
-            var feature = map._layers[key].feature;
+        // console.debug('extractContent',map, focusGeometry);
+        var focusFeatures = Object.keys(map._layers).reduce(function (res, key) {
+            var feature = map._layers[key].options.feature;
+            // console.debug("check feature",feature);
             if (!feature) {
                 return res;
             }
@@ -2055,7 +2056,7 @@ module.exports = function (map) {
             try {
                 // console.debug(feature, focusGeometry);
                 var isInside = within({ type: "featureCollection", features: [feature] }, { type: "featureCollection", features: [focusGeometry] }).features.length > 0;
-                console.debug('is inside?', isInside);
+                // console.debug('is inside?',isInside);
                 if (isInside) {
                     return res.concat(feature);
                 }
@@ -2064,6 +2065,8 @@ module.exports = function (map) {
             }
             return res;
         }, []);
+        // console.debug("extractContent",focusFeatures);
+        return focusFeatures;
     }
     // fallback: focus on a tile
     function virtualFocus(entry, observer) {

@@ -99,9 +99,10 @@ module.exports = (map) => {
     function extractContent(focusGeometry){
         // console.debug('extractContent?',typeof map._layers === 'undefined',  !map._layers);
         if(typeof map._layers === 'undefined' || !map._layers ){return [];}
-        console.debug('extractContent',map, focusGeometry);
-        return Object.keys(map._layers).reduce((res,key) => {
-            let feature = map._layers[key].feature;
+        // console.debug('extractContent',map, focusGeometry);
+        let focusFeatures = Object.keys(map._layers).reduce((res,key) => {
+            let feature = map._layers[key].options.feature;
+            // console.debug("check feature",feature);
             if(!feature){return res;}
             if(feature && feature.properties && feature.properties.area_id && feature.properties.area_id === features[0].id){
                 return res.concat(feature);
@@ -109,7 +110,7 @@ module.exports = (map) => {
             try{
                 // console.debug(feature, focusGeometry);
                 let isInside = (within({type:"featureCollection", features:[feature]}, {type:"featureCollection", features:[focusGeometry]}).features.length > 0);
-                console.debug('is inside?',isInside);
+                // console.debug('is inside?',isInside);
                 if(isInside) {
                     return res.concat(feature);
                 }
@@ -118,6 +119,8 @@ module.exports = (map) => {
             }
             return res;
         },[]);
+        // console.debug("extractContent",focusFeatures);
+        return focusFeatures;
     }
     // fallback: focus on a tile
     function virtualFocus(entry,observer){
